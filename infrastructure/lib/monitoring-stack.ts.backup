@@ -36,7 +36,7 @@ export class MonitoringStack extends cdk.Stack {
     if (stage === 'prod') {
       // Replace with actual admin email
       this.alertTopic.addSubscription(
-        new subscriptions.EmailSubscription('bhardwick@aerotage.com')
+        new subscriptions.EmailSubscription('admin@aerotage.com')
       );
     }
 
