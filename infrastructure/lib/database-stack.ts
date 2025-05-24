@@ -15,7 +15,7 @@ export interface DatabaseTables {
   invoicesTable: dynamodb.Table;
   userSessionsTable: dynamodb.Table;
   userActivityTable: dynamodb.Table;
-  userInvitationsTable: dynamodb.Table | null;
+  userInvitationsTable: dynamodb.ITable;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -205,25 +205,12 @@ export class DatabaseStack extends cdk.Stack {
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
     });
 
-    // TODO: Temporarily removed UserInvitations table to clean CloudFormation state
-    // Will add back in next deployment
-    /*
-    // User Invitations Table
-    const userInvitationsTable = new dynamodb.Table(this, 'UserInvitationsTable', {
-      tableName: `aerotage-user-invitations-${stage}`,
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      timeToLiveAttribute: 'expiresAt',
-      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
-
-    // Add GSI for secure token lookup (most critical for functionality)
-    userInvitationsTable.addGlobalSecondaryIndex({
-      indexName: 'TokenHashIndexV2',
-      partitionKey: { name: 'tokenHash', type: dynamodb.AttributeType.STRING },
-    });
-    */
+    // User Invitations Table - Import existing manually created table
+    const userInvitationsTable = dynamodb.Table.fromTableName(
+      this, 
+      'UserInvitationsTable', 
+      `aerotage-user-invitations-${stage}`
+    );
 
     // Store all tables for easy access
     this.tables = {
@@ -235,7 +222,7 @@ export class DatabaseStack extends cdk.Stack {
       invoicesTable,
       userSessionsTable,
       userActivityTable,
-      userInvitationsTable: null as any, // Temporarily null
+      userInvitationsTable,
     };
 
     // CloudFormation Outputs
@@ -287,13 +274,10 @@ export class DatabaseStack extends cdk.Stack {
       exportName: `UserActivityTableName-${stage}`,
     });
 
-    /*
-    // TODO: Temporarily commented out with table
     new cdk.CfnOutput(this, 'UserInvitationsTableName', {
-      value: userInvitationsTable?.tableName || '',
+      value: userInvitationsTable.tableName,
       description: 'User Invitations DynamoDB Table Name',
       exportName: `UserInvitationsTableName-${stage}`,
     });
-    */
   }
 } 
