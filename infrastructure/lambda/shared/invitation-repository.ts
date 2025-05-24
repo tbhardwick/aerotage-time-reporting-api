@@ -103,7 +103,7 @@ export class InvitationRepository {
 
     const command = new PutItemCommand({
       TableName: this.tableName,
-      Item: marshall(dynamoItem),
+      Item: marshall(dynamoItem, { removeUndefinedValues: true }),
       ConditionExpression: 'attribute_not_exists(PK)',
     });
 
@@ -125,7 +125,7 @@ export class InvitationRepository {
       Key: marshall({
         PK: `INVITATION#${id}`,
         SK: `INVITATION#${id}`,
-      }),
+      }, { removeUndefinedValues: true }),
     });
 
     try {
@@ -151,7 +151,7 @@ export class InvitationRepository {
       KeyConditionExpression: 'tokenHash = :tokenHash',
       ExpressionAttributeValues: marshall({
         ':tokenHash': tokenHash,
-      }),
+      }, { removeUndefinedValues: true }),
     });
 
     try {
@@ -182,7 +182,7 @@ export class InvitationRepository {
       ExpressionAttributeValues: marshall({
         ':email': email.toLowerCase(),
         ':status': 'pending',
-      }),
+      }, { removeUndefinedValues: true }),
     });
 
     try {
@@ -220,7 +220,7 @@ export class InvitationRepository {
       TableName: this.tableName,
       FilterExpression: filterExpression || undefined,
       ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
-      ExpressionAttributeValues: Object.keys(expressionAttributeValues).length > 0 ? marshall(expressionAttributeValues) : undefined,
+      ExpressionAttributeValues: Object.keys(expressionAttributeValues).length > 0 ? marshall(expressionAttributeValues, { removeUndefinedValues: true }) : undefined,
       Limit: limit + offset + 1, // Get one extra to check if there are more
     });
 
@@ -278,10 +278,10 @@ export class InvitationRepository {
       Key: marshall({
         PK: `INVITATION#${id}`,
         SK: `INVITATION#${id}`,
-      }),
+      }, { removeUndefinedValues: true }),
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: marshall(expressionAttributeValues),
+      ExpressionAttributeValues: marshall(expressionAttributeValues, { removeUndefinedValues: true }),
       ReturnValues: 'ALL_NEW',
     });
 
@@ -307,7 +307,7 @@ export class InvitationRepository {
       Key: marshall({
         PK: `INVITATION#${id}`,
         SK: `INVITATION#${id}`,
-      }),
+      }, { removeUndefinedValues: true }),
     });
 
     try {

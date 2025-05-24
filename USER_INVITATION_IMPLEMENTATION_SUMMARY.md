@@ -271,6 +271,92 @@ async getUserInvitations(filters?: InvitationFilters): Promise<UserInvitation[]>
 }
 ```
 
+## 🔧 Frontend Integration Issues & Solutions
+
+### ⚠️ DNS Resolution Error (RESOLVED)
+
+**Issue:** Frontend team encountered `net::ERR_NAME_NOT_RESOLVED` when accessing user invitations:
+```
+GET https://0sty9mf3f7.execute-api.us-east-1.amazonaws.com/dev/user-invitations
+net::ERR_NAME_NOT_RESOLVED
+```
+
+**Root Cause:** Frontend was using an **outdated API Gateway URL** from a previous deployment.
+
+**Solution:** ✅ **RESOLVED**
+- ❌ **Old URL:** `https://0sty9mf3f7.execute-api.us-east-1.amazonaws.com/dev/`
+- ✅ **Correct URL:** `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+
+### 🛠️ API Endpoint Discovery Script
+
+Created `/scripts/get-api-endpoints.sh` for frontend team to get current API URLs:
+
+```bash
+# Usage: Get current API endpoints for any environment
+./scripts/get-api-endpoints.sh dev
+./scripts/get-api-endpoints.sh prod
+
+# Output includes:
+# - Current correct API Gateway URL
+# - Connectivity test results
+# - Frontend configuration examples
+# - All invitation endpoints
+# - Troubleshooting guidance
+```
+
+**Script Features:**
+- ✅ Automatically fetches current API Gateway URL from CloudFormation
+- ✅ Tests API connectivity and reports status
+- ✅ Provides ready-to-use frontend configuration
+- ✅ Lists all user invitation endpoints
+- ✅ Includes troubleshooting tips
+
+### 📋 Frontend Configuration Update
+
+**For Frontend Team:** Update your API configuration in `aerotage_time_reporting_app`:
+
+```typescript
+// Update in your API config file:
+const API_BASE_URL = 'https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/';
+
+// Or in environment files:
+REACT_APP_API_BASE_URL=https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/
+VITE_API_BASE_URL=https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/
+```
+
+**Verification:**
+```bash
+# Test the corrected endpoint
+curl -X GET "https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/user-invitations"
+# Expected: {"message":"Unauthorized"} (correct for unauthenticated requests)
+```
+
+### 🔍 Available User Invitation Endpoints
+
+All endpoints are **deployed and functional**:
+
+- **List Invitations:** `GET /user-invitations` (requires auth)
+- **Create Invitation:** `POST /user-invitations` (requires auth)
+- **Resend Invitation:** `POST /user-invitations/{id}/resend` (requires auth)
+- **Cancel Invitation:** `DELETE /user-invitations/{id}` (requires auth)
+- **Validate Token:** `GET /user-invitations/validate/{token}` (public)
+- **Accept Invitation:** `POST /user-invitations/accept` (public)
+
+### 📝 Authentication Requirements
+
+- **Public Endpoints:** `validate` and `accept` (no auth required)
+- **Admin Endpoints:** All others require `Authorization: Bearer {cognito-jwt}` header
+- **Expected Response:** `401 Unauthorized` without valid token (this is correct behavior)
+
+### 🎯 Status Update
+
+- ✅ **Backend API:** Fully deployed and functional
+- ✅ **All Endpoints:** Available and responding correctly
+- ✅ **Email Service:** Configured and ready
+- ✅ **Database:** UserInvitations table deployed with indexes
+- 🔄 **Frontend:** Needs API URL configuration update
+- 📋 **Next:** Frontend team update configuration and test
+
 ## 📊 Monitoring & Analytics
 
 ### CloudWatch Metrics (TODO)
