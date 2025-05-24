@@ -147,7 +147,7 @@ export class InvitationRepository {
   async getInvitationByTokenHash(tokenHash: string): Promise<UserInvitation | null> {
     const command = new QueryCommand({
       TableName: this.tableName,
-      IndexName: 'TokenHashIndex',
+      IndexName: 'TokenHashIndexV2',
       KeyConditionExpression: 'tokenHash = :tokenHash',
       ExpressionAttributeValues: marshall({
         ':tokenHash': tokenHash,
@@ -173,7 +173,7 @@ export class InvitationRepository {
   async checkEmailExists(email: string): Promise<boolean> {
     const command = new QueryCommand({
       TableName: this.tableName,
-      IndexName: 'EmailIndex',
+      IndexName: 'EmailIndexV2',
       KeyConditionExpression: 'GSI1PK = :email',
       FilterExpression: '#status = :status',
       ExpressionAttributeNames: {
@@ -208,10 +208,10 @@ export class InvitationRepository {
     let command: QueryCommand | ScanCommand;
 
     if (filters.status) {
-      // Use GSI2 (StatusIndex) when filtering by status
+      // Use GSI2 (StatusIndexV2) when filtering by status
       command = new QueryCommand({
         TableName: this.tableName,
-        IndexName: 'StatusIndex',
+        IndexName: 'StatusIndexV2',
         KeyConditionExpression: 'GSI2PK = :status',
         ExpressionAttributeValues: marshall({
           ':status': `STATUS#${filters.status}`,

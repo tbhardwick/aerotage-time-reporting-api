@@ -180,7 +180,7 @@ export interface UserInvitationDynamoItem {
   GSI1SK: string; // "INVITATION#{createdAt}"
   GSI2PK?: string; // "STATUS#{status}"
   GSI2SK?: string; // "INVITATION#{createdAt}"
-  tokenHash: string; // For TokenHashIndex
+  tokenHash: string; // For TokenHashIndexV2
   id: string;
   email: string;
   invitedBy: string;
