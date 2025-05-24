@@ -6,7 +6,6 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { DatabaseTables } from './database-stack';
 
@@ -314,7 +313,7 @@ export class MonitoringStack extends cdk.Stack {
     this.dashboard.addWidgets(healthWidget);
 
     // Log Groups for centralized logging
-    const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
+    new logs.LogGroup(this, 'ApiLogGroup', {
       logGroupName: `/aws/apigateway/${apiGateway.restApiName}`,
       retention: stage === 'prod' ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_WEEK,
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,

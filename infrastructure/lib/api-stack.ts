@@ -3,7 +3,6 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -158,7 +157,7 @@ export class ApiStack extends cdk.Stack {
     this.lambdaFunctions = {};
 
     // Helper function to create Lambda functions
-    const createLambdaFunction = (name: string, handler: string, description: string) => {
+    const createLambdaFunction = (name: string, handler: string, description: string): lambdaNodejs.NodejsFunction => {
       const func = new lambdaNodejs.NodejsFunction(this, name, {
         functionName: `aerotage-${name.toLowerCase()}-${stage}`,
         entry: `lambda/${handler}.ts`,
@@ -182,9 +181,6 @@ export class ApiStack extends cdk.Stack {
       return func;
     };
 
-    // Authentication APIs
-    const authResource = this.api.root.addResource('auth');
-    
     // User Management APIs
     const usersResource = this.api.root.addResource('users');
     const createUserFunction = createLambdaFunction('CreateUser', 'users/create', 'Create new user');

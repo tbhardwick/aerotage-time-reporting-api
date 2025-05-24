@@ -43,9 +43,149 @@ This repository contains the AWS serverless backend infrastructure and API for t
 ### **Development Tools**
 - **Language**: TypeScript (strict mode)
 - **Package Manager**: npm
-- **Linting**: ESLint with AWS CDK recommended rules
+- **Linting**: ESLint v9 with flat config (backend-optimized rules)
+- **Code Quality**: Automated linting with TypeScript integration
 - **Testing**: Jest for unit tests, AWS CDK testing constructs
 - **Deployment**: AWS CDK CLI with multiple environments
+
+## 🧹 **Code Quality & Linting**
+
+### **ESLint Configuration**
+
+This repository uses **ESLint v9 with flat config** specifically optimized for AWS serverless backend development. The configuration enforces:
+
+- ✅ **Backend-focused rules** for CDK infrastructure and Lambda functions
+- ✅ **TypeScript integration** with strict type checking
+- ✅ **AWS best practices** for security and performance
+- ✅ **Build artifact exclusion** (automatically ignores compiled files)
+- ✅ **Frontend file protection** (prevents frontend code in backend repo)
+
+### **Linting Scripts**
+
+```bash
+# Basic linting
+npm run lint              # Run ESLint on all TypeScript files
+
+# Auto-fix issues
+npm run lint:fix          # Automatically fix linting issues where possible
+
+# Strict checking
+npm run lint:check        # Fail build if ANY warnings exist (CI/CD)
+
+# Developer-friendly summary
+npm run lint:summary      # Run linting with helpful context messages
+```
+
+### **File-Specific Rules**
+
+The ESLint configuration provides different rule sets for different file types:
+
+#### **Lambda Functions** (`infrastructure/lambda/**/*.ts`, `src/handlers/**/*.ts`)
+- ✅ **Strict return types**: Required for all handler functions
+- ⚠️ **Console statements**: Allowed (warnings) for CloudWatch logging
+- ✅ **Async/await rules**: Enforced for Promise handling
+- ✅ **Performance rules**: Optimized for serverless execution
+
+#### **CDK Infrastructure** (`infrastructure/lib/**/*.ts`, `infrastructure/bin/**/*.ts`)
+- ✅ **Unused parameters**: Allowed with underscore prefix (`_param`)
+- ✅ **Console statements**: Allowed for deployment output
+- ✅ **CDK patterns**: Optimized for infrastructure-as-code
+
+#### **Test Files** (`**/*.test.ts`, `**/*.spec.ts`, `tests/**/*.ts`)
+- ✅ **Relaxed rules**: Allow `any` types and console statements
+- ✅ **Jest globals**: Pre-configured (describe, it, expect, etc.)
+- ✅ **Test-specific patterns**: Optimized for testing scenarios
+
+### **Ignored Files & Directories**
+
+The linter automatically ignores:
+- 🚫 Build artifacts (`dist/`, `cdk.out/`, `*.js`, `*.d.ts`)
+- 🚫 Dependencies (`node_modules/`)
+- 🚫 CDK asset bundles (`**/asset.*/**`)
+- 🚫 Frontend files (`src/components/`, `public/`, `*.html`, `*.css`)
+
+### **Current Linting Status**
+
+✅ **0 errors** - All critical issues resolved  
+⚠️ **70 warnings** - Only console.log statements in Lambda functions (acceptable for logging)
+
+The remaining warnings are intentional `console.log` statements in Lambda functions, which are:
+- **Best practice** for CloudWatch logging in AWS Lambda
+- **Required** for production monitoring and debugging
+- **Configured as warnings** to maintain awareness without blocking builds
+
+### **Development Workflow with Linting**
+
+#### **VS Code Setup** 🔧
+This repository includes optimized VS Code configuration:
+- `.vscode/settings.json` - Workspace settings with ESLint integration
+- `.vscode/extensions.json` - Recommended extensions for AWS development
+
+When you open this repository in VS Code, you'll be prompted to install recommended extensions that provide:
+- ✅ **Auto-linting** on save with ESLint
+- ✅ **TypeScript IntelliSense** with AWS SDK support  
+- ✅ **AWS Toolkit** for deployment and debugging
+- ✅ **Jest integration** for running tests
+- ✅ **Path auto-completion** for imports
+
+#### **Pre-commit Workflow**
+```bash
+# 1. Write your code
+# 2. Run linting before committing
+npm run lint:fix          # Auto-fix what can be fixed
+npm run lint              # Check remaining issues
+npm run test              # Ensure tests pass
+git commit -m "feat: add new feature"
+```
+
+#### **CI/CD Integration**
+```bash
+# In CI/CD pipeline, use strict checking
+npm run lint:check        # Fails if ANY warnings exist
+npm run test:coverage     # Ensure test coverage
+npm run build             # Verify TypeScript compilation
+```
+
+#### **IDE Integration**
+
+For optimal development experience, configure your IDE:
+
+**VS Code** (`.vscode/settings.json`):
+```json
+{
+  "eslint.enable": true,
+  "eslint.format.enable": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.includePackageJsonAutoImports": "on"
+}
+```
+
+**WebStorm/IntelliJ**:
+- Enable ESLint in Settings → Languages & Frameworks → JavaScript → Code Quality Tools → ESLint
+- Set to use flat config format
+- Enable "Run eslint --fix on save"
+
+### **Code Quality Standards**
+
+#### **TypeScript Requirements**
+- ✅ **Explicit return types** for all functions
+- ✅ **No `any` types** (except in tests)
+- ✅ **Strict null checks** enabled
+- ✅ **Promise handling** with proper async/await
+
+#### **AWS Best Practices**
+- ✅ **Least privilege** IAM permissions
+- ✅ **Environment variables** for configuration
+- ✅ **Error handling** with proper logging
+- ✅ **Performance optimization** for Lambda cold starts
+
+#### **Security Standards**
+- 🚫 **No hardcoded secrets** in code
+- 🚫 **No eval() functions** or dynamic code execution
+- ✅ **Input validation** for all API endpoints
+- ✅ **Secure dependencies** with regular updates
 
 ## 📁 **Repository Structure**
 
@@ -103,9 +243,13 @@ npm install
 # Install infrastructure dependencies
 cd infrastructure
 npm install
+
+# Verify linting setup
+cd ..
+npm run lint:summary
 ```
 
-#### 2. **Configure AWS Credentials**
+#### 2. **Configure Development Environment**
 ```bash
 # Configure AWS CLI
 aws configure
@@ -114,6 +258,10 @@ aws configure
 aws configure --profile aerotage-dev
 aws configure --profile aerotage-staging
 aws configure --profile aerotage-prod
+
+# Verify code quality setup
+npm run lint              # Should show 0 errors, 70 warnings (acceptable)
+npm run test              # Run tests to ensure everything works
 ```
 
 #### 3. **Bootstrap CDK** (One-time setup)
@@ -216,6 +364,12 @@ The project supports multiple environments:
 ### **Available Scripts**
 
 ```bash
+# Code Quality & Linting
+npm run lint              # Run ESLint on all TypeScript files
+npm run lint:fix          # Automatically fix linting issues where possible
+npm run lint:check        # Fail build if ANY warnings exist (CI/CD)
+npm run lint:summary      # Run linting with helpful context messages
+
 # Infrastructure deployment
 npm run deploy:dev         # Deploy to development
 npm run deploy:staging     # Deploy to staging
@@ -226,10 +380,10 @@ npm run diff:dev          # Show changes for development
 npm run destroy:dev       # Destroy development stack
 npm run synth             # Generate CloudFormation templates
 
-# Development
+# Development & Testing
 npm run build             # Build TypeScript
 npm run test              # Run tests
-npm run lint              # Run ESLint
+npm run test:coverage     # Run tests with coverage report
 ```
 
 ### **Deployment Process**
@@ -285,6 +439,7 @@ npm run test:coverage
 
 - **API Reference**: See `infrastructure/API_REFERENCE.md`
 - **Deployment Guide**: See `infrastructure/DEPLOYMENT_GUIDE.md`
+- **Linting Guide**: See `docs/LINTING_GUIDE.md` - Comprehensive code quality documentation
 - **Architecture**: See project documentation in frontend repository
 
 ## 🛠️ **Development**
@@ -313,6 +468,20 @@ npm run test:coverage
    // Add API Gateway integration
    const newFeatureResource = api.root.addResource('new-feature');
    newFeatureResource.addMethod('GET', new apigateway.LambdaIntegration(newFeatureHandler));
+   ```
+
+4. **Code Quality & Testing**
+   ```bash
+   # Run linting to catch issues early
+   npm run lint:fix          # Auto-fix formatting issues
+   npm run lint              # Check for remaining issues
+   
+   # Run tests
+   npm run test              # Unit tests
+   npm run build             # Verify TypeScript compilation
+   
+   # Deploy and test
+   npm run deploy:dev        # Deploy to development environment
    ```
 
 ### **Database Schema Changes**
