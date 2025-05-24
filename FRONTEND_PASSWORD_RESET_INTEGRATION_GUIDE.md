@@ -11,11 +11,21 @@ This guide provides step-by-step instructions for integrating and testing the pa
 **✅ Monitoring**: CloudWatch alarms and dashboard configured  
 **✅ Email Service**: Default Cognito email service enabled (50 emails/day limit)
 
+## 🚀 Quick Start (Ready to Test Now!)
+
+**For immediate testing**, you only need:
+
+1. **Update frontend AWS config** with the values below
+2. **Create a test user** via AWS Console or script
+3. **Test password reset** in your frontend
+
+The admin email issue is **optional** and only affects production alerts, not password reset functionality.
+
 ## 🔧 Frontend Configuration
 
-### **1. Update AWS Configuration**
+### **1. AWS Configuration Values**
 
-Update your frontend `aws-config.ts` file with the deployed values:
+**Copy these exact values into your frontend `aws-config.ts`:**
 
 ```typescript
 // src/aws-config.ts (or equivalent)
@@ -41,13 +51,36 @@ const awsConfig = {
       requireDigits: true,
       requireSymbols: false, // Optional per backend configuration
     }
+  },
+  
+  // ✅ API Gateway configuration
+  API: {
+    endpoints: [
+      {
+        name: 'AerotageTimeAPI',
+        endpoint: 'https://0sty9mf3f7.execute-api.us-east-1.amazonaws.com/dev',
+        region: 'us-east-1'
+      }
+    ]
   }
 };
 
 export default awsConfig;
 ```
 
-### **2. Verify Amplify Integration**
+### **2. Configuration Summary Table**
+
+| Configuration | Value | Purpose |
+|---------------|-------|---------|
+| **Region** | `us-east-1` | AWS region |
+| **User Pool ID** | `us-east-1_EsdlgX9Qg` | Cognito authentication |
+| **User Pool Client ID** | `148r35u6uultp1rmfdu22i8amb` | Frontend app client |
+| **Identity Pool ID** | `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787` | AWS resource access |
+| **API Gateway URL** | `https://0sty9mf3f7.execute-api.us-east-1.amazonaws.com/dev` | Backend API calls |
+| **Password Reset** | ✅ Enabled | Email-based reset |
+| **Email Limit** | 50/day | Cognito free tier |
+
+### **3. Verify Amplify Integration**
 
 Ensure your application is using the correct Amplify configuration:
 
@@ -61,33 +94,25 @@ Amplify.configure(awsConfig);
 
 ## 🧪 Testing the Password Reset Feature
 
-### **🚨 IMPORTANT: Admin User Setup Required**
-
-Before testing, you need to address the admin user issue:
-
-#### **Option 1: Update Admin Email (Recommended)**
-```bash
-# Update the admin email in monitoring stack to a real address
-# Edit: infrastructure/lib/monitoring-stack.ts line ~38
-# Change: 'admin@aerotage.com' 
-# To: 'your-real-admin@email.com'
-
-# Then redeploy:
-cd infrastructure/
-npm run deploy:dev
-```
-
-#### **Option 2: Create Test Users via AWS Console**
+### **Option 1: Create Test User via AWS Console (Recommended)**
 1. Go to [AWS Cognito Console](https://console.aws.amazon.com/cognito/)
 2. Select User Pool: `aerotage-time-dev`
 3. Click "Create user"
-4. Use your real email address for testing
-5. Set temporary password
-6. Enable "Mark email as verified"
+4. **Username**: Use an email address (e.g., `test@yourdomain.com`)
+5. **Email**: Same email address
+6. Set temporary password: `TempPass123!`
+7. **✅ Enable "Mark email as verified"**
+8. **✅ Enable "Send an invitation to this new user?"** = NO
 
-### **3. Frontend Testing Steps**
+### **Option 2: Use the Fixed Setup Script**
+```bash
+# Run the automated setup script
+./scripts/setup-admin-user.sh
+```
 
-#### **Test Scenario 1: Valid User Password Reset**
+### **3. Frontend Testing Implementation**
+
+#### **Test Scenario 1: Complete Password Reset Flow**
 
 ```typescript
 // Example test implementation
@@ -96,17 +121,19 @@ import { resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 // Step 1: Request password reset
 const testPasswordReset = async () => {
   try {
-    const email = 'your-test-user@yourdomain.com'; // Use actual test email
+    const email = 'test@yourdomain.com'; // Use actual test email
     
     console.log('🔄 Requesting password reset for:', email);
     const result = await resetPassword({ username: email });
     
     console.log('✅ Password reset initiated:', result);
-    // User should receive email with 6-digit code
+    console.log('📧 Check email for 6-digit code');
+    
+    return result;
     
   } catch (error) {
     console.error('❌ Password reset failed:', error);
-    // Handle error cases
+    // Handle error cases - see error handling section below
   }
 };
 
@@ -125,12 +152,25 @@ const confirmPasswordReset = async (email: string, code: string, newPassword: st
     
   } catch (error) {
     console.error('❌ Password confirmation failed:', error);
-    // Handle error cases (invalid code, expired code, weak password, etc.)
+    // Handle specific error cases (see error handling section)
   }
+};
+
+// Complete test flow
+const runPasswordResetTest = async () => {
+  const testEmail = 'test@yourdomain.com';
+  
+  // Step 1: Request reset
+  await testPasswordReset();
+  
+  // Step 2: Get code from email and confirm
+  // const code = prompt('Enter the 6-digit code from email:');
+  // const newPassword = 'NewPassword123!';
+  // await confirmPasswordReset(testEmail, code, newPassword);
 };
 ```
 
-#### **Test Scenario 2: Invalid Email Handling**
+#### **Test Scenario 2: Security - Invalid Email Handling**
 
 ```typescript
 const testInvalidEmail = async () => {
@@ -139,7 +179,7 @@ const testInvalidEmail = async () => {
     await resetPassword({ username: 'nonexistent@example.com' });
     console.log('✅ Request completed (no information leakage)');
   } catch (error) {
-    console.log('Error handled:', error);
+    console.log('Error handled properly:', error);
   }
 };
 ```
@@ -150,7 +190,7 @@ const testInvalidEmail = async () => {
 const testPasswordPolicy = async (email: string, code: string) => {
   const weakPasswords = [
     'weak',           // Too short
-    'nodigits',       // No digits
+    'nodigits',       // No digits  
     'NOCAPS',         // No lowercase
     'nocaps123',      // No uppercase
   ];
@@ -183,19 +223,21 @@ const testPasswordPolicy = async (email: string, code: string) => {
 
 ## 👥 User Management & Invitation System
 
-### **🔍 Current User Invitation Status**
+### **🔍 User Invitation System (Already Available)**
 
-Based on the deployed infrastructure, there IS an invitation system available:
+Your backend has a working invitation system:
 
 #### **Available API Endpoints:**
-- **✅ InviteUser**: `aerotage-inviteuser-dev` Lambda function
-- **✅ CreateUser**: `aerotage-createuser-dev` Lambda function
-- **✅ GetUsers**: `aerotage-getusers-dev` Lambda function
+- **✅ InviteUser**: `POST /users/invite`
+- **✅ CreateUser**: `POST /users`
+- **✅ GetUsers**: `GET /users`
 
-#### **Testing User Invitation:**
+#### **Frontend Integration Example:**
 
 ```typescript
-// Example API call to invite a user
+import { API } from 'aws-amplify';
+
+// Invite a new user
 const inviteUser = async (userData: {
   email: string;
   givenName: string;
@@ -205,50 +247,48 @@ const inviteUser = async (userData: {
   hourlyRate?: number;
 }) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/users/invite`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
+    const response = await API.post('AerotageTimeAPI', '/users/invite', {
+      body: userData
     });
     
-    if (response.ok) {
-      console.log('✅ User invitation sent');
-      // User will receive email with temporary password
-    } else {
-      console.error('❌ Invitation failed:', await response.text());
-    }
+    console.log('✅ User invitation sent:', response);
+    // User will receive email with temporary password
+    return response;
+    
   } catch (error) {
-    console.error('❌ Invitation error:', error);
+    console.error('❌ Invitation failed:', error);
+    throw error;
   }
 };
 
 // Example usage
-await inviteUser({
-  email: 'newuser@yourdomain.com',
-  givenName: 'John',
-  familyName: 'Doe',
-  role: 'employee',
-  teamId: 'team-123',
-  hourlyRate: 50,
-});
+const inviteNewEmployee = async () => {
+  await inviteUser({
+    email: 'newuser@yourdomain.com',
+    givenName: 'John',
+    familyName: 'Doe',
+    role: 'employee',
+    teamId: 'team-123',
+    hourlyRate: 50,
+  });
+};
 ```
 
-## 🔧 Admin User Setup Solutions
+## 🔧 Admin User Setup (Optional - Production Alerts Only)
 
-### **Solution 1: Create Proper Admin User**
+**⚠️ Note**: The admin email issue only affects production alert notifications, not password reset functionality or development testing.
+
+### **Create Admin User (if needed)**
 
 ```bash
 # Using AWS CLI to create admin user with real email
 aws cognito-idp admin-create-user \
   --user-pool-id us-east-1_EsdlgX9Qg \
-  --username admin \
+  --username "your-admin@yourdomain.com" \
   --user-attributes \
-    Name=email,Value=your-real-admin@email.com \
-    Name=given_name,Value=Admin \
-    Name=family_name,Value=User \
+    Name=email,Value="your-admin@yourdomain.com" \
+    Name=given_name,Value="Admin" \
+    Name=family_name,Value="User" \
     Name=email_verified,Value=true \
     Name=custom:role,Value=admin \
   --temporary-password "TempPass123!" \
@@ -257,97 +297,108 @@ aws cognito-idp admin-create-user \
 # Add admin to admin group
 aws cognito-idp admin-add-user-to-group \
   --user-pool-id us-east-1_EsdlgX9Qg \
-  --username admin \
+  --username "your-admin@yourdomain.com" \
   --group-name admin
-```
-
-### **Solution 2: Update Monitoring Email**
-
-```typescript
-// Edit: infrastructure/lib/monitoring-stack.ts
-// Line 38: Replace admin@aerotage.com with real email
-
-if (stage === 'prod') {
-  this.alertTopic.addSubscription(
-    new subscriptions.EmailSubscription('your-real-admin@email.com') // ← Update this
-  );
-}
-```
-
-Then redeploy:
-```bash
-cd infrastructure/
-npm run deploy:dev
 ```
 
 ## 📧 Email Delivery Testing
 
 ### **Check Email Delivery**
 
-1. **Primary Inbox**: Check the recipient's primary inbox
-2. **Spam/Junk Folder**: Cognito emails often go to spam initially
-3. **Email Filtering**: Check if corporate email filters are blocking AWS emails
+1. **Primary Inbox**: Check the recipient's primary inbox first
+2. **Spam/Junk Folder**: Cognito emails often go here initially
+3. **Promotions Tab**: Gmail sometimes categorizes here
+4. **Corporate Email Filters**: May block AWS emails
 
 ### **Email Content Example**
 
 Users will receive emails similar to:
 ```
-Subject: Password Reset - Aerotage Time Reporting
+Subject: Your verification code
+From: no-reply@verificationemail.com
 
-Your password reset code: 123456
+Your verification code is: 123456
 
-This code expires in 15 minutes.
+This code will expire in 15 minutes.
 ```
 
 ### **Troubleshooting Email Issues**
 
 ```bash
-# Check Cognito logs for email delivery
+# Check Cognito logs for email delivery issues
 aws logs filter-log-events \
   --log-group-name /aws/cognito/userpool/us-east-1_EsdlgX9Qg \
   --start-time $(date -d '1 hour ago' +%s)000 \
   --filter-pattern "ERROR"
 
-# Check password reset alarm status
-aws cloudwatch describe-alarms \
-  --alarm-names aerotage-password-reset-high-volume-dev
+# Check email quota (50/day for free tier)
+aws cognito-idp describe-user-pool \
+  --user-pool-id us-east-1_EsdlgX9Qg \
+  --query 'UserPool.EmailConfiguration'
 ```
 
 ## 🛠️ Error Handling
 
-### **Common Error Scenarios**
+### **Complete Error Handling Implementation**
 
 ```typescript
 const handlePasswordResetErrors = (error: any) => {
   switch (error.code) {
     case 'UserNotFoundException':
       // Don't reveal if user exists - show generic message
-      showMessage('If this email is registered, you will receive a reset code.');
-      break;
+      return 'If this email is registered, you will receive a reset code.';
       
     case 'InvalidParameterException':
-      showMessage('Invalid email format. Please check and try again.');
-      break;
+      return 'Invalid email format. Please check and try again.';
       
     case 'TooManyRequestsException':
-      showMessage('Too many requests. Please wait before trying again.');
-      break;
+      return 'Too many requests. Please wait before trying again.';
       
     case 'CodeExpiredException':
-      showMessage('Reset code has expired. Please request a new one.');
-      break;
+      return 'Reset code has expired. Please request a new one.';
       
     case 'InvalidPasswordException':
-      showMessage('Password does not meet requirements. Must be 8+ characters with uppercase, lowercase, and numbers.');
-      break;
+      return 'Password does not meet requirements. Must be 8+ characters with uppercase, lowercase, and numbers.';
       
     case 'CodeMismatchException':
-      showMessage('Invalid reset code. Please check and try again.');
-      break;
+      return 'Invalid reset code. Please check and try again.';
+      
+    case 'LimitExceededException':
+      return 'Too many attempts. Please try again later.';
+      
+    case 'NotAuthorizedException':
+      return 'Invalid verification code provided.';
       
     default:
-      showMessage('Password reset failed. Please try again later.');
       console.error('Password reset error:', error);
+      return 'Password reset failed. Please try again later.';
+  }
+};
+
+// Usage in your components
+const handleResetPassword = async (email: string) => {
+  try {
+    await resetPassword({ username: email });
+    setMessage('If this email is registered, you will receive a reset code.');
+    setStep('confirm'); // Move to code confirmation step
+  } catch (error) {
+    const errorMessage = handlePasswordResetErrors(error);
+    setMessage(errorMessage);
+  }
+};
+
+const handleConfirmReset = async (email: string, code: string, newPassword: string) => {
+  try {
+    await confirmResetPassword({
+      username: email,
+      confirmationCode: code,
+      newPassword: newPassword,
+    });
+    setMessage('Password reset successful! You can now log in.');
+    router.push('/login'); // Redirect to login
+  } catch (error) {
+    const errorMessage = handlePasswordResetErrors(error);
+    setMessage(errorMessage);
   }
 };
 ```
@@ -360,39 +411,39 @@ const handlePasswordResetErrors = (error: any) => {
 
 ### **Key Metrics to Track**
 - Password reset request count
-- Successful vs failed confirmations
+- Successful vs failed confirmations  
 - Email delivery success rates
 - User journey completion rates
 
 ## ✅ Testing Checklist
 
 ### **Frontend Integration Testing**
-- [ ] AWS configuration updated with correct values
-- [ ] Amplify properly configured
-- [ ] Password reset form implemented
-- [ ] Error handling implemented
-- [ ] Success flow tested
+- [ ] AWS configuration updated with correct values from this guide
+- [ ] Amplify properly configured and imported
+- [ ] Password reset form implemented with proper error handling
+- [ ] Success flow tested end-to-end
+- [ ] User redirect to login after successful reset
 
 ### **Backend Functionality Testing**
-- [ ] Admin user created with real email
-- [ ] Test user created for password reset testing
+- [ ] Test user created via AWS Console or script
 - [ ] Email delivery confirmed (check spam folders)
 - [ ] Password policy validation working
 - [ ] Error scenarios handled properly
+- [ ] Invalid email attempts don't reveal user existence
 
 ### **User Experience Testing**
-- [ ] Password reset flow intuitive
+- [ ] Password reset flow intuitive and clear
 - [ ] Error messages helpful and secure
-- [ ] Email instructions clear
+- [ ] Email instructions clear to users
 - [ ] Success confirmation displayed
-- [ ] Redirect to login after success
+- [ ] Proper loading states during API calls
 
 ### **Security Testing**
 - [ ] Invalid emails don't reveal user existence
-- [ ] Expired codes properly rejected
-- [ ] Weak passwords rejected
+- [ ] Expired codes properly rejected (15-minute limit)
+- [ ] Weak passwords rejected per policy
 - [ ] Rate limiting prevents abuse
-- [ ] Monitoring alerts function
+- [ ] No sensitive information in error messages
 
 ## 🚀 Production Deployment Considerations
 
@@ -422,9 +473,10 @@ const handlePasswordResetErrors = (error: any) => {
 ### **Common Issues**
 
 1. **"Email not received"**
-   - Check spam/junk folders
+   - Check spam/junk folders first
    - Verify email address is correct
    - Check Cognito email quota (50/day for free tier)
+   - Try with different email provider (Gmail, Outlook, etc.)
 
 2. **"Code expired"**
    - Codes expire in 15 minutes
@@ -436,20 +488,52 @@ const handlePasswordResetErrors = (error: any) => {
    - Require uppercase, lowercase, numbers
    - Symbols are optional
 
-### **Getting Help**
+4. **"Amplify configuration errors"**
+   - Double-check all IDs in aws-config.ts
+   - Ensure Amplify.configure() is called before any auth operations
+   - Check browser console for detailed error messages
 
-- **CloudWatch Logs**: Check Cognito and Lambda logs
-- **AWS Console**: Monitor Cognito user pool metrics
-- **Support**: Contact backend team with specific error messages
+### **Debug Commands**
+
+```bash
+# Verify deployment values
+aws cloudformation describe-stacks \
+  --stack-name AerotageAuth-dev \
+  --query 'Stacks[0].Outputs'
+
+# Check user pool configuration
+aws cognito-idp describe-user-pool \
+  --user-pool-id us-east-1_EsdlgX9Qg
+
+# List users for testing
+aws cognito-idp list-users \
+  --user-pool-id us-east-1_EsdlgX9Qg
+```
 
 ---
 
 ## 🎯 Next Steps
 
-1. **Implement Frontend Changes**: Update AWS config and test password reset flow
-2. **Create Admin User**: Set up proper admin account with real email
-3. **Test User Invitation**: Use existing invite system to create test users
-4. **Monitor Performance**: Check CloudWatch dashboard for metrics
-5. **Plan Production**: Prepare for production deployment with SES integration
+### **Immediate Actions (30 minutes)**
+1. **✅ Update Frontend Config**: Copy AWS configuration values above
+2. **✅ Create Test User**: Via AWS Console (Option 1 above)
+3. **✅ Test Password Reset**: Implement basic test in your frontend
+4. **✅ Test Error Handling**: Try invalid emails and codes
 
-The password reset functionality is fully operational and ready for frontend integration! 🚀 
+### **Integration Phase (1-2 hours)**
+1. **Implement UI Components**: Password reset form and confirmation
+2. **Add Error Handling**: Use error handling code above
+3. **Test User Journey**: Complete end-to-end flow
+4. **Test Edge Cases**: Expired codes, weak passwords, etc.
+
+### **Production Preparation**
+1. **Monitor Performance**: Check CloudWatch dashboard
+2. **Plan SES Upgrade**: For higher email volume
+3. **Document Process**: For operations team
+4. **Security Review**: Validate all security requirements
+
+## 🚀 **The password reset functionality is fully operational and ready for frontend integration!**
+
+**Start with the Quick Start section above for immediate testing!** 
+
+All backend infrastructure is deployed and working. The frontend team can begin integration immediately using the configuration values and examples provided in this guide. 
