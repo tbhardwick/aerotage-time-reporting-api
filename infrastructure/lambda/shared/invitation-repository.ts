@@ -171,12 +171,12 @@ export class InvitationRepository {
    * Checks if an email already has a pending invitation
    */
   async checkEmailExists(email: string): Promise<boolean> {
-    const command = new QueryCommand({
+    // Fallback to table scan since EmailIndexV2 is not deployed yet
+    const command = new ScanCommand({
       TableName: this.tableName,
-      IndexName: 'EmailIndexV2',
-      KeyConditionExpression: 'email = :email',
-      FilterExpression: '#status = :status',
+      FilterExpression: '#email = :email AND #status = :status',
       ExpressionAttributeNames: {
+        '#email': 'email',
         '#status': 'status',
       },
       ExpressionAttributeValues: marshall({
@@ -205,45 +205,42 @@ export class InvitationRepository {
     const limit = filters.limit || 50;
     const offset = filters.offset || 0;
 
-    let command: QueryCommand | ScanCommand;
+    // Use table scan for now since StatusIndexV2 is not deployed yet
+    let filterExpression = '';
+    const expressionAttributeNames: { [key: string]: string } = {};
+    const expressionAttributeValues: { [key: string]: any } = {};
 
     if (filters.status) {
-      // Use GSI2 (StatusIndexV2) when filtering by status
-      command = new QueryCommand({
-        TableName: this.tableName,
-        IndexName: 'StatusIndexV2',
-        KeyConditionExpression: '#status = :status',
-        ExpressionAttributeNames: {
-          '#status': 'status',
-        },
-        ExpressionAttributeValues: marshall({
-          ':status': filters.status,
-        }),
-        ScanIndexForward: filters.sortOrder !== 'desc',
-        Limit: limit + offset + 1, // Get one extra to check if there are more
-      });
-    } else {
-      // Scan all invitations
-      command = new ScanCommand({
-        TableName: this.tableName,
-        Limit: limit + offset + 1,
-      });
+      filterExpression = '#status = :status';
+      expressionAttributeNames['#status'] = 'status';
+      expressionAttributeValues[':status'] = filters.status;
     }
+
+    const command = new ScanCommand({
+      TableName: this.tableName,
+      FilterExpression: filterExpression || undefined,
+      ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
+      ExpressionAttributeValues: Object.keys(expressionAttributeValues).length > 0 ? marshall(expressionAttributeValues) : undefined,
+      Limit: limit + offset + 1, // Get one extra to check if there are more
+    });
 
     try {
       const result = await this.dynamoClient.send(command);
       const items = result.Items || [];
       
-      const invitations = items
-        .slice(offset, offset + limit)
+      let invitations = items
         .map(item => this.mapDynamoItemToInvitation(unmarshall(item) as UserInvitationDynamoItem));
 
-      const hasMore = items.length > offset + limit;
-      const total = items.length; // This is an approximation for scans
+      // Sort by createdAt (newest first) since we don't have GSI sorting
+      invitations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Apply pagination
+      const paginatedInvitations = invitations.slice(offset, offset + limit);
+      const hasMore = invitations.length > offset + limit;
 
       return {
-        invitations,
-        total,
+        invitations: paginatedInvitations,
+        total: invitations.length,
         hasMore,
       };
     } catch (error) {
