@@ -187,7 +187,10 @@ export class MonitoringStack extends cdk.Stack {
     const dynamoWidgets: cloudwatch.IWidget[] = [];
     const dynamoAlarms: cloudwatch.Alarm[] = [];
 
-    Object.entries(dynamoDbTables).forEach(([name, table]) => {
+    // Filter out null tables before processing
+    const validTables = Object.entries(dynamoDbTables).filter(([_, table]) => table !== null);
+    
+    validTables.forEach(([name, table]) => {
       // Read Capacity Metric
       const readCapacityMetric = new cloudwatch.Metric({
         namespace: 'AWS/DynamoDB',
