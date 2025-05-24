@@ -245,7 +245,7 @@ STAGE=prod npm run deploy
 ### Environment Configuration
 ```bash
 # Required environment variables
-FRONTEND_BASE_URL=https://app.aerotage.com
+FRONTEND_BASE_URL=https://time.aerotage.com
 SES_FROM_EMAIL=noreply@aerotage.com
 SES_REPLY_TO_EMAIL=support@aerotage.com
 ```

@@ -70,7 +70,7 @@ export class EmailService {
       recipientEmail,
       companyName: 'Aerotage Design Group, Inc.',
       supportEmail: this.replyToEmail,
-      dashboardUrl: templateData.dashboardUrl || process.env.FRONTEND_BASE_URL || 'https://app.aerotage.com',
+      dashboardUrl: templateData.dashboardUrl || process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com',
     };
 
     await this.sendTemplatedEmail(recipientEmail, templateName, enhancedData);

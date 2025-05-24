@@ -101,7 +101,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Send welcome email
     try {
-      const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://app.aerotage.com';
+      const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com';
       const emailData: EmailTemplateData = {
         userName: user.name,
         dashboardUrl: frontendBaseUrl,

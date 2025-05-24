@@ -66,7 +66,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     );
 
     // Prepare email template data
-    const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://app.aerotage.com';
+    const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com';
     const invitationUrl = `${frontendBaseUrl}/accept-invitation?token=${updatedInvitation.invitationToken}`;
     
     const emailData: EmailTemplateData = {
