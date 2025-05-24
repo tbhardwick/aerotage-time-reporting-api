@@ -215,21 +215,7 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // Add GSI for email lookup
-    userInvitationsTable.addGlobalSecondaryIndex({
-      indexName: 'EmailIndexV2',
-      partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
-    });
-
-    // Add GSI for status lookup
-    userInvitationsTable.addGlobalSecondaryIndex({
-      indexName: 'StatusIndexV2',
-      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
-    });
-
-    // Add GSI for secure token lookup
+    // Add GSI for secure token lookup (most critical for functionality)
     userInvitationsTable.addGlobalSecondaryIndex({
       indexName: 'TokenHashIndexV2',
       partitionKey: { name: 'tokenHash', type: dynamodb.AttributeType.STRING },
