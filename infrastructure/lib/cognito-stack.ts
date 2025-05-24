@@ -87,8 +87,7 @@ export class CognitoStack extends cdk.Stack {
       },
       // ✅ REQUIRED: Account recovery for password reset
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      // ✅ SECURITY: Enhanced security configuration
-      advancedSecurityMode: cognito.AdvancedSecurityMode.ENFORCED,
+      // ✅ SECURITY: Device tracking and MFA (Advanced Security requires paid plan)
       deviceTracking: {
         challengeRequiredOnNewDevice: true,
         deviceOnlyRememberedOnUserPrompt: false,
@@ -167,7 +166,6 @@ export class CognitoStack extends cdk.Stack {
       writeAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({
           email: true,
-          emailVerified: true,
           givenName: true,
           familyName: true,
           phoneNumber: true,
