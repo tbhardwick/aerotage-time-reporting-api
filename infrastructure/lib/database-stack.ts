@@ -15,7 +15,7 @@ export interface DatabaseTables {
   invoicesTable: dynamodb.Table;
   userSessionsTable: dynamodb.Table;
   userActivityTable: dynamodb.Table;
-  userInvitationsTable: dynamodb.ITable;
+  userInvitationsTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -205,12 +205,35 @@ export class DatabaseStack extends cdk.Stack {
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
     });
 
-    // User Invitations Table - Import existing manually created table
-    const userInvitationsTable = dynamodb.Table.fromTableName(
-      this, 
-      'UserInvitationsTable', 
-      `aerotage-user-invitations-${stage}`
-    );
+    // User Invitations Table
+    const userInvitationsTable = new dynamodb.Table(this, 'UserInvitationsTable', {
+      tableName: `aerotage-user-invitations-${stage}`,
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'expiresAt',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for email lookup
+    userInvitationsTable.addGlobalSecondaryIndex({
+      indexName: 'EmailIndexV2',
+      partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for status lookup
+    userInvitationsTable.addGlobalSecondaryIndex({
+      indexName: 'StatusIndexV2',
+      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for secure token lookup
+    userInvitationsTable.addGlobalSecondaryIndex({
+      indexName: 'TokenHashIndexV2',
+      partitionKey: { name: 'tokenHash', type: dynamodb.AttributeType.STRING },
+    });
 
     // Store all tables for easy access
     this.tables = {
