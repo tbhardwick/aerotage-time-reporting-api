@@ -14,6 +14,7 @@ export interface MonitoringStackProps extends cdk.StackProps {
   apiGateway: apigateway.RestApi;
   lambdaFunctions: { [key: string]: lambda.Function };
   dynamoDbTables: DatabaseTables;
+  cognitoPasswordResetAlarm?: cloudwatch.Alarm;
 }
 
 export class MonitoringStack extends cdk.Stack {
@@ -23,7 +24,7 @@ export class MonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
-    const { stage, apiGateway, lambdaFunctions, dynamoDbTables } = props;
+    const { stage, apiGateway, lambdaFunctions, dynamoDbTables, cognitoPasswordResetAlarm } = props;
 
     // SNS Topic for alerts
     this.alertTopic = new sns.Topic(this, 'AlertTopic', {
@@ -298,6 +299,19 @@ export class MonitoringStack extends cdk.Stack {
       this.dashboard.addWidgets(...firstDynamoWidgets);
     }
 
+    // ✅ NEW: Add password reset monitoring widget if available
+    if (cognitoPasswordResetAlarm) {
+      // Add password reset monitoring to dashboard
+      const passwordResetWidget = new cloudwatch.GraphWidget({
+        title: 'Cognito Password Reset Monitoring',
+        left: [cognitoPasswordResetAlarm.metric],
+        width: 12,
+        height: 6,
+      });
+      
+      this.dashboard.addWidgets(passwordResetWidget);
+    }
+
     // System Health Summary Widget
     const healthWidget = new cloudwatch.SingleValueWidget({
       title: 'System Health Summary',
@@ -328,21 +342,30 @@ export class MonitoringStack extends cdk.Stack {
       });
     });
 
-    // Composite Alarm for overall system health
+    // ✅ ENHANCED: Composite Alarm for overall system health including password reset monitoring
+    const systemHealthAlarmRules = [
+      cloudwatch.AlarmRule.fromAlarm(highLatencyAlarm, cloudwatch.AlarmState.ALARM),
+      cloudwatch.AlarmRule.fromAlarm(highErrorRateAlarm, cloudwatch.AlarmState.ALARM),
+      cloudwatch.AlarmRule.fromAlarm(serverErrorAlarm, cloudwatch.AlarmState.ALARM),
+      ...lambdaAlarms.map(alarm => 
+        cloudwatch.AlarmRule.fromAlarm(alarm, cloudwatch.AlarmState.ALARM)
+      ),
+      ...dynamoAlarms.map(alarm => 
+        cloudwatch.AlarmRule.fromAlarm(alarm, cloudwatch.AlarmState.ALARM)
+      ),
+    ];
+
+    // Include password reset alarm in system health if provided
+    if (cognitoPasswordResetAlarm) {
+      systemHealthAlarmRules.push(
+        cloudwatch.AlarmRule.fromAlarm(cognitoPasswordResetAlarm, cloudwatch.AlarmState.ALARM)
+      );
+    }
+
     const systemHealthAlarm = new cloudwatch.CompositeAlarm(this, 'SystemHealthAlarm', {
       compositeAlarmName: `${stage}-system-health`,
-      alarmDescription: 'Overall system health alarm',
-      alarmRule: cloudwatch.AlarmRule.anyOf(
-        cloudwatch.AlarmRule.fromAlarm(highLatencyAlarm, cloudwatch.AlarmState.ALARM),
-        cloudwatch.AlarmRule.fromAlarm(highErrorRateAlarm, cloudwatch.AlarmState.ALARM),
-        cloudwatch.AlarmRule.fromAlarm(serverErrorAlarm, cloudwatch.AlarmState.ALARM),
-        ...lambdaAlarms.map(alarm => 
-          cloudwatch.AlarmRule.fromAlarm(alarm, cloudwatch.AlarmState.ALARM)
-        ),
-        ...dynamoAlarms.map(alarm => 
-          cloudwatch.AlarmRule.fromAlarm(alarm, cloudwatch.AlarmState.ALARM)
-        )
-      ),
+      alarmDescription: 'Overall system health alarm including password reset monitoring',
+      alarmRule: cloudwatch.AlarmRule.anyOf(...systemHealthAlarmRules),
     });
 
     systemHealthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.alertTopic));

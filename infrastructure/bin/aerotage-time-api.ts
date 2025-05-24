@@ -25,6 +25,7 @@ const commonTags = {
   Environment: stage,
   ManagedBy: 'CDK',
   Application: 'aerotage-time-api',
+  PasswordResetEnabled: 'true',
 };
 
 // Authentication Stack (Cognito)
@@ -65,6 +66,7 @@ const monitoringStack = new MonitoringStack(app, `AerotageMonitoring-${stage}`, 
   apiGateway: apiStack.api,
   lambdaFunctions: apiStack.lambdaFunctions,
   dynamoDbTables: databaseStack.tables,
+  cognitoPasswordResetAlarm: cognitoStack.passwordResetAlarm,
   env,
   tags: commonTags,
 });
@@ -74,4 +76,5 @@ apiStack.addDependency(cognitoStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(storageStack);
 monitoringStack.addDependency(apiStack);
-monitoringStack.addDependency(databaseStack); 
+monitoringStack.addDependency(databaseStack);
+monitoringStack.addDependency(cognitoStack); 
