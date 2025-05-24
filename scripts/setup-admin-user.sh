@@ -36,15 +36,14 @@ check_aws_cli() {
 # Function to create admin user
 create_admin_user() {
     local email=$1
-    local username=$2
-    local temp_password=$3
+    local temp_password=$2
     
-    echo -e "${YELLOW}🔄 Creating admin user: $username${NC}"
+    echo -e "${YELLOW}🔄 Creating admin user: $email${NC}"
     
-    # Create the user
+    # Create the user (using email as username since signInAliases is email)
     aws cognito-idp admin-create-user \
         --user-pool-id "$USER_POOL_ID" \
-        --username "$username" \
+        --username "$email" \
         --user-attributes \
             Name=email,Value="$email" \
             Name=given_name,Value="Admin" \
@@ -55,15 +54,15 @@ create_admin_user() {
         --message-action SUPPRESS \
         > /dev/null
     
-    # Add user to admin group
+    # Add user to admin group (using email as username)
     aws cognito-idp admin-add-user-to-group \
         --user-pool-id "$USER_POOL_ID" \
-        --username "$username" \
+        --username "$email" \
         --group-name admin \
         > /dev/null
     
     echo -e "${GREEN}✅ Admin user created successfully${NC}"
-    echo -e "   Username: $username"
+    echo -e "   Username: $email"
     echo -e "   Email: $email"
     echo -e "   Temporary Password: $temp_password"
     echo -e "   ${YELLOW}⚠️  User must change password on first login${NC}"
@@ -72,15 +71,14 @@ create_admin_user() {
 # Function to create test user
 create_test_user() {
     local email=$1
-    local username=$2
-    local temp_password=$3
+    local temp_password=$2
     
-    echo -e "${YELLOW}🔄 Creating test user: $username${NC}"
+    echo -e "${YELLOW}🔄 Creating test user: $email${NC}"
     
-    # Create the user
+    # Create the user (using email as username since signInAliases is email)
     aws cognito-idp admin-create-user \
         --user-pool-id "$USER_POOL_ID" \
-        --username "$username" \
+        --username "$email" \
         --user-attributes \
             Name=email,Value="$email" \
             Name=given_name,Value="Test" \
@@ -91,15 +89,15 @@ create_test_user() {
         --message-action SUPPRESS \
         > /dev/null
     
-    # Add user to employee group
+    # Add user to employee group (using email as username)
     aws cognito-idp admin-add-user-to-group \
         --user-pool-id "$USER_POOL_ID" \
-        --username "$username" \
+        --username "$email" \
         --group-name employee \
         > /dev/null
     
     echo -e "${GREEN}✅ Test user created successfully${NC}"
-    echo -e "   Username: $username"
+    echo -e "   Username: $email"
     echo -e "   Email: $email"
     echo -e "   Temporary Password: $temp_password"
     echo -e "   ${YELLOW}⚠️  Use this user to test password reset${NC}"
@@ -158,12 +156,12 @@ main() {
     echo -e "${YELLOW}🚀 Creating users...${NC}"
     
     # Create admin user
-    create_admin_user "$admin_email" "admin" "$admin_temp_password"
+    create_admin_user "$admin_email" "$admin_temp_password"
     
     echo ""
     
     # Create test user
-    create_test_user "$test_email" "testuser" "$test_temp_password"
+    create_test_user "$test_email" "$test_temp_password"
     
     echo ""
     
@@ -185,12 +183,12 @@ main() {
     echo ""
     echo -e "${YELLOW}🔑 Login Information:${NC}"
     echo "   Admin User:"
-    echo "     - Username: admin"
+    echo "     - Username: $admin_email"
     echo "     - Email: $admin_email"
     echo "     - Temp Password: $admin_temp_password"
     echo ""
     echo "   Test User (for password reset testing):"
-    echo "     - Username: testuser"
+    echo "     - Username: $test_email"
     echo "     - Email: $test_email"
     echo "     - Temp Password: $test_temp_password"
     echo ""
