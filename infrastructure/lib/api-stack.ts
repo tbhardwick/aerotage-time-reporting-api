@@ -7,6 +7,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { DatabaseTables } from './database-stack';
+import { SesStack } from './ses-stack';
 
 export interface ApiStackProps extends cdk.StackProps {
   stage: string;
@@ -14,6 +15,7 @@ export interface ApiStackProps extends cdk.StackProps {
   userPoolClient: cognito.UserPoolClient;
   tables: DatabaseTables;
   storageBucket: s3.Bucket;
+  sesStack: SesStack;
 }
 
 export class ApiStack extends cdk.Stack {
@@ -23,7 +25,7 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { stage, userPool, userPoolClient, tables, storageBucket } = props;
+    const { stage, userPool, userPoolClient, tables, storageBucket, sesStack } = props;
 
     // Create REST API
     this.api = new apigateway.RestApi(this, 'AerotageTimeApi', {
@@ -63,6 +65,10 @@ export class ApiStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        // Import SES policy from SES stack
+        iam.ManagedPolicy.fromManagedPolicyArn(this, 'SesPolicy', 
+          cdk.Fn.importValue(`LambdaSesPolicyArn-${stage}`)
+        ),
       ],
       inlinePolicies: {
         DynamoDBAccess: new iam.PolicyDocument({
@@ -151,6 +157,13 @@ export class ApiStack extends cdk.Stack {
       USER_ACTIVITY_TABLE: tables.userActivityTable.tableName,
       USER_INVITATIONS_TABLE: tables.userInvitationsTable.tableName,
       STORAGE_BUCKET: storageBucket.bucketName,
+      // SES Configuration
+      SES_FROM_EMAIL: sesStack.fromEmail,
+      SES_REPLY_TO_EMAIL: sesStack.replyToEmail,
+      INVITATION_TEMPLATE_NAME: cdk.Fn.importValue(`SesInvitationTemplate-${stage}`),
+      REMINDER_TEMPLATE_NAME: cdk.Fn.importValue(`SesReminderTemplate-${stage}`),
+      WELCOME_TEMPLATE_NAME: cdk.Fn.importValue(`SesWelcomeTemplate-${stage}`),
+      FRONTEND_BASE_URL: stage === 'prod' ? 'https://app.aerotage.com' : `https://app-${stage}.aerotage.com`,
     };
 
     // Store Lambda functions for monitoring
@@ -212,6 +225,40 @@ export class ApiStack extends cdk.Stack {
     inviteResource.addMethod('POST', new apigateway.LambdaIntegration(inviteUserFunction), {
       authorizer: cognitoAuthorizer,
     });
+
+    // User Invitations APIs
+    const userInvitationsResource = this.api.root.addResource('user-invitations');
+    const createInvitationFunction = createLambdaFunction('CreateInvitation', 'user-invitations/create', 'Create user invitation');
+    const listInvitationsFunction = createLambdaFunction('ListInvitations', 'user-invitations/list', 'List user invitations');
+    const validateInvitationFunction = createLambdaFunction('ValidateInvitation', 'user-invitations/validate', 'Validate invitation token');
+    const acceptInvitationFunction = createLambdaFunction('AcceptInvitation', 'user-invitations/accept', 'Accept invitation');
+
+    userInvitationsResource.addMethod('POST', new apigateway.LambdaIntegration(createInvitationFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+    userInvitationsResource.addMethod('GET', new apigateway.LambdaIntegration(listInvitationsFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    const invitationResource = userInvitationsResource.addResource('{id}');
+    const resendInvitationFunction = createLambdaFunction('ResendInvitation', 'user-invitations/resend', 'Resend invitation');
+    const cancelInvitationFunction = createLambdaFunction('CancelInvitation', 'user-invitations/cancel', 'Cancel invitation');
+
+    const resendResource = invitationResource.addResource('resend');
+    resendResource.addMethod('POST', new apigateway.LambdaIntegration(resendInvitationFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    invitationResource.addMethod('DELETE', new apigateway.LambdaIntegration(cancelInvitationFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    const validateResource = userInvitationsResource.addResource('validate');
+    const validateTokenResource = validateResource.addResource('{token}');
+    validateTokenResource.addMethod('GET', new apigateway.LambdaIntegration(validateInvitationFunction));
+
+    const acceptResource = userInvitationsResource.addResource('accept');
+    acceptResource.addMethod('POST', new apigateway.LambdaIntegration(acceptInvitationFunction));
 
     // Team Management APIs
     const teamsResource = this.api.root.addResource('teams');

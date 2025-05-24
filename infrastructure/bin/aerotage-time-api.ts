@@ -3,6 +3,7 @@ import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { CognitoStack } from '../lib/cognito-stack';
 import { DatabaseStack } from '../lib/database-stack';
+import { SesStack } from '../lib/ses-stack';
 import { ApiStack } from '../lib/api-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
@@ -26,6 +27,7 @@ const commonTags = {
   ManagedBy: 'CDK',
   Application: 'aerotage-time-api',
   PasswordResetEnabled: 'true',
+  UserInvitationsEnabled: 'true',
 };
 
 // Authentication Stack (Cognito)
@@ -37,6 +39,13 @@ const cognitoStack = new CognitoStack(app, `AerotageAuth-${stage}`, {
 
 // Database Stack (DynamoDB)
 const databaseStack = new DatabaseStack(app, `AerotageDB-${stage}`, {
+  stage,
+  env,
+  tags: commonTags,
+});
+
+// Email Service Stack (SES)
+const sesStack = new SesStack(app, `AerotageSES-${stage}`, {
   stage,
   env,
   tags: commonTags,
@@ -56,6 +65,7 @@ const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
   userPoolClient: cognitoStack.userPoolClient,
   tables: databaseStack.tables,
   storageBucket: storageStack.storageBucket,
+  sesStack: sesStack,
   env,
   tags: commonTags,
 });
@@ -75,6 +85,7 @@ const monitoringStack = new MonitoringStack(app, `AerotageMonitoring-${stage}`, 
 apiStack.addDependency(cognitoStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(storageStack);
+apiStack.addDependency(sesStack);
 monitoringStack.addDependency(apiStack);
 monitoringStack.addDependency(databaseStack);
 monitoringStack.addDependency(cognitoStack); 

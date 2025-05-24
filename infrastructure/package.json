@@ -30,7 +30,11 @@
   "dependencies": {
     "aws-cdk-lib": "^2.165.0",
     "constructs": "^10.3.0",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "@aws-sdk/client-dynamodb": "^3.658.1",
+    "@aws-sdk/util-dynamodb": "^3.658.1",
+    "@aws-sdk/client-ses": "^3.658.1",
+    "@aws-sdk/client-cognito-identity-provider": "^3.658.1"
   },
   "keywords": [
     "aws",

@@ -219,6 +219,7 @@ export class DatabaseStack extends cdk.Stack {
     userInvitationsTable.addGlobalSecondaryIndex({
       indexName: 'EmailIndex',
       partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
     });
 
     // Add GSI for status lookup
@@ -226,6 +227,12 @@ export class DatabaseStack extends cdk.Stack {
       indexName: 'StatusIndex',
       partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for secure token lookup
+    userInvitationsTable.addGlobalSecondaryIndex({
+      indexName: 'TokenHashIndex',
+      partitionKey: { name: 'tokenHash', type: dynamodb.AttributeType.STRING },
     });
 
     // Store all tables for easy access
