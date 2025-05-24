@@ -117,7 +117,7 @@ amplifytools.xcconfig
 # Build artifacts
 dist/
 build/
-lib/
+# lib/ - commented out to allow infrastructure/lib
 tmp/
 temp/
 
