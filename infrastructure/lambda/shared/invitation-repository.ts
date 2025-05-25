@@ -73,15 +73,9 @@ export class InvitationRepository {
       resentCount: 0,
     };
 
-    const dynamoItem: UserInvitationDynamoItem = {
-      PK: `INVITATION#${id}`,
-      SK: `INVITATION#${id}`,
-      GSI1PK: `EMAIL#${invitation.email}`,
-      GSI1SK: `INVITATION#${now}`,
-      GSI2PK: `STATUS#${invitation.status}`,
-      GSI2SK: `INVITATION#${now}`,
+    const dynamoItem = {
+      id: invitation.id, // Primary key matching table schema
       tokenHash,
-      id: invitation.id,
       email: invitation.email,
       invitedBy: invitation.invitedBy,
       role: invitation.role,
@@ -104,7 +98,7 @@ export class InvitationRepository {
     const command = new PutItemCommand({
       TableName: this.tableName,
       Item: marshall(dynamoItem, { removeUndefinedValues: true }),
-      ConditionExpression: 'attribute_not_exists(PK)',
+      ConditionExpression: 'attribute_not_exists(id)', // Use the actual partition key name
     });
 
     try {
@@ -123,8 +117,7 @@ export class InvitationRepository {
     const command = new GetItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        PK: `INVITATION#${id}`,
-        SK: `INVITATION#${id}`,
+        id: id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
     });
 
@@ -134,7 +127,7 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Item) as UserInvitationDynamoItem);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Item) as any);
     } catch (error) {
       console.error('Error getting invitation by ID:', error);
       throw new Error('Failed to get invitation');
@@ -160,7 +153,7 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Items[0]) as UserInvitationDynamoItem);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Items[0]) as any);
     } catch (error) {
       console.error('Error getting invitation by token hash:', error);
       throw new Error('Failed to get invitation');
@@ -229,7 +222,7 @@ export class InvitationRepository {
       const items = result.Items || [];
       
       let invitations = items
-        .map(item => this.mapDynamoItemToInvitation(unmarshall(item) as UserInvitationDynamoItem));
+        .map(item => this.mapDynamoItemToInvitation(unmarshall(item) as any));
 
       // Sort by createdAt (newest first) since we don't have GSI sorting
       invitations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -276,8 +269,7 @@ export class InvitationRepository {
     const command = new UpdateItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        PK: `INVITATION#${id}`,
-        SK: `INVITATION#${id}`,
+        id: id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
@@ -291,7 +283,7 @@ export class InvitationRepository {
         throw new Error('Invitation not found');
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Attributes) as UserInvitationDynamoItem);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Attributes) as any);
     } catch (error) {
       console.error('Error updating invitation:', error);
       throw new Error('Failed to update invitation');
@@ -305,8 +297,7 @@ export class InvitationRepository {
     const command = new DeleteItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        PK: `INVITATION#${id}`,
-        SK: `INVITATION#${id}`,
+        id: id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
     });
 
@@ -359,7 +350,7 @@ export class InvitationRepository {
   /**
    * Maps DynamoDB item to UserInvitation object
    */
-  private mapDynamoItemToInvitation(item: UserInvitationDynamoItem): UserInvitation {
+  private mapDynamoItemToInvitation(item: any): UserInvitation {
     return {
       id: item.id,
       email: item.email,
@@ -369,18 +360,18 @@ export class InvitationRepository {
       department: item.department,
       jobTitle: item.jobTitle,
       hourlyRate: item.hourlyRate,
-      permissions: JSON.parse(item.permissions),
+      permissions: JSON.parse(item.permissions || '{"features":[],"projects":[]}'),
       status: item.status as 'pending' | 'accepted' | 'expired' | 'cancelled',
       invitationToken: item.invitationToken,
       tokenHash: item.tokenHash,
       expiresAt: item.expiresAt,
       acceptedAt: item.acceptedAt,
-      onboardingCompleted: item.onboardingCompleted,
+      onboardingCompleted: item.onboardingCompleted || false,
       personalMessage: item.personalMessage,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       emailSentAt: item.emailSentAt,
-      resentCount: item.resentCount,
+      resentCount: item.resentCount || 0,
       lastResentAt: item.lastResentAt,
     };
   }
