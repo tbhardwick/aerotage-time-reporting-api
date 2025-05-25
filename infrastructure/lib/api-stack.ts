@@ -143,7 +143,7 @@ export class ApiStack extends cdk.Stack {
     });
 
     // Environment variables for Lambda functions
-    const lambdaEnvironment = {
+    const lambdaEnvironment: { [key: string]: string } = {
       STAGE: stage,
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -163,11 +163,14 @@ export class ApiStack extends cdk.Stack {
       INVITATION_TEMPLATE_NAME: cdk.Fn.importValue(`SesInvitationTemplate-${stage}`),
       REMINDER_TEMPLATE_NAME: cdk.Fn.importValue(`SesReminderTemplate-${stage}`),
       WELCOME_TEMPLATE_NAME: cdk.Fn.importValue(`SesWelcomeTemplate-${stage}`),
-      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : `https://time-${stage}.aerotage.com`,
+      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/${stage}`,
     };
 
     // Store Lambda functions for monitoring
     this.lambdaFunctions = {};
+
+    // Add API Gateway ID to environment variables after API is created
+    lambdaEnvironment.API_GATEWAY_ID = this.api.restApiId;
 
     // Helper function to create Lambda functions
     const createLambdaFunction = (name: string, handler: string, description: string): lambdaNodejs.NodejsFunction => {
@@ -259,6 +262,11 @@ export class ApiStack extends cdk.Stack {
 
     const acceptResource = userInvitationsResource.addResource('accept');
     acceptResource.addMethod('POST', new apigateway.LambdaIntegration(acceptInvitationFunction));
+
+    // Accept invitation page (for direct email links)
+    const acceptInvitationPageFunction = createLambdaFunction('AcceptInvitationPage', 'user-invitations/accept-page', 'Accept invitation page');
+    const acceptInvitationPageResource = this.api.root.addResource('accept-invitation');
+    acceptInvitationPageResource.addMethod('GET', new apigateway.LambdaIntegration(acceptInvitationPageFunction));
 
     // Team Management APIs
     const teamsResource = this.api.root.addResource('teams');

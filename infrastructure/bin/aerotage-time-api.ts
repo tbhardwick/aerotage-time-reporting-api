@@ -70,6 +70,8 @@ const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
   tags: commonTags,
 });
 
+
+
 // Monitoring Stack (CloudWatch)
 const monitoringStack = new MonitoringStack(app, `AerotageMonitoring-${stage}`, {
   stage,
