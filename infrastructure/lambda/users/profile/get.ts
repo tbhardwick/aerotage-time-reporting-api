@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { UserProfile, SuccessResponse, ErrorResponse, ProfileSettingsErrorCodes } from '../../shared/types';
+import { getAuthenticatedUser } from '../../shared/auth-helper';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -32,10 +33,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    // Get authenticated user from context (added by Cognito authorizer)
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
-    const userRole = cognitoUser?.['custom:role'] || 'employee';
+    // Get authenticated user from custom authorizer context
+    const authenticatedUser = getAuthenticatedUser(event);
+    if (!authenticatedUser) {
+      const response: ErrorResponse = {
+        success: false,
+        error: {
+          code: ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS,
+          message: 'Authentication required',
+        },
+        timestamp: new Date().toISOString(),
+      };
+      
+      return {
+        statusCode: 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify(response),
+      };
+    }
+
+    const { userId: authenticatedUserId, role: userRole } = authenticatedUser;
 
     // Authorization check: users can only access their own profile unless they're admin
     if (userId !== authenticatedUserId && userRole !== 'admin') {

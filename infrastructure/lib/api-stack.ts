@@ -54,10 +54,37 @@ export class ApiStack extends cdk.Stack {
       },
     });
 
-    // Cognito Authorizer
-    const cognitoAuthorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'CognitoAuthorizer', {
-      cognitoUserPools: [userPool],
-      authorizerName: 'CognitoAuthorizer',
+    // Create Custom Lambda Authorizer Function
+    const customAuthorizerFunction = new lambdaNodejs.NodejsFunction(this, 'CustomAuthorizerFunction', {
+      functionName: `aerotage-custom-authorizer-${stage}`,
+      entry: `lambda/shared/custom-authorizer.ts`,
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        STAGE: stage,
+        USER_POOL_ID: userPool.userPoolId,
+        USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
+      },
+      bundling: {
+        minify: false,
+        sourceMap: false,
+        target: 'es2020',
+        externalModules: ['aws-sdk'],
+        forceDockerBundling: false,
+      },
+      description: 'Custom Lambda authorizer with session validation',
+    });
+
+    // Grant the authorizer function permissions to read from DynamoDB
+    tables.userSessionsTable.grantReadData(customAuthorizerFunction);
+
+    // Custom Lambda Authorizer
+    const customAuthorizer = new apigateway.TokenAuthorizer(this, 'CustomAuthorizer', {
+      handler: customAuthorizerFunction,
+      authorizerName: 'SessionValidatingAuthorizer',
+      resultsCacheTtl: cdk.Duration.minutes(5), // Cache results for 5 minutes
     });
 
     // Lambda execution role with necessary permissions
@@ -220,26 +247,26 @@ export class ApiStack extends cdk.Stack {
     const inviteUserFunction = createLambdaFunction('InviteUser', 'users/invite', 'Invite new user');
 
     usersResource.addMethod('GET', new apigateway.LambdaIntegration(getUsersFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     usersResource.addMethod('POST', new apigateway.LambdaIntegration(createUserFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const userResource = usersResource.addResource('{id}');
     userResource.addMethod('GET', new apigateway.LambdaIntegration(getUserFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     userResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     userResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteUserFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const inviteResource = usersResource.addResource('invite');
     inviteResource.addMethod('POST', new apigateway.LambdaIntegration(inviteUserFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // User Invitations APIs
@@ -250,10 +277,10 @@ export class ApiStack extends cdk.Stack {
     const acceptInvitationFunction = createLambdaFunction('AcceptInvitation', 'user-invitations/accept', 'Accept invitation');
 
     userInvitationsResource.addMethod('POST', new apigateway.LambdaIntegration(createInvitationFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     userInvitationsResource.addMethod('GET', new apigateway.LambdaIntegration(listInvitationsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const invitationResource = userInvitationsResource.addResource('{id}');
@@ -262,11 +289,11 @@ export class ApiStack extends cdk.Stack {
 
     const resendResource = invitationResource.addResource('resend');
     resendResource.addMethod('POST', new apigateway.LambdaIntegration(resendInvitationFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     invitationResource.addMethod('DELETE', new apigateway.LambdaIntegration(cancelInvitationFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const validateResource = userInvitationsResource.addResource('validate');
@@ -289,18 +316,18 @@ export class ApiStack extends cdk.Stack {
     const deleteTeamFunction = createLambdaFunction('DeleteTeam', 'teams/delete', 'Delete team');
 
     teamsResource.addMethod('GET', new apigateway.LambdaIntegration(getTeamsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     teamsResource.addMethod('POST', new apigateway.LambdaIntegration(createTeamFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const teamResource = teamsResource.addResource('{id}');
     teamResource.addMethod('PUT', new apigateway.LambdaIntegration(updateTeamFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     teamResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteTeamFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Project APIs
@@ -311,18 +338,18 @@ export class ApiStack extends cdk.Stack {
     const deleteProjectFunction = createLambdaFunction('DeleteProject', 'projects/delete', 'Delete project');
 
     projectsResource.addMethod('GET', new apigateway.LambdaIntegration(getProjectsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     projectsResource.addMethod('POST', new apigateway.LambdaIntegration(createProjectFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const projectResource = projectsResource.addResource('{id}');
     projectResource.addMethod('PUT', new apigateway.LambdaIntegration(updateProjectFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     projectResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteProjectFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Client APIs
@@ -333,18 +360,18 @@ export class ApiStack extends cdk.Stack {
     const deleteClientFunction = createLambdaFunction('DeleteClient', 'clients/delete', 'Delete client');
 
     clientsResource.addMethod('GET', new apigateway.LambdaIntegration(getClientsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     clientsResource.addMethod('POST', new apigateway.LambdaIntegration(createClientFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const clientResource = clientsResource.addResource('{id}');
     clientResource.addMethod('PUT', new apigateway.LambdaIntegration(updateClientFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     clientResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteClientFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Time Entry APIs
@@ -358,33 +385,33 @@ export class ApiStack extends cdk.Stack {
     const rejectTimeEntriesFunction = createLambdaFunction('RejectTimeEntries', 'time-entries/reject', 'Reject time entries');
 
     timeEntriesResource.addMethod('GET', new apigateway.LambdaIntegration(getTimeEntriesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     timeEntriesResource.addMethod('POST', new apigateway.LambdaIntegration(createTimeEntryFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const timeEntryResource = timeEntriesResource.addResource('{id}');
     timeEntryResource.addMethod('PUT', new apigateway.LambdaIntegration(updateTimeEntryFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     timeEntryResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteTimeEntryFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const submitResource = timeEntriesResource.addResource('submit');
     submitResource.addMethod('POST', new apigateway.LambdaIntegration(submitTimeEntriesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const approveResource = timeEntriesResource.addResource('approve');
     approveResource.addMethod('POST', new apigateway.LambdaIntegration(approveTimeEntriesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const rejectResource = timeEntriesResource.addResource('reject');
     rejectResource.addMethod('POST', new apigateway.LambdaIntegration(rejectTimeEntriesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Reporting APIs
@@ -397,27 +424,27 @@ export class ApiStack extends cdk.Stack {
 
     const timeReportsResource = reportsResource.addResource('time');
     timeReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getTimeReportsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const projectReportsResource = reportsResource.addResource('projects');
     projectReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getProjectReportsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const userReportsResource = reportsResource.addResource('users');
     userReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getUserReportsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const exportResource = reportsResource.addResource('export');
     exportResource.addMethod('POST', new apigateway.LambdaIntegration(exportReportsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const analyticsResource = reportsResource.addResource('analytics');
     analyticsResource.addMethod('GET', new apigateway.LambdaIntegration(getAnalyticsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Invoice APIs
@@ -429,25 +456,25 @@ export class ApiStack extends cdk.Stack {
     const updateInvoiceStatusFunction = createLambdaFunction('UpdateInvoiceStatus', 'invoices/status', 'Update invoice status');
 
     invoicesResource.addMethod('GET', new apigateway.LambdaIntegration(getInvoicesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     invoicesResource.addMethod('POST', new apigateway.LambdaIntegration(generateInvoiceFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const invoiceResource = invoicesResource.addResource('{id}');
     invoiceResource.addMethod('PUT', new apigateway.LambdaIntegration(updateInvoiceFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const sendInvoiceResource = invoiceResource.addResource('send');
     sendInvoiceResource.addMethod('POST', new apigateway.LambdaIntegration(sendInvoiceFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const invoiceStatusResource = invoiceResource.addResource('status');
     invoiceStatusResource.addMethod('PUT', new apigateway.LambdaIntegration(updateInvoiceStatusFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // User Profile & Settings APIs
@@ -457,10 +484,10 @@ export class ApiStack extends cdk.Stack {
     const updateUserProfileFunction = createLambdaFunction('UpdateUserProfile', 'users/profile/update', 'Update user profile');
 
     profileResource.addMethod('GET', new apigateway.LambdaIntegration(getUserProfileFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     profileResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserProfileFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Preferences endpoints: /users/{id}/preferences
@@ -469,10 +496,10 @@ export class ApiStack extends cdk.Stack {
     const updateUserPreferencesFunction = createLambdaFunction('UpdateUserPreferences', 'users/preferences/update', 'Update user preferences');
 
     preferencesResource.addMethod('GET', new apigateway.LambdaIntegration(getUserPreferencesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     preferencesResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserPreferencesFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // Security endpoints: /users/{id}/password, /users/{id}/security-settings, /users/{id}/sessions
@@ -480,7 +507,7 @@ export class ApiStack extends cdk.Stack {
     const changePasswordFunction = createLambdaFunction('ChangePassword', 'users/security/change-password', 'Change user password');
 
     passwordResource.addMethod('PUT', new apigateway.LambdaIntegration(changePasswordFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const securitySettingsResource = userResource.addResource('security-settings');
@@ -488,23 +515,28 @@ export class ApiStack extends cdk.Stack {
     const updateSecuritySettingsFunction = createLambdaFunction('UpdateSecuritySettings', 'users/security/update-settings', 'Update user security settings');
 
     securitySettingsResource.addMethod('GET', new apigateway.LambdaIntegration(getSecuritySettingsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
     securitySettingsResource.addMethod('PUT', new apigateway.LambdaIntegration(updateSecuritySettingsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     const sessionsResource = userResource.addResource('sessions');
     const listSessionsFunction = createLambdaFunction('ListSessions', 'users/security/list-sessions', 'List user sessions');
+    const createSessionFunction = createLambdaFunction('CreateSession', 'users/security/create-session', 'Create user session');
     const terminateSessionFunction = createLambdaFunction('TerminateSession', 'users/security/terminate-session', 'Terminate user session');
 
     sessionsResource.addMethod('GET', new apigateway.LambdaIntegration(listSessionsFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
+    });
+    
+    sessionsResource.addMethod('POST', new apigateway.LambdaIntegration(createSessionFunction), {
+      authorizer: customAuthorizer,
     });
 
     const sessionResource = sessionsResource.addResource('{sessionId}');
     sessionResource.addMethod('DELETE', new apigateway.LambdaIntegration(terminateSessionFunction), {
-      authorizer: cognitoAuthorizer,
+      authorizer: customAuthorizer,
     });
 
     // CloudFormation Outputs

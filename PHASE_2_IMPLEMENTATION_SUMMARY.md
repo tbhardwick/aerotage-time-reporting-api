@@ -24,11 +24,13 @@ Phase 2 of the User Profile & Settings Management backend API has been successfu
 
 ### 3. Session Management
 - **GET /users/{userId}/sessions** - List all active user sessions
+- **POST /users/{userId}/sessions** - Create new session record during login
 - **DELETE /users/{userId}/sessions/{sessionId}** - Terminate specific session
 - Current session identification
 - Session data includes IP address, user agent, login time, last activity
 - Location data support (when available)
 - Prevention of self-session termination
+- Automatic session creation during user login
 
 ## 🗄️ Database Schema
 
@@ -57,6 +59,7 @@ All Phase 2 database tables were created in Phase 1 and are now actively used:
 | `GET` | `/users/{userId}/security-settings` | Get security settings | ✅ Ready |
 | `PUT` | `/users/{userId}/security-settings` | Update security settings | ✅ Ready |
 | `GET` | `/users/{userId}/sessions` | List active sessions | ✅ Ready |
+| `POST` | `/users/{userId}/sessions` | Create session record | ✅ Ready |
 | `DELETE` | `/users/{userId}/sessions/{sessionId}` | Terminate session | ✅ Ready |
 
 ### Phase 1 Endpoints (Previously Deployed)
@@ -183,7 +186,41 @@ All Phase 2 database tables were created in Phase 1 and are now actively used:
 }
 ```
 
-### 5. Terminate Session
+### 5. Create Session
+
+**POST /users/{userId}/sessions**
+
+```typescript
+// Request
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36...",
+  "loginTime": "2024-01-15T10:30:00Z"
+}
+
+// Response
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "ipAddress": "192.168.1.100",
+    "userAgent": "Mozilla/5.0...",
+    "loginTime": "2024-01-15T10:30:00Z",
+    "lastActivity": "2024-01-15T10:30:00Z",
+    "isCurrent": true,
+    "location": {
+      "city": "New York",
+      "country": "United States"
+    }
+  }
+}
+```
+
+**Error Responses**:
+- `400` - Invalid input (missing userAgent, invalid loginTime)
+- `403` - Unauthorized access
+- `500` - Server error
+
+### 6. Terminate Session
 
 **DELETE /users/{userId}/sessions/{sessionId}**
 
@@ -319,6 +356,26 @@ export const securityApi = {
     return data.data;
   },
 
+  async createSession(userId: string, sessionData?: { userAgent?: string; loginTime?: string }): Promise<UserSession> {
+    const body = {
+      userAgent: sessionData?.userAgent || navigator.userAgent,
+      loginTime: sessionData?.loginTime || new Date().toISOString()
+    };
+
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getJwtToken()}`,
+      },
+      body: JSON.stringify(body),
+    });
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error.message);
+    return data.data;
+  },
+
   async terminateSession(userId: string, sessionId: string) {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/sessions/${sessionId}`, {
       method: 'DELETE',
@@ -412,10 +469,12 @@ export const securityApi = {
 
 📱 **Session Management**
 - ✅ Users can view all active sessions
+- ✅ Session creation during login process
 - ✅ Session details include IP, browser, timestamps
 - ✅ Current session identification
 - ✅ Secure session termination (excluding current)
 - ✅ Location data support
+- ✅ Automatic session tracking
 
 🔒 **Security & Authorization**
 - ✅ JWT authentication enforced on all endpoints
@@ -424,4 +483,13 @@ export const securityApi = {
 - ✅ Proper error handling and user feedback
 - ✅ Account lockout integration
 
-Phase 2 is now **complete and ready for frontend integration**! 🎉 
+Phase 2 is now **100% complete and ready for frontend integration**! 🎉
+
+### 🆕 Latest Update: Session Creation Endpoint
+
+The final missing piece has been implemented and deployed:
+- ✅ **POST /users/{userId}/sessions** - Creates session records during login
+- ✅ **Deployed & Tested** - Endpoint is live and functioning
+- ✅ **Frontend Integration Guide** - See `FRONTEND_SESSION_CREATION_INTEGRATION_GUIDE.md`
+
+This completes all Phase 2 Security Features. The frontend can now create sessions automatically during login, and users will see real session data in their Security Settings. 
