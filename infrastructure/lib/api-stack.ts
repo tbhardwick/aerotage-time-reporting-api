@@ -95,6 +95,10 @@ export class ApiStack extends cdk.Stack {
                 tables.userSessionsTable.tableArn,
                 tables.userActivityTable.tableArn,
                 tables.userInvitationsTable.tableArn,
+                tables.userPreferencesTable.tableArn,
+                tables.userSecuritySettingsTable.tableArn,
+                tables.userNotificationSettingsTable.tableArn,
+                tables.passwordHistoryTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
                 `${tables.teamsTable.tableArn}/index/*`,
                 `${tables.projectsTable.tableArn}/index/*`,
@@ -104,6 +108,10 @@ export class ApiStack extends cdk.Stack {
                 `${tables.userSessionsTable.tableArn}/index/*`,
                 `${tables.userActivityTable.tableArn}/index/*`,
                 `${tables.userInvitationsTable.tableArn}/index/*`,
+                `${tables.userPreferencesTable.tableArn}/index/*`,
+                `${tables.userSecuritySettingsTable.tableArn}/index/*`,
+                `${tables.userNotificationSettingsTable.tableArn}/index/*`,
+                `${tables.passwordHistoryTable.tableArn}/index/*`,
               ],
             }),
           ],
@@ -156,6 +164,10 @@ export class ApiStack extends cdk.Stack {
       USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
       USER_ACTIVITY_TABLE: tables.userActivityTable.tableName,
       USER_INVITATIONS_TABLE: tables.userInvitationsTable.tableName,
+      USER_PREFERENCES_TABLE: tables.userPreferencesTable.tableName,
+      USER_SECURITY_SETTINGS_TABLE: tables.userSecuritySettingsTable.tableName,
+      USER_NOTIFICATION_SETTINGS_TABLE: tables.userNotificationSettingsTable.tableName,
+      PASSWORD_HISTORY_TABLE: tables.passwordHistoryTable.tableName,
       STORAGE_BUCKET: storageBucket.bucketName,
       // SES Configuration
       SES_FROM_EMAIL: sesStack.fromEmail,
@@ -434,6 +446,31 @@ export class ApiStack extends cdk.Stack {
 
     const invoiceStatusResource = invoiceResource.addResource('status');
     invoiceStatusResource.addMethod('PUT', new apigateway.LambdaIntegration(updateInvoiceStatusFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    // User Profile & Settings APIs
+    // Profile endpoints: /users/{id}/profile
+    const profileResource = userResource.addResource('profile');
+    const getUserProfileFunction = createLambdaFunction('GetUserProfile', 'users/profile/get', 'Get user profile');
+    const updateUserProfileFunction = createLambdaFunction('UpdateUserProfile', 'users/profile/update', 'Update user profile');
+
+    profileResource.addMethod('GET', new apigateway.LambdaIntegration(getUserProfileFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+    profileResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserProfileFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    // Preferences endpoints: /users/{id}/preferences
+    const preferencesResource = userResource.addResource('preferences');
+    const getUserPreferencesFunction = createLambdaFunction('GetUserPreferences', 'users/preferences/get', 'Get user preferences');
+    const updateUserPreferencesFunction = createLambdaFunction('UpdateUserPreferences', 'users/preferences/update', 'Update user preferences');
+
+    preferencesResource.addMethod('GET', new apigateway.LambdaIntegration(getUserPreferencesFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+    preferencesResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserPreferencesFunction), {
       authorizer: cognitoAuthorizer,
     });
 

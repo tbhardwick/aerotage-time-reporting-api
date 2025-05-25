@@ -16,6 +16,10 @@ export interface DatabaseTables {
   userSessionsTable: dynamodb.Table;
   userActivityTable: dynamodb.Table;
   userInvitationsTable: dynamodb.Table;
+  userPreferencesTable: dynamodb.Table;
+  userSecuritySettingsTable: dynamodb.Table;
+  userNotificationSettingsTable: dynamodb.Table;
+  passwordHistoryTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -224,6 +228,48 @@ export class DatabaseStack extends cdk.Stack {
     // TODO: Will add EmailIndexV2 and StatusIndexV2 in subsequent deployment
     // to work around CloudFormation's "one GSI per update" limitation
 
+    // User Preferences Table
+    const userPreferencesTable = new dynamodb.Table(this, 'UserPreferencesTable', {
+      tableName: `aerotage-user-preferences-${stage}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // User Security Settings Table
+    const userSecuritySettingsTable = new dynamodb.Table(this, 'UserSecuritySettingsTable', {
+      tableName: `aerotage-user-security-settings-${stage}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // User Notification Settings Table
+    const userNotificationSettingsTable = new dynamodb.Table(this, 'UserNotificationSettingsTable', {
+      tableName: `aerotage-user-notification-settings-${stage}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Password History Table
+    const passwordHistoryTable = new dynamodb.Table(this, 'PasswordHistoryTable', {
+      tableName: `aerotage-password-history-${stage}`,
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'expiresAt', // Auto-delete old password history
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     // Store all tables for easy access
     this.tables = {
       usersTable,
@@ -235,6 +281,10 @@ export class DatabaseStack extends cdk.Stack {
       userSessionsTable,
       userActivityTable,
       userInvitationsTable,
+      userPreferencesTable,
+      userSecuritySettingsTable,
+      userNotificationSettingsTable,
+      passwordHistoryTable,
     };
 
     // CloudFormation Outputs
@@ -290,6 +340,30 @@ export class DatabaseStack extends cdk.Stack {
       value: userInvitationsTable.tableName,
       description: 'User Invitations DynamoDB Table Name',
       exportName: `UserInvitationsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserPreferencesTableName', {
+      value: userPreferencesTable.tableName,
+      description: 'User Preferences DynamoDB Table Name',
+      exportName: `UserPreferencesTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserSecuritySettingsTableName', {
+      value: userSecuritySettingsTable.tableName,
+      description: 'User Security Settings DynamoDB Table Name',
+      exportName: `UserSecuritySettingsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserNotificationSettingsTableName', {
+      value: userNotificationSettingsTable.tableName,
+      description: 'User Notification Settings DynamoDB Table Name',
+      exportName: `UserNotificationSettingsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'PasswordHistoryTableName', {
+      value: passwordHistoryTable.tableName,
+      description: 'Password History DynamoDB Table Name',
+      exportName: `PasswordHistoryTableName-${stage}`,
     });
   }
 } 
