@@ -23,7 +23,9 @@ export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<AP
     console.log(`Request: ${httpMethod} ${resourcePath}`);
 
     // Check if this is a session bootstrap request
-    if (isSessionBootstrapRequest(httpMethod, resourcePath)) {
+    const isBootstrap = isSessionBootstrapRequest(httpMethod, resourcePath);
+    
+    if (isBootstrap) {
       console.log('🚀 Detected session bootstrap request');
       
       // For session creation, validate JWT only (no session requirement)
@@ -94,7 +96,7 @@ function parseMethodArn(methodArn: string): { httpMethod: string; resourcePath: 
       return { httpMethod: 'UNKNOWN', resourcePath: 'UNKNOWN' };
     }
 
-    const httpMethod = parts[2]; // e.g., "POST", "GET"
+    const httpMethod = parts[2] || 'UNKNOWN'; // e.g., "POST", "GET"
     const resourcePath = '/' + parts.slice(3).join('/'); // e.g., "/users/123/sessions"
     
     return { httpMethod, resourcePath };
@@ -128,7 +130,6 @@ function isSessionBootstrapRequest(httpMethod: string, resourcePath: string): bo
     }
   }
 
-  console.log(`❌ Not a session bootstrap request: ${httpMethod} ${resourcePath}`);
   return false;
 }
 

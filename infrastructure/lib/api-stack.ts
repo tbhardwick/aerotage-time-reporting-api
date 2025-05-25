@@ -530,6 +530,8 @@ export class ApiStack extends cdk.Stack {
       authorizer: customAuthorizer,
     });
     
+    // Session creation endpoint uses custom authorizer with bootstrap support
+    // The custom authorizer will detect this endpoint and apply JWT-only validation for users without sessions
     sessionsResource.addMethod('POST', new apigateway.LambdaIntegration(createSessionFunction), {
       authorizer: customAuthorizer,
     });

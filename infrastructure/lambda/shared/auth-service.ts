@@ -265,6 +265,6 @@ export class AuthService {
       return null;
     }
 
-    return parts[1];
+    return parts[1] || null;
   }
 } 
