@@ -30,8 +30,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const updateData: UpdateUserSecuritySettingsRequest = JSON.parse(event.body);
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
+    const authContext = event.requestContext.authorizer;
+    const authenticatedUserId = authContext?.userId;
 
     // Authorization check: users can only update their own security settings
     if (userId !== authenticatedUserId) {

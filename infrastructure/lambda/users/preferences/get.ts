@@ -51,9 +51,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
-    const userRole = cognitoUser?.['custom:role'] || 'employee';
+    const authContext = event.requestContext.authorizer;
+    const authenticatedUserId = authContext?.userId;
+    const userRole = authContext?.role || 'employee';
 
     // Authorization check: users can only access their own preferences unless they're admin
     if (userId !== authenticatedUserId && userRole !== 'admin') {

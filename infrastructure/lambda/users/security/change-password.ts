@@ -37,10 +37,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const { currentPassword, newPassword }: ChangePasswordRequest = JSON.parse(event.body);
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
-    const userRole = cognitoUser?.['custom:role'] || 'employee';
-    const userEmail = cognitoUser?.email;
+    const authContext = event.requestContext.authorizer;
+    const authenticatedUserId = authContext?.userId;
+    const userRole = authContext?.role || 'employee';
+    const userEmail = authContext?.email;
 
     // Authorization check: users can only change their own password
     if (userId !== authenticatedUserId) {

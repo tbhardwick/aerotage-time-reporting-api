@@ -138,17 +138,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 /**
- * Extracts current user ID from Cognito JWT token
+ * Extracts current user ID from authorization context
  */
 function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const cognitoIdentity = event.requestContext.authorizer?.claims;
-  if (cognitoIdentity && cognitoIdentity.sub) {
-    return cognitoIdentity.sub;
+  const authContext = event.requestContext.authorizer;
+  
+  // Primary: get from custom authorizer context
+  if (authContext?.userId) {
+    return authContext.userId;
   }
 
-  // Fallback: try to get from custom authorizer
-  if (event.requestContext.authorizer?.userId) {
-    return event.requestContext.authorizer.userId;
+  // Fallback: try to get from Cognito claims (for backward compatibility)
+  if (authContext?.claims?.sub) {
+    return authContext.claims.sub;
   }
 
   return null;

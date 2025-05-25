@@ -27,8 +27,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
+    const authContext = event.requestContext.authorizer;
+    const authenticatedUserId = authContext?.userId;
 
     // Authorization check: users can only terminate their own sessions
     if (userId !== authenticatedUserId) {

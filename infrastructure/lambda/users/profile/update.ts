@@ -30,9 +30,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const updateData: UpdateUserProfileRequest = JSON.parse(event.body);
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
-    const userRole = cognitoUser?.['custom:role'] || 'employee';
+    const authContext = event.requestContext.authorizer;
+    const authenticatedUserId = authContext?.userId;
+    const userRole = authContext?.role || 'employee';
 
     // Authorization check: users can only update their own profile unless they're admin
     if (userId !== authenticatedUserId && userRole !== 'admin') {
@@ -71,8 +71,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const currentTimestamp = new Date().toISOString();
     const defaultProfile = {
       id: userId,
-      email: cognitoUser?.email || cognitoUser?.username || '',
-      name: cognitoUser?.name || cognitoUser?.given_name || cognitoUser?.username?.split('@')[0] || '',
+      email: authContext?.email || '',
+      name: authContext?.email?.split('@')[0] || '',
       role: userRole,
       isActive: true,
       startDate: currentTimestamp.split('T')[0], // ISO date format
