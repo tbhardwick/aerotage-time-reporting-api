@@ -153,6 +153,7 @@ export class ApiStack extends cdk.Stack {
     // Environment variables for Lambda functions
     const lambdaEnvironment: { [key: string]: string } = {
       STAGE: stage,
+      COGNITO_USER_POOL_ID: userPool.userPoolId,
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       USERS_TABLE: tables.usersTable.tableName,
@@ -471,6 +472,38 @@ export class ApiStack extends cdk.Stack {
       authorizer: cognitoAuthorizer,
     });
     preferencesResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserPreferencesFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    // Security endpoints: /users/{id}/password, /users/{id}/security-settings, /users/{id}/sessions
+    const passwordResource = userResource.addResource('password');
+    const changePasswordFunction = createLambdaFunction('ChangePassword', 'users/security/change-password', 'Change user password');
+
+    passwordResource.addMethod('PUT', new apigateway.LambdaIntegration(changePasswordFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    const securitySettingsResource = userResource.addResource('security-settings');
+    const getSecuritySettingsFunction = createLambdaFunction('GetSecuritySettings', 'users/security/get-settings', 'Get user security settings');
+    const updateSecuritySettingsFunction = createLambdaFunction('UpdateSecuritySettings', 'users/security/update-settings', 'Update user security settings');
+
+    securitySettingsResource.addMethod('GET', new apigateway.LambdaIntegration(getSecuritySettingsFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+    securitySettingsResource.addMethod('PUT', new apigateway.LambdaIntegration(updateSecuritySettingsFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    const sessionsResource = userResource.addResource('sessions');
+    const listSessionsFunction = createLambdaFunction('ListSessions', 'users/security/list-sessions', 'List user sessions');
+    const terminateSessionFunction = createLambdaFunction('TerminateSession', 'users/security/terminate-session', 'Terminate user session');
+
+    sessionsResource.addMethod('GET', new apigateway.LambdaIntegration(listSessionsFunction), {
+      authorizer: cognitoAuthorizer,
+    });
+
+    const sessionResource = sessionsResource.addResource('{sessionId}');
+    sessionResource.addMethod('DELETE', new apigateway.LambdaIntegration(terminateSessionFunction), {
       authorizer: cognitoAuthorizer,
     });
 

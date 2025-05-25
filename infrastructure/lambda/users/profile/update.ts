@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { 
   UpdateUserProfileRequest, 
   UserProfile, 
@@ -58,75 +58,65 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current user profile to ensure it exists
+    // Get current user profile (if it exists)
     const getCommand = new GetCommand({
       TableName: process.env.USERS_TABLE!,
       Key: { id: userId },
     });
 
-    const currentUser = await docClient.send(getCommand);
-    if (!currentUser.Item) {
-      return createErrorResponse(404, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User profile not found');
+    const currentResult = await docClient.send(getCommand);
+    const currentUser = currentResult.Item;
+
+    // Create default profile data from JWT token for new profiles
+    const currentTimestamp = new Date().toISOString();
+    const defaultProfile = {
+      id: userId,
+      email: cognitoUser?.email || cognitoUser?.username || '',
+      name: cognitoUser?.name || cognitoUser?.given_name || cognitoUser?.username?.split('@')[0] || '',
+      role: userRole,
+      isActive: true,
+      startDate: currentTimestamp.split('T')[0], // ISO date format
+      createdAt: currentTimestamp,
+      updatedAt: currentTimestamp,
+      // Optional fields default to undefined
+      jobTitle: undefined,
+      department: undefined,
+      hourlyRate: undefined,
+      contactInfo: undefined,
+      profilePicture: undefined,
+      lastLogin: undefined,
+      teamId: undefined,
+    };
+
+    // Merge current profile (if exists) with default values and updates
+    const profileData = {
+      ...defaultProfile,
+      ...(currentUser || {}), // Existing profile data takes precedence over defaults
+      ...updateData, // Updates take precedence over everything
+      updatedAt: currentTimestamp, // Always update timestamp
+      // Preserve creation timestamp if profile already exists
+      createdAt: currentUser?.createdAt || currentTimestamp,
+    };
+
+    // Ensure required fields are present
+    if (!profileData.email) {
+      return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Email is required but not found in token');
     }
 
-    // Build update expression dynamically
-    const updateExpression: string[] = [];
-    const expressionAttributeNames: { [key: string]: string } = {};
-    const expressionAttributeValues: { [key: string]: any } = {};
-
-    if (updateData.name !== undefined) {
-      updateExpression.push('#name = :name');
-      expressionAttributeNames['#name'] = 'name';
-      expressionAttributeValues[':name'] = updateData.name;
+    if (!profileData.name) {
+      return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Name is required but not found in token or update data');
     }
 
-    if (updateData.jobTitle !== undefined) {
-      updateExpression.push('#jobTitle = :jobTitle');
-      expressionAttributeNames['#jobTitle'] = 'jobTitle';
-      expressionAttributeValues[':jobTitle'] = updateData.jobTitle;
-    }
-
-    if (updateData.department !== undefined) {
-      updateExpression.push('#department = :department');
-      expressionAttributeNames['#department'] = 'department';
-      expressionAttributeValues[':department'] = updateData.department;
-    }
-
-    if (updateData.hourlyRate !== undefined) {
-      updateExpression.push('#hourlyRate = :hourlyRate');
-      expressionAttributeNames['#hourlyRate'] = 'hourlyRate';
-      expressionAttributeValues[':hourlyRate'] = updateData.hourlyRate;
-    }
-
-    if (updateData.contactInfo !== undefined) {
-      updateExpression.push('#contactInfo = :contactInfo');
-      expressionAttributeNames['#contactInfo'] = 'contactInfo';
-      expressionAttributeValues[':contactInfo'] = updateData.contactInfo;
-    }
-
-    // Always update the updatedAt timestamp
-    updateExpression.push('#updatedAt = :updatedAt');
-    expressionAttributeNames['#updatedAt'] = 'updatedAt';
-    expressionAttributeValues[':updatedAt'] = new Date().toISOString();
-
-    if (updateExpression.length === 1) { // Only updatedAt
-      return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'No fields to update');
-    }
-
-    // Update user profile
-    const updateCommand = new UpdateCommand({
+    // Save profile (create or update)
+    const putCommand = new PutCommand({
       TableName: process.env.USERS_TABLE!,
-      Key: { id: userId },
-      UpdateExpression: `SET ${updateExpression.join(', ')}`,
-      ExpressionAttributeNames: expressionAttributeNames,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ReturnValues: 'ALL_NEW',
+      Item: profileData,
     });
 
-    const result = await docClient.send(updateCommand);
+    await docClient.send(putCommand);
 
-    // Transform updated item to UserProfile
-    const updatedUser = result.Attributes!;
+    // Transform saved data to UserProfile response format
+    const updatedUser = profileData;
     const profile: UserProfile = {
       id: updatedUser.id,
       email: updatedUser.email,

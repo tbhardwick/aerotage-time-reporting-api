@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "aws-cdk": "^2.165.0",
@@ -35,7 +36,8 @@
     "@aws-sdk/lib-dynamodb": "^3.658.1",
     "@aws-sdk/util-dynamodb": "^3.658.1",
     "@aws-sdk/client-ses": "^3.658.1",
-    "@aws-sdk/client-cognito-identity-provider": "^3.658.1"
+    "@aws-sdk/client-cognito-identity-provider": "^3.658.1",
+    "bcryptjs": "^2.4.3"
   },
   "keywords": [
     "aws",
