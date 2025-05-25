@@ -14,26 +14,54 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Create session request:', JSON.stringify(event, null, 2));
+    console.log('🔥 SESSION CREATION LAMBDA INVOKED 🔥');
+    console.log('='.repeat(50));
+    console.log('📋 SESSION CREATION DEBUG DETAILS:');
+    console.log(`   Timestamp: ${new Date().toISOString()}`);
+    console.log(`   HTTP Method: ${event.httpMethod}`);
+    console.log(`   Resource Path: ${event.resource}`);
+    console.log(`   Path Parameters:`, JSON.stringify(event.pathParameters, null, 2));
+    console.log(`   Request Context:`, JSON.stringify(event.requestContext, null, 2));
+    console.log(`   Headers:`, JSON.stringify(event.headers, null, 2));
+    console.log(`   Body:`, event.body);
+    console.log('📋 Full event object:', JSON.stringify(event, null, 2));
 
     // Extract user ID from path parameters
+    console.log('\n🔍 STEP 1: User ID Extraction and Validation');
+    console.log('-'.repeat(45));
     const userId = event.pathParameters?.id;
+    console.log(`   User ID from path: ${userId}`);
+    
     if (!userId) {
+      console.log('❌ FAILED: No user ID in path parameters');
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
     }
+    console.log('✅ SUCCESS: User ID extracted from path');
 
     // Get authenticated user from context
-    const cognitoUser = event.requestContext.authorizer?.claims;
-    const authenticatedUserId = cognitoUser?.sub;
+    console.log('\n🔍 STEP 2: Authorization Context Analysis');
+    console.log('-'.repeat(42));
+    const authorizerContext = event.requestContext.authorizer;
+    // Custom authorizer sets userId directly in context, not in claims
+    const authenticatedUserId = authorizerContext?.userId || authorizerContext?.claims?.sub;
+    console.log(`   Authorizer context:`, JSON.stringify(authorizerContext, null, 2));
+    console.log(`   Authenticated user ID: ${authenticatedUserId}`);
+    console.log(`   Path user ID: ${userId}`);
 
     // Authorization check: users can only create sessions for themselves
+    console.log('\n🔍 STEP 3: Authorization Validation');
+    console.log('-'.repeat(35));
     if (userId !== authenticatedUserId) {
+      console.log('❌ AUTHORIZATION FAILED: User ID mismatch');
+      console.log(`   Path user ID: ${userId}`);
+      console.log(`   Authenticated user ID: ${authenticatedUserId}`);
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
         'You can only create sessions for yourself'
       );
     }
+    console.log('✅ SUCCESS: Authorization validation passed');
 
     // Parse request body
     let requestBody;

@@ -1,0 +1,5 @@
+{
+  "type": "TOKEN",
+  "authorizationToken": "Bearer test-token",
+  "methodArn": "arn:aws:execute-api:us-east-1:659943476000:0z6kxagbh2/dev/POST/users/test-user/sessions"
+} 

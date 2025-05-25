@@ -110,10 +110,13 @@ export class AuthService {
    */
   static async checkUserHasActiveSessions(userId: string): Promise<boolean> {
     try {
+      console.log(`🔍 AUTH SERVICE: Checking active sessions for user ${userId}`);
       const sessionResult = await this.validateUserSession(userId);
+      console.log(`📊 AUTH SERVICE: Session check result - Has active sessions: ${sessionResult.hasActiveSessions}, Count: ${sessionResult.sessionCount}`);
       return sessionResult.hasActiveSessions;
     } catch (error) {
-      console.error(`Error checking sessions for user ${userId}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ AUTH SERVICE: Error checking sessions for user ${userId}:`, errorMessage);
       return false;
     }
   }

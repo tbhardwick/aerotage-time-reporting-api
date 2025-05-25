@@ -66,6 +66,7 @@ export class ApiStack extends cdk.Stack {
         STAGE: stage,
         USER_POOL_ID: userPool.userPoolId,
         USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
+        FORCE_BOOTSTRAP: 'true', // Enable bootstrap testing
       },
       bundling: {
         minify: false,
@@ -84,7 +85,7 @@ export class ApiStack extends cdk.Stack {
     const customAuthorizer = new apigateway.TokenAuthorizer(this, 'CustomAuthorizer', {
       handler: customAuthorizerFunction,
       authorizerName: 'SessionValidatingAuthorizer',
-      resultsCacheTtl: cdk.Duration.minutes(5), // Cache results for 5 minutes
+      resultsCacheTtl: cdk.Duration.seconds(0), // Disable cache to fix bootstrap issues
     });
 
     // Lambda execution role with necessary permissions
@@ -539,6 +540,48 @@ export class ApiStack extends cdk.Stack {
     const sessionResource = sessionsResource.addResource('{sessionId}');
     sessionResource.addMethod('DELETE', new apigateway.LambdaIntegration(terminateSessionFunction), {
       authorizer: customAuthorizer,
+    });
+
+    // Configure Gateway Responses for CORS support on error responses
+    // This fixes the issue where 403 responses from the Lambda authorizer don't include CORS headers
+    // Without this, browsers show CORS errors instead of the actual 403 authorization error
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': "'*'",
+      'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+      'Access-Control-Allow-Methods': "'DELETE,GET,HEAD,OPTIONS,PUT,POST,PATCH'",
+    };
+
+    // Add CORS headers to 4XX error responses (including 403 from authorizer)
+    this.api.addGatewayResponse('Default4XX', {
+      type: apigateway.ResponseType.DEFAULT_4XX,
+      responseHeaders: corsHeaders,
+    });
+
+    // Add CORS headers to 5XX error responses
+    this.api.addGatewayResponse('Default5XX', {
+      type: apigateway.ResponseType.DEFAULT_5XX,
+      responseHeaders: corsHeaders,
+    });
+
+    // Add CORS headers to specific responses that are commonly problematic
+    this.api.addGatewayResponse('Unauthorized', {
+      type: apigateway.ResponseType.UNAUTHORIZED,
+      responseHeaders: corsHeaders,
+    });
+
+    this.api.addGatewayResponse('AccessDenied', {
+      type: apigateway.ResponseType.ACCESS_DENIED,
+      responseHeaders: corsHeaders,
+    });
+
+    this.api.addGatewayResponse('AuthorizerFailure', {
+      type: apigateway.ResponseType.AUTHORIZER_FAILURE,
+      responseHeaders: corsHeaders,
+    });
+
+    this.api.addGatewayResponse('AuthorizerConfigurationError', {
+      type: apigateway.ResponseType.AUTHORIZER_CONFIGURATION_ERROR,
+      responseHeaders: corsHeaders,
     });
 
     // CloudFormation Outputs
