@@ -20,6 +20,10 @@ export interface DatabaseTables {
   userSecuritySettingsTable: dynamodb.Table;
   userNotificationSettingsTable: dynamodb.Table;
   passwordHistoryTable: dynamodb.Table;
+  // ✅ NEW - Phase 6 Reporting & Analytics Tables
+  reportConfigsTable: dynamodb.Table;
+  reportCacheTable: dynamodb.Table;
+  analyticsEventsTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -63,6 +67,7 @@ export class DatabaseStack extends cdk.Stack {
     });
 
     // Projects Table
+    // ✅ Phase 6 Enhancement: Will include performance metrics (efficiencyRating, budgetVariance, performanceMetrics)
     const projectsTable = new dynamodb.Table(this, 'ProjectsTable', {
       tableName: `aerotage-projects-${stage}`,
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
@@ -101,6 +106,7 @@ export class DatabaseStack extends cdk.Stack {
     });
 
     // Time Entries Table
+    // ✅ Phase 6 Enhancement: Will include analytics fields (productivityScore, complexityRating, reportingPeriod)
     const timeEntriesTable = new dynamodb.Table(this, 'TimeEntriesTable', {
       tableName: `aerotage-time-entries-${stage}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -224,6 +230,7 @@ export class DatabaseStack extends cdk.Stack {
     // to work around CloudFormation's "one GSI per update" limitation
 
     // User Preferences Table
+    // ✅ Phase 6 Enhancement: Will include reporting preferences (reportingPreferences, dashboardConfig)
     const userPreferencesTable = new dynamodb.Table(this, 'UserPreferencesTable', {
       tableName: `aerotage-user-preferences-${stage}`,
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
@@ -265,6 +272,71 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // ✅ NEW - Phase 6: Report Configurations Table
+    const reportConfigsTable = new dynamodb.Table(this, 'ReportConfigsTable', {
+      tableName: `aerotage-report-configs-${stage}`,
+      partitionKey: { name: 'reportId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for user lookup
+    reportConfigsTable.addGlobalSecondaryIndex({
+      indexName: 'UserIndex',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for report type lookup
+    reportConfigsTable.addGlobalSecondaryIndex({
+      indexName: 'ReportTypeIndex',
+      partitionKey: { name: 'reportType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // ✅ NEW - Phase 6: Report Cache Table
+    const reportCacheTable = new dynamodb.Table(this, 'ReportCacheTable', {
+      tableName: `aerotage-report-cache-${stage}`,
+      partitionKey: { name: 'cacheKey', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'expiresAt', // Auto-delete expired cache entries
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for report type lookup
+    reportCacheTable.addGlobalSecondaryIndex({
+      indexName: 'ReportTypeIndex',
+      partitionKey: { name: 'reportType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'generatedAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // ✅ NEW - Phase 6: Analytics Events Table
+    const analyticsEventsTable = new dynamodb.Table(this, 'AnalyticsEventsTable', {
+      tableName: `aerotage-analytics-events-${stage}`,
+      partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      timeToLiveAttribute: 'expiresAt', // Auto-delete old analytics events (90 days)
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for user-timestamp lookup (most common query pattern)
+    analyticsEventsTable.addGlobalSecondaryIndex({
+      indexName: 'UserTimestampIndex',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for event type-timestamp lookup (for analytics aggregation)
+    analyticsEventsTable.addGlobalSecondaryIndex({
+      indexName: 'EventTypeTimestampIndex',
+      partitionKey: { name: 'eventType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+    });
+
     // Store all tables for easy access
     this.tables = {
       usersTable,
@@ -280,6 +352,10 @@ export class DatabaseStack extends cdk.Stack {
       userSecuritySettingsTable,
       userNotificationSettingsTable,
       passwordHistoryTable,
+      // ✅ NEW - Phase 6 Reporting & Analytics Tables
+      reportConfigsTable,
+      reportCacheTable,
+      analyticsEventsTable,
     };
 
     // CloudFormation Outputs
@@ -359,6 +435,25 @@ export class DatabaseStack extends cdk.Stack {
       value: passwordHistoryTable.tableName,
       description: 'Password History DynamoDB Table Name',
       exportName: `PasswordHistoryTableName-${stage}`,
+    });
+
+    // ✅ NEW - Phase 6 CloudFormation Outputs
+    new cdk.CfnOutput(this, 'ReportConfigsTableName', {
+      value: reportConfigsTable.tableName,
+      description: 'Report Configurations DynamoDB Table Name',
+      exportName: `ReportConfigsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'ReportCacheTableName', {
+      value: reportCacheTable.tableName,
+      description: 'Report Cache DynamoDB Table Name',
+      exportName: `ReportCacheTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'AnalyticsEventsTableName', {
+      value: analyticsEventsTable.tableName,
+      description: 'Analytics Events DynamoDB Table Name',
+      exportName: `AnalyticsEventsTableName-${stage}`,
     });
   }
 } 
