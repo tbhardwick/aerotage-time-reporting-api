@@ -37,7 +37,7 @@ export class ProjectRepository {
   constructor() {
     const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
     this.dynamoClient = DynamoDBDocumentClient.from(client);
-    this.tableName = process.env.PROJECTS_TABLE_NAME || 'aerotage-projects-dev';
+    this.tableName = process.env.PROJECTS_TABLE || 'aerotage-projects-dev';
   }
 
   /**
@@ -54,13 +54,8 @@ export class ProjectRepository {
       updatedAt: now,
     };
 
-    const dynamoItem: ProjectDynamoItem = {
-      PK: `PROJECT#${projectId}`,
-      SK: `PROJECT#${projectId}`,
-      GSI1PK: `CLIENT#${project.clientId}`,
-      GSI1SK: `PROJECT#${project.name}`,
-      GSI2PK: `STATUS#${project.status}`,
-      GSI2SK: `PROJECT#${now}`,
+    // Simple structure matching the existing table
+    const dynamoItem = {
       id: projectId,
       name: project.name,
       clientId: project.clientId,
@@ -81,7 +76,7 @@ export class ProjectRepository {
     await this.dynamoClient.send(new PutCommand({
       TableName: this.tableName,
       Item: dynamoItem,
-      ConditionExpression: 'attribute_not_exists(PK)',
+      ConditionExpression: 'attribute_not_exists(id)',
     }));
 
     return newProject;
@@ -94,8 +89,7 @@ export class ProjectRepository {
     const result = await this.dynamoClient.send(new GetCommand({
       TableName: this.tableName,
       Key: {
-        PK: `PROJECT#${projectId}`,
-        SK: `PROJECT#${projectId}`,
+        id: projectId,
       },
     }));
 
@@ -103,7 +97,7 @@ export class ProjectRepository {
       return null;
     }
 
-    return this.mapDynamoItemToProject(result.Item as ProjectDynamoItem);
+    return this.mapDynamoItemToProject(result.Item as any);
   }
 
   /**
@@ -124,19 +118,11 @@ export class ProjectRepository {
       updateExpressions.push('#name = :name');
       expressionAttributeNames['#name'] = 'name';
       expressionAttributeValues[':name'] = updates.name;
-      
-      // Update GSI1SK as well
-      updateExpressions.push('GSI1SK = :gsi1sk');
-      expressionAttributeValues[':gsi1sk'] = `PROJECT#${updates.name}`;
     }
 
     if (updates.clientId !== undefined) {
       updateExpressions.push('clientId = :clientId');
       expressionAttributeValues[':clientId'] = updates.clientId;
-      
-      // Update GSI1PK as well
-      updateExpressions.push('GSI1PK = :gsi1pk');
-      expressionAttributeValues[':gsi1pk'] = `CLIENT#${updates.clientId}`;
     }
 
     if (updates.clientName !== undefined) {
@@ -153,10 +139,6 @@ export class ProjectRepository {
       updateExpressions.push('#status = :status');
       expressionAttributeNames['#status'] = 'status';
       expressionAttributeValues[':status'] = updates.status;
-      
-      // Update GSI2PK as well
-      updateExpressions.push('GSI2PK = :gsi2pk');
-      expressionAttributeValues[':gsi2pk'] = `STATUS#${updates.status}`;
     }
 
     if (updates.defaultHourlyRate !== undefined) {
@@ -200,17 +182,16 @@ export class ProjectRepository {
     const result = await this.dynamoClient.send(new UpdateCommand({
       TableName: this.tableName,
       Key: {
-        PK: `PROJECT#${projectId}`,
-        SK: `PROJECT#${projectId}`,
+        id: projectId,
       },
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
       ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
       ExpressionAttributeValues: expressionAttributeValues,
-      ConditionExpression: 'attribute_exists(PK)',
+      ConditionExpression: 'attribute_exists(id)',
       ReturnValues: 'ALL_NEW',
     }));
 
-    return this.mapDynamoItemToProject(result.Attributes as ProjectDynamoItem);
+    return this.mapDynamoItemToProject(result.Attributes as any);
   }
 
   /**
@@ -220,10 +201,9 @@ export class ProjectRepository {
     await this.dynamoClient.send(new DeleteCommand({
       TableName: this.tableName,
       Key: {
-        PK: `PROJECT#${projectId}`,
-        SK: `PROJECT#${projectId}`,
+        id: projectId,
       },
-      ConditionExpression: 'attribute_exists(PK)',
+      ConditionExpression: 'attribute_exists(id)',
     }));
   }
 
@@ -237,25 +217,28 @@ export class ProjectRepository {
     let queryCommand;
 
     if (filters.clientId) {
-      // Query by client using GSI1
+      // Query by client using GSI
       queryCommand = new QueryCommand({
         TableName: this.tableName,
         IndexName: 'ClientIndex',
-        KeyConditionExpression: 'GSI1PK = :clientId',
+        KeyConditionExpression: 'clientId = :clientId',
         ExpressionAttributeValues: {
-          ':clientId': `CLIENT#${filters.clientId}`,
+          ':clientId': filters.clientId,
         },
         Limit: limit + offset,
         ScanIndexForward: filters.sortOrder !== 'desc',
       });
     } else if (filters.status) {
-      // Query by status using GSI2
+      // Query by status using GSI
       queryCommand = new QueryCommand({
         TableName: this.tableName,
         IndexName: 'StatusIndex',
-        KeyConditionExpression: 'GSI2PK = :status',
+        KeyConditionExpression: '#status = :status',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+        },
         ExpressionAttributeValues: {
-          ':status': `STATUS#${filters.status}`,
+          ':status': filters.status,
         },
         Limit: limit + offset,
         ScanIndexForward: filters.sortOrder !== 'desc',
@@ -272,7 +255,7 @@ export class ProjectRepository {
     const items = result.Items || [];
 
     // Convert DynamoDB items to Project objects
-    let projects = items.map(item => this.mapDynamoItemToProject(item as ProjectDynamoItem));
+    let projects = items.map(item => this.mapDynamoItemToProject(item as any));
 
     // Apply team member filter if specified
     if (filters.teamMember) {
@@ -299,13 +282,13 @@ export class ProjectRepository {
     const result = await this.dynamoClient.send(new QueryCommand({
       TableName: this.tableName,
       IndexName: 'ClientIndex',
-      KeyConditionExpression: 'GSI1PK = :clientId',
+      KeyConditionExpression: 'clientId = :clientId',
       ExpressionAttributeValues: {
-        ':clientId': `CLIENT#${clientId}`,
+        ':clientId': clientId,
       },
     }));
 
-    return (result.Items || []).map(item => this.mapDynamoItemToProject(item as ProjectDynamoItem));
+    return (result.Items || []).map(item => this.mapDynamoItemToProject(item as any));
   }
 
   /**
@@ -324,7 +307,7 @@ export class ProjectRepository {
   /**
    * Map DynamoDB item to Project object
    */
-  private mapDynamoItemToProject(item: ProjectDynamoItem): Project {
+  private mapDynamoItemToProject(item: any): Project {
     return {
       id: item.id,
       name: item.name,
@@ -336,8 +319,8 @@ export class ProjectRepository {
       defaultBillable: item.defaultBillable,
       budget: item.budget ? JSON.parse(item.budget) : undefined,
       deadline: item.deadline,
-      teamMembers: JSON.parse(item.teamMembers),
-      tags: JSON.parse(item.tags),
+      teamMembers: JSON.parse(item.teamMembers || '[]'),
+      tags: JSON.parse(item.tags || '[]'),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       createdBy: item.createdBy,

@@ -34,7 +34,7 @@ export class ClientRepository {
   constructor() {
     const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
     this.dynamoClient = DynamoDBDocumentClient.from(client);
-    this.tableName = process.env.CLIENTS_TABLE_NAME || 'aerotage-clients-dev';
+    this.tableName = process.env.CLIENTS_TABLE || 'aerotage-clients-dev';
   }
 
   /**
@@ -51,11 +51,8 @@ export class ClientRepository {
       updatedAt: now,
     };
 
-    const dynamoItem: ClientDynamoItem = {
-      PK: `CLIENT#${clientId}`,
-      SK: `CLIENT#${clientId}`,
-      GSI1PK: `STATUS#${client.isActive ? 'true' : 'false'}`,
-      GSI1SK: `CLIENT#${client.name}`,
+    // Simple structure matching the existing table
+    const dynamoItem = {
       id: clientId,
       name: client.name,
       email: client.email,
@@ -63,7 +60,7 @@ export class ClientRepository {
       address: client.address,
       contactPerson: client.contactPerson,
       defaultHourlyRate: client.defaultHourlyRate,
-      isActive: client.isActive,
+      isActive: client.isActive ? 'true' : 'false', // String for GSI
       notes: client.notes,
       createdAt: now,
       updatedAt: now,
@@ -73,7 +70,7 @@ export class ClientRepository {
     await this.dynamoClient.send(new PutCommand({
       TableName: this.tableName,
       Item: dynamoItem,
-      ConditionExpression: 'attribute_not_exists(PK)',
+      ConditionExpression: 'attribute_not_exists(id)',
     }));
 
     return newClient;
@@ -86,8 +83,7 @@ export class ClientRepository {
     const result = await this.dynamoClient.send(new GetCommand({
       TableName: this.tableName,
       Key: {
-        PK: `CLIENT#${clientId}`,
-        SK: `CLIENT#${clientId}`,
+        id: clientId,
       },
     }));
 
@@ -95,7 +91,7 @@ export class ClientRepository {
       return null;
     }
 
-    return this.mapDynamoItemToClient(result.Item as ClientDynamoItem);
+    return this.mapDynamoItemToClient(result.Item as any);
   }
 
   /**
@@ -116,10 +112,6 @@ export class ClientRepository {
       updateExpressions.push('#name = :name');
       expressionAttributeNames['#name'] = 'name';
       expressionAttributeValues[':name'] = updates.name;
-      
-      // Update GSI1SK as well
-      updateExpressions.push('GSI1SK = :gsi1sk');
-      expressionAttributeValues[':gsi1sk'] = `CLIENT#${updates.name}`;
     }
 
     if (updates.email !== undefined) {
@@ -149,11 +141,7 @@ export class ClientRepository {
 
     if (updates.isActive !== undefined) {
       updateExpressions.push('isActive = :isActive');
-      expressionAttributeValues[':isActive'] = updates.isActive;
-      
-      // Update GSI1PK as well
-      updateExpressions.push('GSI1PK = :gsi1pk');
-      expressionAttributeValues[':gsi1pk'] = `STATUS#${updates.isActive ? 'true' : 'false'}`;
+      expressionAttributeValues[':isActive'] = updates.isActive ? 'true' : 'false';
     }
 
     if (updates.notes !== undefined) {
@@ -172,17 +160,16 @@ export class ClientRepository {
     const result = await this.dynamoClient.send(new UpdateCommand({
       TableName: this.tableName,
       Key: {
-        PK: `CLIENT#${clientId}`,
-        SK: `CLIENT#${clientId}`,
+        id: clientId,
       },
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
       ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
       ExpressionAttributeValues: expressionAttributeValues,
-      ConditionExpression: 'attribute_exists(PK)',
+      ConditionExpression: 'attribute_exists(id)',
       ReturnValues: 'ALL_NEW',
     }));
 
-    return this.mapDynamoItemToClient(result.Attributes as ClientDynamoItem);
+    return this.mapDynamoItemToClient(result.Attributes as any);
   }
 
   /**
@@ -199,10 +186,9 @@ export class ClientRepository {
     await this.dynamoClient.send(new DeleteCommand({
       TableName: this.tableName,
       Key: {
-        PK: `CLIENT#${clientId}`,
-        SK: `CLIENT#${clientId}`,
+        id: clientId,
       },
-      ConditionExpression: 'attribute_exists(PK)',
+      ConditionExpression: 'attribute_exists(id)',
     }));
   }
 
@@ -216,13 +202,13 @@ export class ClientRepository {
     let queryCommand;
 
     if (filters.isActive !== undefined) {
-      // Query by status using GSI1
+      // Query by status using GSI
       queryCommand = new QueryCommand({
         TableName: this.tableName,
         IndexName: 'StatusIndex',
-        KeyConditionExpression: 'GSI1PK = :status',
+        KeyConditionExpression: 'isActive = :status',
         ExpressionAttributeValues: {
-          ':status': `STATUS#${filters.isActive ? 'true' : 'false'}`,
+          ':status': filters.isActive ? 'true' : 'false',
         },
         Limit: limit + offset,
         ScanIndexForward: filters.sortOrder !== 'desc',
@@ -239,7 +225,7 @@ export class ClientRepository {
     const items = result.Items || [];
 
     // Convert DynamoDB items to Client objects
-    const clients = items.map(item => this.mapDynamoItemToClient(item as ClientDynamoItem));
+    const clients = items.map(item => this.mapDynamoItemToClient(item as any));
 
     // Apply sorting if not using GSI
     if (filters.isActive === undefined && filters.sortBy) {
@@ -293,7 +279,7 @@ export class ClientRepository {
       },
     }));
 
-    return (result.Items || []).map(item => this.mapDynamoItemToClient(item as ClientDynamoItem));
+    return (result.Items || []).map(item => this.mapDynamoItemToClient(item as any));
   }
 
   /**
@@ -323,7 +309,7 @@ export class ClientRepository {
   /**
    * Map DynamoDB item to Client object
    */
-  private mapDynamoItemToClient(item: ClientDynamoItem): Client {
+  private mapDynamoItemToClient(item: any): Client {
     return {
       id: item.id,
       name: item.name,
@@ -332,7 +318,7 @@ export class ClientRepository {
       address: item.address,
       contactPerson: item.contactPerson,
       defaultHourlyRate: item.defaultHourlyRate,
-      isActive: item.isActive,
+      isActive: item.isActive === 'true', // Convert string back to boolean
       notes: item.notes,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
