@@ -227,8 +227,6 @@ components:
         invitedBy:
           type: string
           format: email
-        teamId:
-          type: string
         department:
           type: string
         jobTitle:
@@ -237,39 +235,7 @@ components:
           type: number
           format: float
           
-    Team:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        managerId:
-          type: string
-        members:
-          type: array
-          items:
-            $ref: '#/components/schemas/TeamMember'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-          
-    TeamMember:
-      type: object
-      properties:
-        userId:
-          type: string
-        role:
-          type: string
-          enum: [manager, member]
-        joinedAt:
-          type: string
-          format: date-time
+
           
     Project:
       type: object
@@ -1048,8 +1014,6 @@ paths:
                 role:
                   type: string
                   enum: [admin, manager, employee]
-                teamId:
-                  type: string
                 department:
                   type: string
                 jobTitle:
