@@ -892,6 +892,124 @@ class ClientApi {
 export const clientApi = new ClientApi();
 ```
 
+### **8. Time Entry Management API** ✅ **Phase 4 - COMPLETE**
+
+```typescript
+// src/services/time-entry-api.ts
+import { apiClient } from './api-client';
+
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId?: string;
+  description: string;
+  date: string; // YYYY-MM-DD
+  startTime?: string; // ISO datetime
+  endTime?: string; // ISO datetime
+  duration: number; // minutes
+  isBillable: boolean;
+  hourlyRate?: number;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  tags: string[];
+  notes?: string;
+  attachments?: string[];
+  isTimerEntry: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTimeEntryRequest {
+  projectId: string;
+  taskId?: string;
+  description: string;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number;
+  isBillable?: boolean;
+  hourlyRate?: number;
+  tags?: string[];
+  notes?: string;
+}
+
+export interface UpdateTimeEntryRequest {
+  description?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number;
+  isBillable?: boolean;
+  hourlyRate?: number;
+  tags?: string[];
+  notes?: string;
+}
+
+export interface TimeEntryFilters {
+  startDate?: string;
+  endDate?: string;
+  projectId?: string;
+  status?: 'draft' | 'submitted' | 'approved' | 'rejected';
+  isBillable?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface BulkTimeEntryResponse {
+  successful: string[];
+  failed: Array<{ id: string; error: string }>;
+}
+
+class TimeEntryApi {
+  // List time entries
+  async listTimeEntries(filters?: TimeEntryFilters): Promise<{ items: TimeEntry[]; pagination: any }> {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.projectId) params.append('projectId', filters.projectId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.isBillable !== undefined) params.append('isBillable', filters.isBillable.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiClient.get<{ items: TimeEntry[]; pagination: any }>(`time-entries${query}`);
+  }
+
+  // Create time entry
+  async createTimeEntry(request: CreateTimeEntryRequest): Promise<TimeEntry> {
+    return apiClient.post<TimeEntry>('time-entries', request);
+  }
+
+  // Update time entry
+  async updateTimeEntry(id: string, updates: UpdateTimeEntryRequest): Promise<TimeEntry> {
+    return apiClient.put<TimeEntry>(`time-entries/${id}`, updates);
+  }
+
+  // Delete time entry
+  async deleteTimeEntry(id: string): Promise<void> {
+    return apiClient.delete(`time-entries/${id}`);
+  }
+
+  // Submit time entries for approval
+  async submitTimeEntries(timeEntryIds: string[]): Promise<BulkTimeEntryResponse> {
+    return apiClient.post<BulkTimeEntryResponse>('time-entries/submit', { timeEntryIds });
+  }
+
+  // Approve time entries (managers only)
+  async approveTimeEntries(timeEntryIds: string[]): Promise<BulkTimeEntryResponse> {
+    return apiClient.post<BulkTimeEntryResponse>('time-entries/approve', { timeEntryIds });
+  }
+
+  // Reject time entries (managers only)
+  async rejectTimeEntries(timeEntryIds: string[], reason: string): Promise<BulkTimeEntryResponse> {
+    return apiClient.post<BulkTimeEntryResponse>('time-entries/reject', { timeEntryIds, reason });
+  }
+}
+
+export const timeEntryApi = new TimeEntryApi();
+```
+
 ---
 
 ## 🎨 **React Context Integration**

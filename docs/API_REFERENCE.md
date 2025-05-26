@@ -745,12 +745,56 @@ Authorization: Bearer {token}
 
 ---
 
-## ⏱️ **Time Tracking**
+## ⏱️ **Time Tracking** ✅ **Phase 4 - COMPLETE**
 
 ### **List Time Entries**
 ```http
-GET /time-entries?startDate=2024-01-01&endDate=2024-01-31&userId=user-123
+GET /time-entries?startDate=2024-01-01&endDate=2024-01-31&projectId=project-123
 Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `startDate`: Filter by start date (YYYY-MM-DD)
+- `endDate`: Filter by end date (YYYY-MM-DD)
+- `projectId`: Filter by project ID
+- `status`: Filter by status (`draft`, `submitted`, `approved`, `rejected`)
+- `isBillable`: Filter by billable status (`true`, `false`)
+- `limit`: Number of results (default: 50, max: 100)
+- `offset`: Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "te_1234567890_abcdef",
+        "userId": "user-id-123",
+        "projectId": "project-id-456",
+        "description": "Frontend development work",
+        "date": "2024-01-15",
+        "startTime": "2024-01-15T09:00:00Z",
+        "endTime": "2024-01-15T12:00:00Z",
+        "duration": 180,
+        "isBillable": true,
+        "hourlyRate": 75.00,
+        "status": "approved",
+        "tags": ["development", "frontend"],
+        "notes": "Completed user interface updates",
+        "isTimerEntry": false,
+        "createdAt": "2024-01-15T09:00:00Z",
+        "updatedAt": "2024-01-16T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "total": 25,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
 ```
 
 ### **Create Time Entry**
@@ -760,12 +804,42 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "projectId": "project-123",
-  "description": "Frontend development work",
+  "projectId": "project-id-456",
+  "description": "Backend API development",
+  "date": "2024-01-15",
   "startTime": "2024-01-15T09:00:00Z",
   "endTime": "2024-01-15T12:00:00Z",
-  "hours": 3.0,
-  "billable": true
+  "duration": 180,
+  "isBillable": true,
+  "hourlyRate": 85.00,
+  "tags": ["development", "backend", "api"],
+  "notes": "Implemented user authentication endpoints"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "te_1234567890_newentry",
+    "userId": "user-id-123",
+    "projectId": "project-id-456",
+    "description": "Backend API development",
+    "date": "2024-01-15",
+    "startTime": "2024-01-15T09:00:00Z",
+    "endTime": "2024-01-15T12:00:00Z",
+    "duration": 180,
+    "isBillable": true,
+    "hourlyRate": 85.00,
+    "status": "draft",
+    "tags": ["development", "backend", "api"],
+    "notes": "Implemented user authentication endpoints",
+    "isTimerEntry": false,
+    "createdAt": "2024-01-15T12:05:00Z",
+    "updatedAt": "2024-01-15T12:05:00Z"
+  },
+  "message": "Time entry created successfully"
 }
 ```
 
@@ -776,8 +850,35 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "description": "Updated description",
-  "hours": 3.5
+  "description": "Updated: Backend API development with testing",
+  "duration": 240,
+  "notes": "Added comprehensive unit tests"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "te_1234567890_newentry",
+    "userId": "user-id-123",
+    "projectId": "project-id-456",
+    "description": "Updated: Backend API development with testing",
+    "date": "2024-01-15",
+    "startTime": "2024-01-15T09:00:00Z",
+    "endTime": "2024-01-15T13:00:00Z",
+    "duration": 240,
+    "isBillable": true,
+    "hourlyRate": 85.00,
+    "status": "draft",
+    "tags": ["development", "backend", "api"],
+    "notes": "Added comprehensive unit tests",
+    "isTimerEntry": false,
+    "createdAt": "2024-01-15T12:05:00Z",
+    "updatedAt": "2024-01-15T14:20:00Z"
+  },
+  "message": "Time entry updated successfully"
 }
 ```
 
@@ -785,6 +886,109 @@ Content-Type: application/json
 ```http
 DELETE /time-entries/{entryId}
 Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Time entry deleted successfully"
+}
+```
+
+**Note**: Only time entries with status `draft` or `rejected` can be deleted.
+
+### **Submit Time Entries for Approval**
+```http
+POST /time-entries/submit
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "timeEntryIds": [
+    "te_1234567890_entry1",
+    "te_1234567890_entry2",
+    "te_1234567890_entry3"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "successful": [
+      "te_1234567890_entry1",
+      "te_1234567890_entry2"
+    ],
+    "failed": [
+      {
+        "id": "te_1234567890_entry3",
+        "error": "TIME_ENTRY_ALREADY_SUBMITTED"
+      }
+    ]
+  },
+  "message": "Bulk submission completed"
+}
+```
+
+### **Approve Time Entries** (Managers Only)
+```http
+POST /time-entries/approve
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "timeEntryIds": [
+    "te_1234567890_entry1",
+    "te_1234567890_entry2"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "successful": [
+      "te_1234567890_entry1",
+      "te_1234567890_entry2"
+    ],
+    "failed": []
+  },
+  "message": "Time entries approved successfully"
+}
+```
+
+### **Reject Time Entries** (Managers Only)
+```http
+POST /time-entries/reject
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "timeEntryIds": [
+    "te_1234567890_entry1"
+  ],
+  "reason": "Insufficient detail in description. Please provide more specific information about the work performed."
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "successful": [
+      "te_1234567890_entry1"
+    ],
+    "failed": []
+  },
+  "message": "Time entries rejected successfully"
+}
 ```
 
 ---
