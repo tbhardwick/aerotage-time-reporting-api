@@ -404,6 +404,46 @@ npm run destroy:dev
 4. **Deployment Tags**: Tag deployments with version numbers
 5. **Documentation Updates**: Update docs with all changes
 
+### **📚 Documentation Update Process** (✅ **AUTOMATED**)
+
+**REQUIRED**: After implementing new API endpoints, always update documentation:
+
+#### **Automated Process** (Recommended)
+```bash
+# After implementing new endpoints, run:
+npm run update:docs
+```
+
+This script automatically:
+- ✅ Detects new API endpoints from git changes
+- ✅ Validates OpenAPI specification syntax
+- ✅ Builds JSON specification from YAML
+- ✅ Deploys updated documentation to CloudFront
+- ✅ Updates project rules with current URLs
+- ✅ Commits documentation changes
+
+#### **Manual Process** (If needed)
+1. **Update OpenAPI Spec**: Edit `docs/openapi.yaml` with new endpoints
+2. **Validate Spec**: `npm run validate:docs`
+3. **Build Documentation**: `npm run build:docs`
+4. **Deploy**: `cd infrastructure && cdk deploy AerotageDocumentation-dev`
+5. **Commit Changes**: `git add docs/ && git commit -m "docs: update API documentation"`
+
+#### **Available Commands**
+- `npm run update:docs` - Full automated update process
+- `npm run validate:docs` - Only validate OpenAPI specification
+- `npm run build:docs` - Build JSON from YAML specification
+
+#### **Documentation Requirements for New Phases**
+When implementing new API phases:
+1. **Add endpoints to OpenAPI spec** (`docs/openapi.yaml`)
+2. **Include comprehensive schemas** for request/response objects
+3. **Add detailed descriptions** and examples
+4. **Tag endpoints appropriately** for organization
+5. **Run automated update process** (`npm run update:docs`)
+6. **Test documentation** in live Swagger UI
+7. **Update integration guides** if needed
+
 ### Code Quality (✅ **ENFORCED**)
 - ✅ **TypeScript**: Strict mode enabled
 - ✅ **ESLint**: AWS CDK recommended rules
