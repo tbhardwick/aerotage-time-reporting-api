@@ -1,0 +1,476 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Phase 4 Development - Time Tracking Features
+
+## 🎯 Context: Phase 4 Time Tracking Development
+
+**Use this rule when**: Planning or implementing Phase 4 time tracking features, including time entries, timers, project association, and approval workflows.
+
+## 📊 Current Status & Phase 4 Goals
+
+### ✅ **Foundation Complete (Phases 1-3)**
+- **User Management**: Profile, preferences, role-based access ✅
+- **Authentication & Security**: JWT tokens, password management ✅
+- **Session Management**: Multi-session tracking ✅
+- **User Invitations**: Email-based invitation system ✅
+- **Infrastructure**: Complete AWS CDK deployment ✅
+
+### 🎯 **Phase 4 Objectives**
+- **Time Entry CRUD**: Create, read, update, delete time entries
+- **Timer Functionality**: Start/stop/pause timers with real-time tracking
+- **Project Association**: Link time entries to projects and tasks
+- **Approval Workflow**: Manager approval process for time entries
+- **Time Categories**: Billable vs non-billable time tracking
+- **Bulk Operations**: Bulk edit and approval of time entries
+
+## 🗄️ Database Design for Time Tracking
+
+### **New DynamoDB Tables Required**
+
+#### **Time Entries Table**
+```typescript
+// Table: aerotage-time-entries-{stage}
+interface TimeEntry {
+  // Primary Key
+  id: string;                    // UUID for time entry
+  
+  // Core Fields
+  userId: string;                // User who logged the time
+  projectId?: string;            // Associated project (optional)
+  taskId?: string;               // Associated task (optional)
+  description: string;           // Time entry description
+  
+  // Time Tracking
+  startTime: string;             // ISO 8601 timestamp
+  endTime?: string;              // ISO 8601 timestamp (null for running timers)
+  duration: number;              // Duration in minutes
+  isRunning: boolean;            // Whether timer is currently running
+  
+  // Categorization
+  isBillable: boolean;           // Billable vs non-billable
+  category: string;              // Time category (development, meeting, etc.)
+  tags: string[];                // Optional tags for filtering
+  
+  // Approval Workflow
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  submittedAt?: string;          // When submitted for approval
+  approvedBy?: string;           // Manager who approved
+  approvedAt?: string;           // When approved
+  rejectionReason?: string;      // Reason for rejection
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  lastModifiedBy: string;
+}
+
+// GSI 1: Query by user and date range
+// PK: userId, SK: startTime
+// GSI 2: Query by project
+// PK: projectId, SK: startTime
+// GSI 3: Query by status for approvals
+// PK: status, SK: submittedAt
+```
+
+#### **Active Timers Table**
+```typescript
+// Table: aerotage-active-timers-{stage}
+interface ActiveTimer {
+  userId: string;                // Primary key
+  timeEntryId: string;           // Reference to time entry
+  startTime: string;             // When timer started
+  lastPing: string;              // Last heartbeat from client
+  description: string;           // Current task description
+  projectId?: string;            // Associated project
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Only one active timer per user allowed
+// Cleanup inactive timers automatically
+```
+
+#### **Projects Table** (Basic for Phase 4)
+```typescript
+// Table: aerotage-projects-{stage}
+interface Project {
+  id: string;                    // Primary key
+  name: string;                  // Project name
+  clientId?: string;             // Associated client
+  description?: string;          // Project description
+  status: 'active' | 'completed' | 'on-hold' | 'cancelled';
+  
+  // Time Tracking Settings
+  defaultBillable: boolean;      // Default billable status
+  hourlyRate?: number;           // Project hourly rate
+  budget?: {
+    hours: number;               // Budgeted hours
+    amount: number;              // Budgeted amount
+  };
+  
+  // Team Assignment
+  teamMembers: string[];         // User IDs assigned to project
+  managers: string[];            // User IDs who can approve time
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+// GSI 1: Query by client
+// PK: clientId, SK: name
+// GSI 2: Query by status
+// PK: status, SK: createdAt
+```
+
+## 📡 Phase 4 API Endpoints
+
+### **Time Entry Management**
+```typescript
+// Time Entry CRUD Operations
+GET    /time-entries                    // List user's time entries (with filters)
+POST   /time-entries                    // Create new time entry
+GET    /time-entries/{id}               // Get specific time entry
+PUT    /time-entries/{id}               // Update time entry
+DELETE /time-entries/{id}               // Delete time entry
+
+// Bulk Operations
+POST   /time-entries/bulk               // Create multiple time entries
+PUT    /time-entries/bulk               // Update multiple time entries
+DELETE /time-entries/bulk               // Delete multiple time entries
+
+// Query Parameters for GET /time-entries
+?startDate=2024-01-01                   // Filter by start date
+?endDate=2024-01-31                     // Filter by end date
+?projectId=project-123                  // Filter by project
+?status=approved                        // Filter by approval status
+?isBillable=true                        // Filter by billable status
+?limit=50                               // Pagination limit
+?cursor=next-page-token                 // Pagination cursor
+```
+
+### **Timer Operations**
+```typescript
+// Timer Control
+POST   /timers/start                    // Start new timer
+PUT    /timers/stop                     // Stop current timer
+PUT    /timers/pause                    // Pause current timer
+PUT    /timers/resume                   // Resume paused timer
+GET    /timers/current                  // Get current running timer
+DELETE /timers/current                  // Cancel current timer
+
+// Timer Heartbeat (keep timer alive)
+POST   /timers/heartbeat                // Update timer last activity
+```
+
+### **Approval Workflow**
+```typescript
+// Time Entry Approval
+POST   /time-entries/{id}/submit        // Submit for approval
+POST   /time-entries/{id}/approve       // Approve time entry (managers)
+POST   /time-entries/{id}/reject        // Reject time entry (managers)
+POST   /time-entries/bulk/submit        // Submit multiple entries
+POST   /time-entries/bulk/approve       // Approve multiple entries
+
+// Approval Queue (for managers)
+GET    /approvals/pending               // Get pending approvals
+GET    /approvals/history               // Get approval history
+```
+
+### **Project Management (Basic)**
+```typescript
+// Project CRUD (basic for Phase 4)
+GET    /projects                        // List projects
+POST   /projects                        // Create project (admin/manager)
+GET    /projects/{id}                   // Get project details
+PUT    /projects/{id}                   // Update project
+DELETE /projects/{id}                   // Delete project
+
+// Project Time Tracking
+GET    /projects/{id}/time-entries      // Get project time entries
+GET    /projects/{id}/summary           // Get project time summary
+```
+
+## ⚡ Timer Implementation
+
+### **Timer State Management**
+```typescript
+// Timer states and transitions
+enum TimerState {
+  STOPPED = 'stopped',
+  RUNNING = 'running',
+  PAUSED = 'paused'
+}
+
+// Timer operations
+interface TimerOperations {
+  start(description: string, projectId?: string): Promise<TimeEntry>;
+  stop(): Promise<TimeEntry>;
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  cancel(): Promise<void>;
+  getCurrentTimer(): Promise<ActiveTimer | null>;
+  sendHeartbeat(): Promise<void>;
+}
+
+// Frontend timer sync
+setInterval(() => {
+  if (timerRunning) {
+    apiClient.post('/timers/heartbeat');
+  }
+}, 30000); // Every 30 seconds
+```
+
+### **Timer Business Rules**
+```typescript
+// Timer constraints and validation
+1. Only one active timer per user at a time
+2. Starting new timer stops any existing timer
+3. Timer automatically stops after 12 hours of inactivity
+4. Minimum time entry duration: 1 minute
+5. Maximum time entry duration: 24 hours
+6. Timer heartbeat required every 5 minutes to stay active
+7. Paused timers auto-stop after 1 hour of inactivity
+```
+
+## 🔄 Approval Workflow
+
+### **Approval Process**
+```typescript
+// Time entry approval states
+enum ApprovalStatus {
+  DRAFT = 'draft',           // User is still editing
+  SUBMITTED = 'submitted',   // Submitted for approval
+  APPROVED = 'approved',     // Manager approved
+  REJECTED = 'rejected'      // Manager rejected
+}
+
+// Approval workflow rules
+1. Users can only edit DRAFT entries
+2. SUBMITTED entries require manager approval
+3. Only project managers can approve/reject
+4. APPROVED entries are locked (admin can unlock)
+5. REJECTED entries return to DRAFT status
+6. Bulk approval available for managers
+7. Email notifications for status changes
+```
+
+### **Manager Approval Interface**
+```typescript
+// Approval queue for managers
+interface ApprovalQueue {
+  pendingEntries: TimeEntry[];
+  totalHours: number;
+  totalBillableHours: number;
+  employeeBreakdown: {
+    userId: string;
+    userName: string;
+    entries: number;
+    hours: number;
+  }[];
+}
+
+// Bulk approval operations
+interface BulkApproval {
+  entryIds: string[];
+  action: 'approve' | 'reject';
+  reason?: string; // Required for rejection
+}
+```
+
+## 🧪 Testing Strategy for Phase 4
+
+### **Unit Tests Required**
+```typescript
+// Time Entry Tests
+- Create time entry with valid data
+- Update time entry validation
+- Delete time entry permissions
+- Query time entries with filters
+- Bulk operations validation
+
+// Timer Tests
+- Start timer creates active timer record
+- Stop timer calculates duration correctly
+- Only one timer per user enforcement
+- Timer heartbeat updates last activity
+- Inactive timer cleanup
+
+// Approval Tests
+- Submit time entry for approval
+- Manager approval permissions
+- Bulk approval operations
+- Status transition validation
+- Email notification triggers
+```
+
+### **Integration Tests**
+```typescript
+// End-to-end workflows
+1. Complete time tracking workflow (start → stop → submit → approve)
+2. Timer state management across sessions
+3. Project association and filtering
+4. Approval workflow with notifications
+5. Bulk operations performance
+6. Data consistency across tables
+```
+
+## 📊 Reporting & Analytics (Phase 4 Scope)
+
+### **Basic Reports**
+```typescript
+// Time summary reports
+GET /reports/time-summary?startDate=2024-01-01&endDate=2024-01-31
+{
+  totalHours: 160,
+  billableHours: 120,
+  nonBillableHours: 40,
+  approvedHours: 140,
+  pendingHours: 20,
+  projectBreakdown: [
+    { projectId: 'proj-1', projectName: 'Project A', hours: 80 },
+    { projectId: 'proj-2', projectName: 'Project B', hours: 60 }
+  ]
+}
+
+// User productivity report
+GET /reports/user-productivity/{userId}?period=month
+{
+  averageHoursPerDay: 8.2,
+  mostProductiveDay: 'Tuesday',
+  projectDistribution: {...},
+  approvalRate: 95.5
+}
+```
+
+## 🔧 Lambda Function Structure
+
+### **Time Entry Functions**
+```typescript
+// infrastructure/lambda/time-entries/
+├── create-time-entry.ts          // POST /time-entries
+├── get-time-entries.ts           // GET /time-entries
+├── get-time-entry.ts             // GET /time-entries/{id}
+├── update-time-entry.ts          // PUT /time-entries/{id}
+├── delete-time-entry.ts          // DELETE /time-entries/{id}
+├── bulk-operations.ts            // Bulk CRUD operations
+├── submit-for-approval.ts        // POST /time-entries/{id}/submit
+└── shared/
+    ├── time-entry-validation.ts  // Input validation
+    ├── duration-calculator.ts    // Time calculations
+    └── approval-notifications.ts // Email notifications
+```
+
+### **Timer Functions**
+```typescript
+// infrastructure/lambda/timers/
+├── start-timer.ts                // POST /timers/start
+├── stop-timer.ts                 // PUT /timers/stop
+├── pause-timer.ts                // PUT /timers/pause
+├── resume-timer.ts               // PUT /timers/resume
+├── get-current-timer.ts          // GET /timers/current
+├── timer-heartbeat.ts            // POST /timers/heartbeat
+├── cleanup-inactive-timers.ts    // Scheduled cleanup
+└── shared/
+    ├── timer-validation.ts       // Timer business rules
+    └── timer-state-manager.ts    // State transitions
+```
+
+## 🚀 Phase 4 Implementation Plan
+
+### **Sprint 1: Core Time Entry CRUD**
+```typescript
+Week 1-2:
+- Design and create DynamoDB tables
+- Implement basic time entry CRUD operations
+- Add input validation and error handling
+- Create unit tests for core functionality
+- Update API documentation
+
+Deliverables:
+- Time entry creation, reading, updating, deletion
+- Basic filtering and pagination
+- Comprehensive test coverage
+```
+
+### **Sprint 2: Timer Functionality**
+```typescript
+Week 3-4:
+- Implement timer start/stop/pause operations
+- Add active timer tracking
+- Create timer heartbeat mechanism
+- Implement timer cleanup jobs
+- Add timer state validation
+
+Deliverables:
+- Full timer functionality
+- Timer state management
+- Automatic cleanup of inactive timers
+- Real-time timer synchronization
+```
+
+### **Sprint 3: Approval Workflow**
+```typescript
+Week 5-6:
+- Implement approval status management
+- Add manager approval permissions
+- Create bulk approval operations
+- Add email notifications
+- Implement approval queue interface
+
+Deliverables:
+- Complete approval workflow
+- Manager approval interface
+- Email notification system
+- Bulk approval capabilities
+```
+
+### **Sprint 4: Project Integration & Polish**
+```typescript
+Week 7-8:
+- Create basic project management
+- Add project-time entry associations
+- Implement basic reporting
+- Performance optimization
+- Frontend integration support
+
+Deliverables:
+- Project-time entry integration
+- Basic time reports
+- Performance optimized queries
+- Frontend integration ready
+```
+
+## 📋 Phase 4 Success Criteria
+
+### **Functional Requirements**
+- ✅ Users can create, edit, and delete time entries
+- ✅ Timer functionality with start/stop/pause
+- ✅ Project association for time entries
+- ✅ Manager approval workflow
+- ✅ Bulk operations for efficiency
+- ✅ Basic time reporting
+
+### **Technical Requirements**
+- ✅ <200ms API response times
+- ✅ Real-time timer synchronization
+- ✅ Data consistency across operations
+- ✅ Comprehensive error handling
+- ✅ 90%+ test coverage
+- ✅ Scalable database design
+
+### **User Experience Requirements**
+- ✅ Intuitive timer interface
+- ✅ Efficient bulk operations
+- ✅ Clear approval status indicators
+- ✅ Responsive time entry forms
+- ✅ Helpful error messages
+
+Remember: Phase 4 builds on the **solid foundation** of Phases 1-3. Focus on **time tracking core functionality** while maintaining the **high quality standards** established in the existing infrastructure.
