@@ -103,9 +103,15 @@ Development: https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/
 
 ## 📚 Documentation
 
-Comprehensive documentation is available in the [`/docs`](./docs) directory:
+### 🌐 **Interactive API Documentation**
+- **[Live Swagger UI](https://d2xyhdliouir95.cloudfront.net)** - Interactive API documentation with live testing
+- **[OpenAPI Specification](./docs/openapi.yaml)** - Complete OpenAPI 3.0 specification
+
+### 📖 **Comprehensive Guides**
+Detailed documentation is available in the [`/docs`](./docs) directory:
 
 - **[API Reference](./docs/API_REFERENCE.md)** - Complete API endpoint documentation
+- **[OpenAPI Documentation](./docs/OPENAPI_DOCUMENTATION.md)** - OpenAPI system setup and usage
 - **[Deployment Guide](./docs/DEPLOYMENT_GUIDE.md)** - Infrastructure deployment instructions
 - **[Frontend Integration](./docs/FRONTEND_INTEGRATION_GUIDE.md)** - Integration guide for frontend applications
 - **[Project Status](./docs/PROJECT_STATUS.md)** - Current implementation status and progress
@@ -131,6 +137,7 @@ Comprehensive documentation is available in the [`/docs`](./docs) directory:
 npm run build              # Build TypeScript
 npm run test               # Run tests
 npm run lint               # Run ESLint
+npm run build:docs         # Build OpenAPI documentation
 npm run deploy:dev         # Deploy to development
 npm run deploy:staging     # Deploy to staging
 npm run deploy:prod        # Deploy to production
@@ -150,7 +157,8 @@ npm run destroy:dev        # Destroy development stack
 - ✅ **API Endpoints**: 15+ endpoints implemented
 - ✅ **Database**: 8 DynamoDB tables with GSIs
 - ✅ **Monitoring**: CloudWatch dashboards and alarms
-- ✅ **Documentation**: Comprehensive guides and references
+- ✅ **Documentation**: Interactive OpenAPI/Swagger UI + comprehensive guides
+- ✅ **API Documentation**: Live interactive documentation with testing capabilities
 
 ## 🤝 Contributing
 

@@ -66,18 +66,21 @@ This project uses a **two-repository architecture** to separate concerns:
 
 ### **Live Environment Details**
 - **API Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Documentation**: `https://d2xyhdliouir95.cloudfront.net` (Interactive Swagger UI)
 - **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
 - **App Client**: `148r35u6uultp1rmfdu22i8amb`
 - **Identity Pool**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
 - **Environment**: Development (staging/production ready for deployment)
 
 ### **Deployed AWS Resources**
-- ✅ **5 CDK Stacks**: Auth, Database, API, Storage, Monitoring
+- ✅ **6 CDK Stacks**: Auth, Database, API, Storage, Documentation, Monitoring
 - ✅ **8 DynamoDB Tables**: Users, profiles, preferences, sessions, invitations, etc.
 - ✅ **30+ Lambda Functions**: All user management and security endpoints
-- ✅ **S3 Buckets**: File storage with lifecycle policies
+- ✅ **S3 Buckets**: File storage with lifecycle policies + documentation hosting
+- ✅ **CloudFront**: CDN for OpenAPI documentation hosting
 - ✅ **CloudWatch**: Comprehensive monitoring and alerting
 - ✅ **SES**: Email service with professional templates
+- ✅ **OpenAPI Documentation**: Interactive Swagger UI with live API testing
 
 ## Core Technology Stack
 
@@ -148,6 +151,7 @@ infrastructure/
 │   ├── api-stack.ts                  # ✅ API Gateway and Lambda integrations
 │   ├── storage-stack.ts              # ✅ S3 buckets and policies
 │   ├── ses-stack.ts                  # ✅ Email service configuration
+│   ├── documentation-stack.ts        # ✅ OpenAPI/Swagger UI hosting
 │   └── monitoring-stack.ts           # ✅ CloudWatch logs, metrics, alarms
 ├── lambda/
 │   ├── users/                        # ✅ User management functions (6 endpoints)
@@ -161,9 +165,14 @@ infrastructure/
 │   ├── reports/                      # 📋 Reporting (Phase 6)
 │   └── invoices/                     # 📋 Invoice generation (Phase 7)
 ├── test/                             # ✅ CDK and Lambda unit tests
+├── scripts/                          # ✅ Build and utility scripts
+│   └── build-openapi.js              # ✅ OpenAPI specification builder
 ├── docs/                             # ✅ Comprehensive API documentation
 │   ├── README.md                     # Documentation navigation
 │   ├── API_REFERENCE.md              # Complete API documentation
+│   ├── openapi.yaml                  # ✅ OpenAPI 3.0 specification
+│   ├── OPENAPI_DOCUMENTATION.md      # ✅ OpenAPI system documentation
+│   ├── swagger-ui/                   # ✅ Swagger UI hosting files
 │   ├── PROJECT_STATUS.md             # Current implementation status
 │   ├── SECURITY_GUIDE.md             # Security implementation
 │   ├── DEPLOYMENT_GUIDE.md           # Infrastructure deployment
@@ -214,6 +223,7 @@ infrastructure/
 - ✅ **ApiStack**: API Gateway with 30+ Lambda functions
 - ✅ **StorageStack**: S3 buckets with lifecycle policies
 - ✅ **SESStack**: Email service with professional templates
+- ✅ **DocumentationStack**: OpenAPI/Swagger UI hosting with CloudFront
 - ✅ **MonitoringStack**: CloudWatch monitoring and alerting
 
 ## Lambda Function Development Rules
@@ -374,7 +384,10 @@ npm run destroy:dev
 ## Documentation Status (✅ **COMPREHENSIVE**)
 
 ### Available Documentation
+- ✅ **Interactive API Documentation**: Live Swagger UI with testing capabilities
+- ✅ **OpenAPI Specification**: Complete OpenAPI 3.0 YAML specification
 - ✅ **API Reference**: Complete endpoint documentation
+- ✅ **OpenAPI System Guide**: Documentation system setup and usage
 - ✅ **Project Status**: Current implementation status
 - ✅ **Security Guide**: Security features and implementation
 - ✅ **Deployment Guide**: Infrastructure deployment instructions
@@ -440,6 +453,8 @@ npm run destroy:dev
 
 ### **Key Resources**
 - **API Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **Interactive API Docs**: `https://d2xyhdliouir95.cloudfront.net` (Live Swagger UI)
+- **OpenAPI Specification**: `/docs/openapi.yaml` for API specification
 - **Documentation**: `/docs` directory with comprehensive guides
 - **Project Status**: `/docs/PROJECT_STATUS.md` for current state
 - **API Reference**: `/docs/API_REFERENCE.md` for endpoint details
