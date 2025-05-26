@@ -329,30 +329,84 @@ components:
       properties:
         id:
           type: string
+          description: Unique time entry identifier
         userId:
           type: string
+          description: User who created this entry
         projectId:
           type: string
+          description: Associated project ID
+        taskId:
+          type: string
+          description: Optional task ID within the project
         description:
           type: string
+          description: Description of work performed
+        date:
+          type: string
+          format: date
+          description: Date of work (YYYY-MM-DD)
         startTime:
           type: string
           format: date-time
+          description: Start time (for timer entries)
         endTime:
           type: string
           format: date-time
+          description: End time (for timer entries)
         duration:
           type: integer
           description: Duration in minutes
+        isBillable:
+          type: boolean
+          description: Whether this time is billable
+        hourlyRate:
+          type: number
+          format: float
+          description: Hourly rate for this entry
         status:
           type: string
           enum: [draft, submitted, approved, rejected]
+          description: Current status of the time entry
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for categorizing the entry
+        attachments:
+          type: array
+          items:
+            type: string
+          description: File attachment URLs
+        approvedBy:
+          type: string
+          description: User ID who approved this entry
+        approvedAt:
+          type: string
+          format: date-time
+          description: When the entry was approved
+        rejectedBy:
+          type: string
+          description: User ID who rejected this entry
+        rejectedAt:
+          type: string
+          format: date-time
+          description: When the entry was rejected
+        rejectionReason:
+          type: string
+          description: Reason for rejection
+        submittedAt:
+          type: string
+          format: date-time
+          description: When the entry was submitted for approval
         createdAt:
           type: string
           format: date-time
+          description: When the entry was created
         updatedAt:
           type: string
           format: date-time
+          description: When the entry was last updated
           
     Invoice:
       type: object
@@ -1183,6 +1237,463 @@ paths:
                         type: string
                         example: Account created successfully
 
+  # Time Tracking Endpoints - Phase 4
+  /time-entries:
+    get:
+      tags:
+        - Time Tracking
+      summary: List time entries
+      description: Retrieve time entries with optional filtering and pagination
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+          description: Filter by user ID (managers/admins can view all users)
+        - name: projectId
+          in: query
+          schema:
+            type: string
+          description: Filter by project ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, approved, rejected]
+          description: Filter by entry status
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries from this date (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter entries to this date (YYYY-MM-DD)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Number of results to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        '200':
+          description: List of time entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimeEntry'
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
+                          offset:
+                            type: integer
+                          hasMore:
+                            type: boolean
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+    post:
+      tags:
+        - Time Tracking
+      summary: Create time entry
+      description: Create a new time entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - projectId
+                - description
+                - date
+                - duration
+              properties:
+                projectId:
+                  type: string
+                  description: Project ID for this time entry
+                taskId:
+                  type: string
+                  description: Optional task ID within the project
+                description:
+                  type: string
+                  description: Description of work performed
+                date:
+                  type: string
+                  format: date
+                  description: Date of work (YYYY-MM-DD)
+                startTime:
+                  type: string
+                  format: date-time
+                  description: Start time (for timer entries)
+                endTime:
+                  type: string
+                  format: date-time
+                  description: End time (for timer entries)
+                duration:
+                  type: integer
+                  description: Duration in minutes
+                isBillable:
+                  type: boolean
+                  default: true
+                  description: Whether this time is billable
+                hourlyRate:
+                  type: number
+                  format: float
+                  description: Override hourly rate for this entry
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Tags for categorizing the entry
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                  description: File attachment URLs
+      responses:
+        '201':
+          description: Time entry created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TimeEntry'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /time-entries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Time entry ID
+        
+    put:
+      tags:
+        - Time Tracking
+      summary: Update time entry
+      description: Update an existing time entry (only draft entries can be updated)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId:
+                  type: string
+                taskId:
+                  type: string
+                description:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                startTime:
+                  type: string
+                  format: date-time
+                endTime:
+                  type: string
+                  format: date-time
+                duration:
+                  type: integer
+                isBillable:
+                  type: boolean
+                hourlyRate:
+                  type: number
+                  format: float
+                tags:
+                  type: array
+                  items:
+                    type: string
+                attachments:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Time entry updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TimeEntry'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Cannot update submitted/approved entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+    delete:
+      tags:
+        - Time Tracking
+      summary: Delete time entry
+      description: Delete a time entry (only draft entries can be deleted)
+      responses:
+        '200':
+          description: Time entry deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Time entry deleted successfully
+        '403':
+          description: Cannot delete submitted/approved entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Time entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /time-entries/submit:
+    post:
+      tags:
+        - Time Tracking
+      summary: Submit time entries for approval
+      description: Submit multiple time entries for manager approval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entryIds
+              properties:
+                entryIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of time entry IDs to submit
+                comment:
+                  type: string
+                  description: Optional comment for the submission
+      responses:
+        '200':
+          description: Time entries submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      submitted:
+                        type: array
+                        items:
+                          type: string
+                        description: Successfully submitted entry IDs
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            entryId:
+                              type: string
+                            error:
+                              type: string
+                        description: Failed submissions with reasons
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /time-entries/approve:
+    post:
+      tags:
+        - Time Tracking
+      summary: Approve time entries
+      description: Approve submitted time entries (managers/admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entryIds
+              properties:
+                entryIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of time entry IDs to approve
+                comment:
+                  type: string
+                  description: Optional approval comment
+      responses:
+        '200':
+          description: Time entries approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      approved:
+                        type: array
+                        items:
+                          type: string
+                        description: Successfully approved entry IDs
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            entryId:
+                              type: string
+                            error:
+                              type: string
+                        description: Failed approvals with reasons
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /time-entries/reject:
+    post:
+      tags:
+        - Time Tracking
+      summary: Reject time entries
+      description: Reject submitted time entries (managers/admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entryIds
+                - reason
+              properties:
+                entryIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of time entry IDs to reject
+                reason:
+                  type: string
+                  description: Reason for rejection (required)
+                comment:
+                  type: string
+                  description: Additional comments
+      responses:
+        '200':
+          description: Time entries rejected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      rejected:
+                        type: array
+                        items:
+                          type: string
+                        description: Successfully rejected entry IDs
+                      failed:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            entryId:
+                              type: string
+                            error:
+                              type: string
+                        description: Failed rejections with reasons
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: User Management
     description: User account management operations
@@ -1207,4 +1718,4 @@ tags:
   - name: Reporting
     description: Reports and analytics
   - name: Invoice Management
-    description: Invoice generation and management 
+    description: Invoice generation and management
