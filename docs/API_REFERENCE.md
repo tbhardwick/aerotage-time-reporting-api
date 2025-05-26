@@ -2,7 +2,7 @@
 
 ## 🚀 **Aerotage Time Reporting API**
 
-**Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`  
+**Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`  
 **Authentication**: AWS Cognito JWT tokens  
 **Content-Type**: `application/json`
 
@@ -413,59 +413,199 @@ Content-Type: application/json
 
 ---
 
-## 🏢 **Team Management**
+## 🏢 **Client Management** ✅ **Phase 5 - NEW**
 
-### **List Teams**
+### **List Clients**
 ```http
-GET /teams
+GET /clients?isActive=true&limit=50&offset=0
 Authorization: Bearer {token}
 ```
 
-### **Create Team**
+**Query Parameters:**
+- `isActive`: Filter by active status (`true`, `false`)
+- `limit`: Number of results (default: 50, max: 100)
+- `offset`: Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "clients": [
+      {
+        "id": "client_1234567890_abcdef",
+        "name": "Acme Corporation",
+        "email": "contact@acme.com",
+        "phone": "+1-555-0123",
+        "address": "123 Business St, Suite 100, Business City, BC 12345",
+        "contactPerson": "John Smith",
+        "defaultHourlyRate": 150,
+        "isActive": true,
+        "notes": "Long-term client with multiple projects",
+        "createdAt": "2024-01-15T10:30:00Z",
+        "updatedAt": "2024-01-20T14:45:00Z",
+        "createdBy": "user-id-123"
+      }
+    ],
+    "pagination": {
+      "total": 25,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
+```
+
+### **Create Client**
 ```http
-POST /teams
+POST /clients
 Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "name": "Engineering Team",
-  "description": "Software development team",
-  "managerId": "manager-user-id"
+  "name": "New Client Corp",
+  "email": "contact@newclient.com",
+  "phone": "+1-555-9876",
+  "address": "456 Corporate Ave, Business City, BC 54321",
+  "contactPerson": "Jane Doe",
+  "defaultHourlyRate": 175,
+  "notes": "New client onboarded in Q1 2024"
 }
 ```
 
-### **Update Team**
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "client_1234567890_newclient",
+    "name": "New Client Corp",
+    "email": "contact@newclient.com",
+    "phone": "+1-555-9876",
+    "address": "456 Corporate Ave, Business City, BC 54321",
+    "contactPerson": "Jane Doe",
+    "defaultHourlyRate": 175,
+    "isActive": true,
+    "notes": "New client onboarded in Q1 2024",
+    "createdAt": "2024-01-25T09:15:00Z",
+    "updatedAt": "2024-01-25T09:15:00Z",
+    "createdBy": "user-id-123"
+  },
+  "message": "Client created successfully"
+}
+```
+
+### **Update Client**
 ```http
-PUT /teams/{teamId}
+PUT /clients/{clientId}
 Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "name": "Updated Team Name",
-  "description": "Updated description"
+  "phone": "+1-555-1111",
+  "defaultHourlyRate": 200,
+  "notes": "Updated contact information and rates for 2024"
 }
 ```
 
-### **Add Team Member**
-```http
-POST /teams/{teamId}/members
-Authorization: Bearer {token}
-Content-Type: application/json
-
+**Response:**
+```json
 {
-  "userId": "user-id-123",
-  "role": "member"
+  "success": true,
+  "data": {
+    "id": "client_1234567890_abcdef",
+    "name": "Acme Corporation",
+    "email": "contact@acme.com",
+    "phone": "+1-555-1111",
+    "address": "123 Business St, Suite 100, Business City, BC 12345",
+    "contactPerson": "John Smith",
+    "defaultHourlyRate": 200,
+    "isActive": true,
+    "notes": "Updated contact information and rates for 2024",
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-25T11:20:00Z",
+    "createdBy": "user-id-123"
+  },
+  "message": "Client updated successfully"
 }
 ```
+
+### **Delete Client (Soft Delete)**
+```http
+DELETE /clients/{clientId}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Client deactivated successfully"
+}
+```
+
+**Note**: Clients with active projects cannot be deleted. The system will return an error with details about associated projects that must be handled first.
 
 ---
 
-## 📊 **Project Management**
+## 📊 **Project Management** ✅ **Phase 5 - NEW**
 
 ### **List Projects**
 ```http
-GET /projects
+GET /projects?clientId=client_123&status=active&limit=50&offset=0
 Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `clientId`: Filter by client ID
+- `status`: Filter by status (`active`, `paused`, `completed`, `cancelled`)
+- `limit`: Number of results (default: 50, max: 100)
+- `offset`: Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "projects": [
+      {
+        "id": "project_1234567890_website",
+        "name": "Website Redesign Project",
+        "clientId": "client_1234567890_abcdef",
+        "clientName": "Acme Corporation",
+        "description": "Complete redesign of company website with modern UI/UX",
+        "status": "active",
+        "defaultHourlyRate": 150,
+        "defaultBillable": true,
+        "budget": {
+          "type": "hours",
+          "value": 200,
+          "spent": 45
+        },
+        "deadline": "2024-06-30",
+        "teamMembers": [
+          {
+            "userId": "user-id-123",
+            "name": "John Developer",
+            "role": "lead"
+          }
+        ],
+        "tags": ["web", "design", "frontend"],
+        "createdAt": "2024-01-15T10:30:00Z",
+        "updatedAt": "2024-01-20T14:45:00Z",
+        "createdBy": "user-id-123"
+      }
+    ],
+    "pagination": {
+      "total": 12,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
 ```
 
 ### **Create Project**
@@ -475,13 +615,61 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "name": "Website Redesign",
-  "description": "Complete redesign of company website",
-  "clientId": "client-id-123",
+  "name": "Mobile App Development",
+  "clientId": "client_1234567890_abcdef",
+  "clientName": "Acme Corporation",
+  "description": "Native mobile app for iOS and Android platforms",
   "status": "active",
-  "startDate": "2024-01-15",
-  "endDate": "2024-03-15",
-  "budget": 50000.00
+  "defaultHourlyRate": 175,
+  "defaultBillable": true,
+  "budget": {
+    "type": "fixed",
+    "value": 50000,
+    "spent": 0
+  },
+  "deadline": "2024-09-15",
+  "teamMembers": [
+    {
+      "userId": "user-id-456",
+      "role": "lead"
+    }
+  ],
+  "tags": ["mobile", "ios", "android", "react-native"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "project_1234567890_mobileapp",
+    "name": "Mobile App Development",
+    "clientId": "client_1234567890_abcdef",
+    "clientName": "Acme Corporation",
+    "description": "Native mobile app for iOS and Android platforms",
+    "status": "active",
+    "defaultHourlyRate": 175,
+    "defaultBillable": true,
+    "budget": {
+      "type": "fixed",
+      "value": 50000,
+      "spent": 0
+    },
+    "deadline": "2024-09-15",
+    "teamMembers": [
+      {
+        "userId": "user-id-456",
+        "name": "Jane Developer",
+        "role": "lead"
+      }
+    ],
+    "tags": ["mobile", "ios", "android", "react-native"],
+    "createdAt": "2024-01-25T09:30:00Z",
+    "updatedAt": "2024-01-25T09:30:00Z",
+    "createdBy": "user-id-123"
+  },
+  "message": "Project created successfully"
 }
 ```
 
@@ -492,10 +680,68 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "name": "Updated Project Name",
-  "status": "completed"
+  "description": "Updated project scope to include web portal",
+  "status": "paused",
+  "budget": {
+    "type": "fixed",
+    "value": 60000,
+    "spent": 15000
+  },
+  "tags": ["mobile", "ios", "android", "react-native", "web"]
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "project_1234567890_mobileapp",
+    "name": "Mobile App Development",
+    "clientId": "client_1234567890_abcdef",
+    "clientName": "Acme Corporation",
+    "description": "Updated project scope to include web portal",
+    "status": "paused",
+    "defaultHourlyRate": 175,
+    "defaultBillable": true,
+    "budget": {
+      "type": "fixed",
+      "value": 60000,
+      "spent": 15000
+    },
+    "deadline": "2024-09-15",
+    "teamMembers": [
+      {
+        "userId": "user-id-456",
+        "name": "Jane Developer",
+        "role": "lead"
+      }
+    ],
+    "tags": ["mobile", "ios", "android", "react-native", "web"],
+    "createdAt": "2024-01-25T09:30:00Z",
+    "updatedAt": "2024-01-25T14:15:00Z",
+    "createdBy": "user-id-123"
+  },
+  "message": "Project updated successfully"
+}
+```
+
+### **Delete Project**
+```http
+DELETE /projects/{projectId}
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Project deleted successfully"
+}
+```
+
+**Note**: Projects with associated time entries may require additional confirmation or may be archived instead of deleted, depending on business rules.
 
 ---
 

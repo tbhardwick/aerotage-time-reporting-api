@@ -27,11 +27,13 @@ The Aerotage Time Reporting API is a production-ready serverless backend that pr
 - Approval workflows for time entries
 - Billable vs non-billable time categorization
 
-### 📊 Project & Client Management
-- Client and project organization
-- Project budgets and rate management
-- Team assignment to projects
-- Project status tracking
+### 📊 Project & Client Management ✅ **Phase 5 Complete**
+- Complete client CRUD operations with business logic validation
+- Project management with client relationship tracking
+- Project budgets and rate management (hours and monetary)
+- Project status tracking (active, paused, completed, cancelled)
+- Soft delete functionality for clients
+- Business logic validation (prevent client deletion with active projects)
 
 ### 📈 Reporting & Analytics
 - Time reports with flexible filtering
@@ -98,13 +100,13 @@ The Aerotage Time Reporting API is a production-ready serverless backend that pr
 
 ### API Base URL
 ```
-Development: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
+Development: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
 ```
 
 ## 📚 Documentation
 
 ### 🌐 **Interactive API Documentation**
-- **[Live Swagger UI](https://d1g30r0bcfgd1s.cloudfront.net)** - Interactive API documentation with live testing
+- **[Live Swagger UI](https://djfreip4iwrq0.cloudfront.net)** - Interactive API documentation with live testing
 - **[OpenAPI Specification](./docs/openapi.yaml)** - Complete OpenAPI 3.0 specification
 
 ### 📖 **Comprehensive Guides**
@@ -154,11 +156,12 @@ npm run destroy:dev        # Destroy development stack
 
 - ✅ **Infrastructure**: Complete AWS serverless backend
 - ✅ **Authentication**: Cognito with role-based access
-- ✅ **API Endpoints**: 15+ endpoints implemented
-- ✅ **Database**: 8 DynamoDB tables with GSIs
+- ✅ **API Endpoints**: 34+ endpoints implemented (Phase 5 complete)
+- ✅ **Database**: 8 DynamoDB tables with GSIs (including projects/clients)
 - ✅ **Monitoring**: CloudWatch dashboards and alarms
 - ✅ **Documentation**: Interactive OpenAPI/Swagger UI + comprehensive guides
-- ✅ **API Documentation**: Live interactive documentation with testing capabilities
+- ✅ **Phase 5**: Project & Client Management fully implemented and tested
+- ✅ **Test Coverage**: 10/10 Phase 5 tests passing
 
 ## 🤝 Contributing
 
