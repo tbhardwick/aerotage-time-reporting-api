@@ -13,7 +13,7 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 ## 📍 **Live Documentation URLs**
 
 ### **Development Environment**
-- **Documentation URL**: https://d2xyhdliouir95.cloudfront.net
+- **Documentation URL**: https://d1g30r0bcfgd1s.cloudfront.net
 - **API Base URL**: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
 
 ### **Production Environment** (When deployed)

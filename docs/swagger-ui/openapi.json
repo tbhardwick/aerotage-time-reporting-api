@@ -14,7 +14,7 @@
   },
   "servers": [
     {
-      "url": "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/",
+      "url": "https://d1g30r0bcfgd1s.cloudfront.net",
       "description": "Development server"
     }
   ],

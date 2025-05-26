@@ -87,9 +87,21 @@ function main() {
   console.log('🔄 Updating API URLs in documentation...');
   console.log(`📍 Old URL: ${OLD_URL}`);
   
-  // Get current API URL
-  const currentUrl = getCurrentApiUrl();
-  console.log(`📍 New URL: ${currentUrl}`);
+  // Check for custom domain argument
+  const args = process.argv.slice(2);
+  const domainFlag = args.findIndex(arg => arg === '--domain');
+  let currentUrl;
+  
+  if (domainFlag !== -1 && args[domainFlag + 1]) {
+    // Use custom domain if provided
+    const customDomain = args[domainFlag + 1];
+    currentUrl = customDomain.startsWith('https://') ? customDomain : `https://${customDomain}`;
+    console.log(`📍 Using custom domain: ${currentUrl}`);
+  } else {
+    // Get current API URL from CloudFormation
+    currentUrl = getCurrentApiUrl();
+    console.log(`📍 New URL: ${currentUrl}`);
+  }
   
   if (currentUrl === OLD_URL) {
     console.log('✅ URLs are already up to date');

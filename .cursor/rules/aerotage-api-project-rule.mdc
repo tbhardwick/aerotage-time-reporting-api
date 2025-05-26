@@ -66,7 +66,7 @@ This project uses a **two-repository architecture** to separate concerns:
 
 ### **Live Environment Details**
 - **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
-- **API Documentation**: `https://d2xyhdliouir95.cloudfront.net` (Interactive Swagger UI)
+- **API Documentation**: `https://d1g30r0bcfgd1s.cloudfront.net` (Interactive Swagger UI)
 - **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
 - **App Client**: `148r35u6uultp1rmfdu22i8amb`
 - **Identity Pool**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
@@ -453,7 +453,7 @@ npm run destroy:dev
 
 ### **Key Resources**
 - **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
-- **Interactive API Docs**: `https://d2xyhdliouir95.cloudfront.net` (Live Swagger UI)
+- **Interactive API Docs**: `https://d1g30r0bcfgd1s.cloudfront.net` (Live Swagger UI)
 - **OpenAPI Specification**: `/docs/openapi.yaml` for API specification
 - **Documentation**: `/docs` directory with comprehensive guides
 - **Project Status**: `/docs/PROJECT_STATUS.md` for current state

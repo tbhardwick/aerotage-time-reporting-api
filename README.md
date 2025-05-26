@@ -104,7 +104,7 @@ Development: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
 ## 📚 Documentation
 
 ### 🌐 **Interactive API Documentation**
-- **[Live Swagger UI](https://d2xyhdliouir95.cloudfront.net)** - Interactive API documentation with live testing
+- **[Live Swagger UI](https://d1g30r0bcfgd1s.cloudfront.net)** - Interactive API documentation with live testing
 - **[OpenAPI Specification](./docs/openapi.yaml)** - Complete OpenAPI 3.0 specification
 
 ### 📖 **Comprehensive Guides**
