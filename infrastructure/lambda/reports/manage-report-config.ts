@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
@@ -68,24 +70,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Report config management request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     const httpMethod = event.httpMethod;
@@ -161,20 +151,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error in report config management:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to manage report configuration',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to manage report configuration');
   }
 };
 
@@ -185,20 +162,7 @@ async function createReportConfig(event: APIGatewayProxyEvent, userId: string, u
     try {
       requestBody = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields
@@ -454,20 +418,7 @@ async function updateReportConfig(reportId: string, event: APIGatewayProxyEvent,
     try {
       updateData = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Update the configuration

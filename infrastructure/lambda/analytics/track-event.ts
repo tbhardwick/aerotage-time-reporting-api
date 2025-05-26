@@ -2,6 +2,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
+import { getCurrentUserId } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -36,6 +38,7 @@ const VALID_EVENT_TYPES = [
   'user_logout',
   'user_profile_update',
   'user_preferences_update',
+  'user_action',
   
   // Time tracking
   'timer_start',
@@ -77,24 +80,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Track analytics event request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const sessionId = event.requestContext.authorizer?.claims?.['custom:session_id'];
+    const userId = getCurrentUserId(event);
+    const sessionId = event.requestContext.authorizer?.sessionId;
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Parse request body
@@ -102,56 +92,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     try {
       requestBody = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields
     if (!requestBody.eventType) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_EVENT_TYPE',
-            message: 'eventType is required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_EVENT_TYPE', 'eventType is required');
     }
 
     // Validate event type
     if (!VALID_EVENT_TYPES.includes(requestBody.eventType)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_EVENT_TYPE',
-            message: `Invalid event type. Must be one of: ${VALID_EVENT_TYPES.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_EVENT_TYPE', `Invalid event type. Must be one of: ${VALID_EVENT_TYPES.join(', ')}`);
     }
 
     // Check rate limiting (simple implementation)
@@ -195,39 +146,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update rate limiting counter
     await updateRateLimit(userId);
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: {
-          eventId: analyticsEvent.eventId,
-          timestamp: analyticsEvent.timestamp,
-          message: 'Event tracked successfully',
-        },
-      }),
-    };
+    return createSuccessResponse({
+      eventId: analyticsEvent.eventId,
+      timestamp: analyticsEvent.timestamp,
+      message: 'Event tracked successfully',
+    }, 201);
 
   } catch (error) {
     console.error('Error tracking analytics event:', error);
-    
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to track analytics event',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to track analytics event');
   }
 };
 

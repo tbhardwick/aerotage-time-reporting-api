@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -58,25 +60,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Export report request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
-    const userEmail = event.requestContext.authorizer?.claims?.email;
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+    const userEmail = user?.email;
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Parse request body
@@ -84,20 +74,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     try {
       exportRequest = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields

@@ -127,6 +127,11 @@ export class ApiStack extends cdk.Stack {
                 tables.userSecuritySettingsTable.tableArn,
                 tables.userNotificationSettingsTable.tableArn,
                 tables.passwordHistoryTable.tableArn,
+                // Phase 6: Analytics & Reporting Tables
+                tables.reportConfigsTable.tableArn,
+                tables.reportCacheTable.tableArn,
+                tables.analyticsEventsTable.tableArn,
+                tables.scheduledReportsTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
                 `${tables.teamsTable.tableArn}/index/*`, // DEPRECATED - kept for backward compatibility
                 `${tables.projectsTable.tableArn}/index/*`,
@@ -140,6 +145,11 @@ export class ApiStack extends cdk.Stack {
                 `${tables.userSecuritySettingsTable.tableArn}/index/*`,
                 `${tables.userNotificationSettingsTable.tableArn}/index/*`,
                 `${tables.passwordHistoryTable.tableArn}/index/*`,
+                // Phase 6: Analytics & Reporting Table Indexes
+                `${tables.reportConfigsTable.tableArn}/index/*`,
+                `${tables.reportCacheTable.tableArn}/index/*`,
+                `${tables.analyticsEventsTable.tableArn}/index/*`,
+                `${tables.scheduledReportsTable.tableArn}/index/*`,
               ],
             }),
           ],
@@ -175,12 +185,44 @@ export class ApiStack extends cdk.Stack {
             }),
           ],
         }),
+        EventBridgeAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'events:PutRule',
+                'events:PutTargets',
+                'events:DeleteRule',
+                'events:RemoveTargets',
+                'events:DescribeRule',
+                'events:ListTargetsByRule',
+              ],
+              resources: [
+                `arn:aws:events:${this.region}:${this.account}:rule/aerotage-report-*`,
+              ],
+            }),
+          ],
+        }),
+        LambdaInvokeAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'lambda:InvokeFunction',
+              ],
+              resources: [
+                `arn:aws:lambda:${this.region}:${this.account}:function:aerotage-*`,
+              ],
+            }),
+          ],
+        }),
       },
     });
 
     // Environment variables for Lambda functions
     const lambdaEnvironment: { [key: string]: string } = {
       STAGE: stage,
+      AWS_ACCOUNT_ID: this.account,
       COGNITO_USER_POOL_ID: userPool.userPoolId,
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
@@ -197,6 +239,11 @@ export class ApiStack extends cdk.Stack {
       USER_SECURITY_SETTINGS_TABLE: tables.userSecuritySettingsTable.tableName,
       USER_NOTIFICATION_SETTINGS_TABLE: tables.userNotificationSettingsTable.tableName,
       PASSWORD_HISTORY_TABLE: tables.passwordHistoryTable.tableName,
+      // Phase 6: Analytics & Reporting Tables
+      REPORT_CONFIGS_TABLE_NAME: tables.reportConfigsTable.tableName,
+      REPORT_CACHE_TABLE_NAME: tables.reportCacheTable.tableName,
+      ANALYTICS_EVENTS_TABLE_NAME: tables.analyticsEventsTable.tableName,
+      SCHEDULED_REPORTS_TABLE_NAME: tables.scheduledReportsTable.tableName,
       STORAGE_BUCKET: storageBucket.bucketName,
       // SES Configuration
       SES_FROM_EMAIL: sesStack.fromEmail,
@@ -425,6 +472,140 @@ export class ApiStack extends cdk.Stack {
 
     const analyticsResource = reportsResource.addResource('analytics');
     analyticsResource.addMethod('GET', new apigateway.LambdaIntegration(getAnalyticsFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Phase 6: Analytics & Dashboard APIs
+    const analyticsMainResource = this.api.root.addResource('analytics');
+    
+    // Dashboard endpoints
+    const dashboardResource = analyticsMainResource.addResource('dashboard');
+    const generateDashboardFunction = createLambdaFunction('GenerateDashboard', 'analytics/generate-dashboard-data', 'Generate dashboard data');
+    const enhancedDashboardFunction = createLambdaFunction('EnhancedDashboard', 'analytics/enhanced-dashboard', 'Enhanced dashboard with widgets');
+    
+    dashboardResource.addMethod('GET', new apigateway.LambdaIntegration(generateDashboardFunction), {
+      authorizer: customAuthorizer,
+    });
+    dashboardResource.addMethod('POST', new apigateway.LambdaIntegration(generateDashboardFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    const enhancedDashboardResource = dashboardResource.addResource('enhanced');
+    enhancedDashboardResource.addMethod('GET', new apigateway.LambdaIntegration(enhancedDashboardFunction), {
+      authorizer: customAuthorizer,
+    });
+    enhancedDashboardResource.addMethod('POST', new apigateway.LambdaIntegration(enhancedDashboardFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Real-time analytics endpoints
+    const realTimeResource = analyticsMainResource.addResource('real-time');
+    const realTimeAnalyticsFunction = createLambdaFunction('RealTimeAnalytics', 'analytics/real-time-analytics', 'Real-time analytics data');
+    
+    realTimeResource.addMethod('GET', new apigateway.LambdaIntegration(realTimeAnalyticsFunction), {
+      authorizer: customAuthorizer,
+    });
+    realTimeResource.addMethod('POST', new apigateway.LambdaIntegration(realTimeAnalyticsFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Performance monitoring endpoints
+    const performanceResource = analyticsMainResource.addResource('performance');
+    const performanceMonitorFunction = createLambdaFunction('PerformanceMonitor', 'analytics/performance-monitor', 'Performance monitoring');
+    
+    performanceResource.addMethod('GET', new apigateway.LambdaIntegration(performanceMonitorFunction), {
+      authorizer: customAuthorizer,
+    });
+    performanceResource.addMethod('POST', new apigateway.LambdaIntegration(performanceMonitorFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Analytics event tracking endpoints
+    const eventsResource = analyticsMainResource.addResource('events');
+    const trackEventFunction = createLambdaFunction('TrackEvent', 'analytics/track-event', 'Track analytics events');
+    
+    eventsResource.addMethod('POST', new apigateway.LambdaIntegration(trackEventFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Advanced filtering endpoints
+    const filterResource = analyticsMainResource.addResource('filter');
+    const advancedFilterFunction = createLambdaFunction('AdvancedFilter', 'reports/advanced-filter', 'Advanced data filtering');
+    
+    filterResource.addMethod('POST', new apigateway.LambdaIntegration(advancedFilterFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Report generation endpoints (enhanced)
+    const generateTimeReportFunction = createLambdaFunction('GenerateTimeReport', 'reports/generate-time-report', 'Generate time reports');
+    const generateProjectReportFunction = createLambdaFunction('GenerateProjectReport', 'reports/generate-project-report', 'Generate project reports');
+    const generateClientReportFunction = createLambdaFunction('GenerateClientReport', 'reports/generate-client-report', 'Generate client reports');
+    
+    // Add POST methods for report generation
+    timeReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateTimeReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    projectReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateProjectReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    const clientReportsResource = reportsResource.addResource('clients');
+    clientReportsResource.addMethod('GET', new apigateway.LambdaIntegration(generateClientReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    clientReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateClientReportFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Report scheduling endpoints
+    const scheduleResource = reportsResource.addResource('schedule');
+    const scheduleReportFunction = createLambdaFunction('ScheduleReport', 'reports/schedule-report', 'Schedule automated reports');
+    
+    // Grant EventBridge permission to invoke the schedule report function
+    scheduleReportFunction.addPermission('AllowEventBridgeInvoke', {
+      principal: new iam.ServicePrincipal('events.amazonaws.com'),
+      action: 'lambda:InvokeFunction',
+      sourceArn: `arn:aws:events:${this.region}:${this.account}:rule/aerotage-report-*`,
+    });
+    
+    scheduleResource.addMethod('GET', new apigateway.LambdaIntegration(scheduleReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    scheduleResource.addMethod('POST', new apigateway.LambdaIntegration(scheduleReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    const scheduleIdResource = scheduleResource.addResource('{id}');
+    scheduleIdResource.addMethod('GET', new apigateway.LambdaIntegration(scheduleReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    scheduleIdResource.addMethod('PUT', new apigateway.LambdaIntegration(scheduleReportFunction), {
+      authorizer: customAuthorizer,
+    });
+    scheduleIdResource.addMethod('DELETE', new apigateway.LambdaIntegration(scheduleReportFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Report configuration management
+    const configResource = reportsResource.addResource('configs');
+    const manageReportConfigFunction = createLambdaFunction('ManageReportConfig', 'reports/manage-report-config', 'Manage report configurations');
+    
+    configResource.addMethod('GET', new apigateway.LambdaIntegration(manageReportConfigFunction), {
+      authorizer: customAuthorizer,
+    });
+    configResource.addMethod('POST', new apigateway.LambdaIntegration(manageReportConfigFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    const configIdResource = configResource.addResource('{id}');
+    configIdResource.addMethod('GET', new apigateway.LambdaIntegration(manageReportConfigFunction), {
+      authorizer: customAuthorizer,
+    });
+    configIdResource.addMethod('PUT', new apigateway.LambdaIntegration(manageReportConfigFunction), {
+      authorizer: customAuthorizer,
+    });
+    configIdResource.addMethod('DELETE', new apigateway.LambdaIntegration(manageReportConfigFunction), {
       authorizer: customAuthorizer,
     });
 

@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 
@@ -78,24 +80,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Advanced filter request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Parse request body
@@ -103,20 +93,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     try {
       filterRequest = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields
@@ -272,16 +249,16 @@ async function fetchDataFromSource(dataSource: string): Promise<any[]> {
   
   switch (dataSource) {
     case 'time-entries':
-      tableName = process.env.TIME_ENTRIES_TABLE_NAME!;
+      tableName = process.env.TIME_ENTRIES_TABLE!;
       break;
     case 'projects':
-      tableName = process.env.PROJECTS_TABLE_NAME!;
+      tableName = process.env.PROJECTS_TABLE!;
       break;
     case 'clients':
-      tableName = process.env.CLIENTS_TABLE_NAME!;
+      tableName = process.env.CLIENTS_TABLE!;
       break;
     case 'users':
-      tableName = process.env.USERS_TABLE_NAME!;
+      tableName = process.env.USERS_TABLE!;
       break;
     default:
       throw new Error(`Unsupported data source: ${dataSource}`);

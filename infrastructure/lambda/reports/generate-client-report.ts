@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
@@ -98,24 +100,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Generate client report request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Check permissions - only managers and admins can view client reports
@@ -195,20 +185,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error generating client report:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to generate client report',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate client report');
   }
 };
 
@@ -255,10 +232,10 @@ async function generateClientReport(filters: ClientReportFilters, userId: string
 }
 
 async function getClientsData(filters: ClientReportFilters): Promise<any[]> {
-  const clientsTable = process.env.CLIENTS_TABLE_NAME;
+  const clientsTable = process.env.CLIENTS_TABLE;
   
   if (!clientsTable) {
-    throw new Error('CLIENTS_TABLE_NAME environment variable not set');
+    throw new Error('CLIENTS_TABLE environment variable not set');
   }
 
   let queryParams: any = {
@@ -279,10 +256,10 @@ async function getClientsData(filters: ClientReportFilters): Promise<any[]> {
 }
 
 async function getProjectsData(filters: ClientReportFilters): Promise<any[]> {
-  const projectsTable = process.env.PROJECTS_TABLE_NAME;
+  const projectsTable = process.env.PROJECTS_TABLE;
   
   if (!projectsTable) {
-    throw new Error('PROJECTS_TABLE_NAME environment variable not set');
+    throw new Error('PROJECTS_TABLE environment variable not set');
   }
 
   let queryParams: any = {
@@ -303,21 +280,22 @@ async function getProjectsData(filters: ClientReportFilters): Promise<any[]> {
 }
 
 async function getTimeEntriesForClients(filters: ClientReportFilters): Promise<any[]> {
-  const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
+  const timeEntriesTable = process.env.TIME_ENTRIES_TABLE;
   
   if (!timeEntriesTable) {
-    throw new Error('TIME_ENTRIES_TABLE_NAME environment variable not set');
+    throw new Error('TIME_ENTRIES_TABLE environment variable not set');
   }
 
   const queryParams: any = {
     TableName: timeEntriesTable,
-    FilterExpression: '#date BETWEEN :startDate AND :endDate',
+    FilterExpression: 'begins_with(PK, :pkPrefix) AND #date BETWEEN :startDate AND :endDate',
     ExpressionAttributeNames: {
       '#date': 'date',
     },
     ExpressionAttributeValues: {
       ':startDate': filters.dateRange.startDate,
       ':endDate': filters.dateRange.endDate,
+      ':pkPrefix': 'TIME_ENTRY#',
     },
   };
 
@@ -414,17 +392,17 @@ async function transformClientData(
       const projectTimeEntries = timeByProject.get(project.id) || [];
       
       const projectHours = projectTimeEntries.reduce((sum, entry) => {
-        return sum + (entry.duration ? entry.duration / 3600 : 0);
+        return sum + (entry.duration ? (entry.duration || 0) / 60 : 0);
       }, 0);
 
       const projectBillableHours = projectTimeEntries
-        .filter(entry => entry.billable)
-        .reduce((sum, entry) => sum + (entry.duration ? entry.duration / 3600 : 0), 0);
+        .filter(entry => entry.isBillable)
+        .reduce((sum, entry) => sum + (entry.duration ? (entry.duration || 0) / 60 : 0), 0);
 
       const projectRevenue = projectTimeEntries
-        .filter(entry => entry.billable)
+        .filter(entry => entry.isBillable)
         .reduce((sum, entry) => {
-          const hours = entry.duration ? entry.duration / 3600 : 0;
+          const hours = entry.duration ? (entry.duration || 0) / 60 : 0;
           const rate = entry.hourlyRate || project.hourlyRate || 0;
           return sum + (hours * rate);
         }, 0);

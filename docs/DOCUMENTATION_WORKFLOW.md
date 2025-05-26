@@ -215,7 +215,7 @@ The documentation update process integrates seamlessly with your git workflow:
 
 ### Current URLs
 
-- **Development**: https://d1g30r0bcfgd1s.cloudfront.net
+- **Development**: https://djfreip4iwrq0.cloudfront.net
 - **Staging**: (Will be available when staging is deployed)
 - **Production**: (Will be available when production is deployed)
 

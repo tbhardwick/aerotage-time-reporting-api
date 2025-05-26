@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
@@ -78,24 +80,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Generate time report request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Parse query parameters
@@ -164,20 +154,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error generating time report:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to generate time report',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate time report');
   }
 };
 
@@ -227,20 +204,21 @@ async function generateTimeReport(filters: ReportFilters, userId: string, userRo
 }
 
 async function queryTimeEntries(filters: ReportFilters, userRole: string): Promise<any[]> {
-  const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
+  const timeEntriesTable = process.env.TIME_ENTRIES_TABLE;
   
   if (!timeEntriesTable) {
-    throw new Error('TIME_ENTRIES_TABLE_NAME environment variable not set');
+    throw new Error('TIME_ENTRIES_TABLE environment variable not set');
   }
 
   // Build query parameters based on filters
   const queryParams: any = {
     TableName: timeEntriesTable,
-    FilterExpression: '#date BETWEEN :startDate AND :endDate',
+    FilterExpression: 'begins_with(PK, :pkPrefix) AND #date BETWEEN :startDate AND :endDate',
     ExpressionAttributeNames: {
       '#date': 'date',
     },
     ExpressionAttributeValues: {
+      ':pkPrefix': 'TIME_ENTRY#',
       ':startDate': filters.dateRange.startDate,
       ':endDate': filters.dateRange.endDate,
     },
@@ -260,8 +238,8 @@ async function queryTimeEntries(filters: ReportFilters, userRole: string): Promi
   }
 
   if (filters.billable !== undefined) {
-    queryParams.FilterExpression += ' AND #billable = :billable';
-    queryParams.ExpressionAttributeNames['#billable'] = 'billable';
+    queryParams.FilterExpression += ' AND #isBillable = :billable';
+    queryParams.ExpressionAttributeNames['#isBillable'] = 'isBillable';
     queryParams.ExpressionAttributeValues[':billable'] = filters.billable;
   }
 
@@ -278,7 +256,7 @@ async function queryTimeEntries(filters: ReportFilters, userRole: string): Promi
 }
 
 async function getUsersData(timeEntries: any[]): Promise<Map<string, any>> {
-  const usersTable = process.env.USERS_TABLE_NAME;
+  const usersTable = process.env.USERS_TABLE;
   const userIds = [...new Set(timeEntries.map(entry => entry.userId))];
   const users = new Map();
 
@@ -306,7 +284,7 @@ async function getUsersData(timeEntries: any[]): Promise<Map<string, any>> {
 }
 
 async function getProjectsData(timeEntries: any[]): Promise<Map<string, any>> {
-  const projectsTable = process.env.PROJECTS_TABLE_NAME;
+  const projectsTable = process.env.PROJECTS_TABLE;
   const projectIds = [...new Set(timeEntries.map(entry => entry.projectId))];
   const projects = new Map();
 
@@ -334,7 +312,7 @@ async function getProjectsData(timeEntries: any[]): Promise<Map<string, any>> {
 }
 
 async function getClientsData(timeEntries: any[]): Promise<Map<string, any>> {
-  const clientsTable = process.env.CLIENTS_TABLE_NAME;
+  const clientsTable = process.env.CLIENTS_TABLE;
   const projects = await getProjectsData(timeEntries);
   const clientIds = [...new Set(Array.from(projects.values()).map(project => project.clientId))];
   const clients = new Map();
@@ -373,16 +351,27 @@ function transformTimeEntries(
     const project = projects.get(entry.projectId);
     const client = clients.get(project?.clientId);
     
-    const hours = entry.duration / 3600; // Convert seconds to hours
-    const billableHours = entry.billable ? hours : 0;
-    const nonBillableHours = entry.billable ? 0 : hours;
+    // Duration is in minutes, convert to hours
+    const hours = (entry.duration || 0) / 60;
+    const billableHours = entry.isBillable ? hours : 0;
+    const nonBillableHours = entry.isBillable ? 0 : hours;
     const hourlyRate = entry.hourlyRate || project?.hourlyRate || user?.hourlyRate || 0;
     const totalCost = billableHours * hourlyRate;
+
+    // Parse tags if they're stored as JSON string
+    let tags = entry.tags || [];
+    if (typeof tags === 'string') {
+      try {
+        tags = JSON.parse(tags);
+      } catch (e) {
+        tags = [];
+      }
+    }
 
     return {
       date: entry.date,
       userId: entry.userId,
-      userName: user?.name || 'Unknown User',
+      userName: user?.name || user?.email || 'Unknown User',
       projectId: entry.projectId,
       projectName: project?.name || 'Unknown Project',
       clientId: project?.clientId || '',
@@ -393,7 +382,7 @@ function transformTimeEntries(
       hourlyRate,
       totalCost,
       description: entry.description || '',
-      tags: entry.tags || [],
+      tags,
     };
   });
 }

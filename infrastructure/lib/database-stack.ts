@@ -24,6 +24,7 @@ export interface DatabaseTables {
   reportConfigsTable: dynamodb.Table;
   reportCacheTable: dynamodb.Table;
   analyticsEventsTable: dynamodb.Table;
+  scheduledReportsTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -337,6 +338,26 @@ export class DatabaseStack extends cdk.Stack {
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
     });
 
+    // ✅ NEW - Phase 6: Scheduled Reports Table
+    const scheduledReportsTable = new dynamodb.Table(this, 'ScheduledReportsTable', {
+      tableName: `aerotage-scheduled-reports-${stage}`,
+      partitionKey: { name: 'scheduleId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for user lookup
+    scheduledReportsTable.addGlobalSecondaryIndex({
+      indexName: 'UserIndex',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Note: GSI for next run lookup will be added in a separate deployment
+    // due to DynamoDB's limitation of one GSI change per update
+
     // Store all tables for easy access
     this.tables = {
       usersTable,
@@ -356,6 +377,7 @@ export class DatabaseStack extends cdk.Stack {
       reportConfigsTable,
       reportCacheTable,
       analyticsEventsTable,
+      scheduledReportsTable,
     };
 
     // CloudFormation Outputs
@@ -454,6 +476,12 @@ export class DatabaseStack extends cdk.Stack {
       value: analyticsEventsTable.tableName,
       description: 'Analytics Events DynamoDB Table Name',
       exportName: `AnalyticsEventsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'ScheduledReportsTableName', {
+      value: scheduledReportsTable.tableName,
+      description: 'Scheduled Reports DynamoDB Table Name',
+      exportName: `ScheduledReportsTableName-${stage}`,
     });
   }
 } 

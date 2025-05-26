@@ -4,7 +4,7 @@ const { getCognitoToken } = require('./get-cognito-token');
 const https = require('https');
 
 // Configuration
-const API_BASE_URL = 'https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
 
 /**
  * Make HTTP request

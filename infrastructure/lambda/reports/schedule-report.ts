@@ -1,15 +1,16 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-// Note: In production, install @aws-sdk/client-eventbridge package
-// import { EventBridgeClient, PutRuleCommand, PutTargetsCommand, DeleteRuleCommand, RemoveTargetsCommand } from '@aws-sdk/client-eventbridge';
+import { EventBridgeClient, PutRuleCommand, PutTargetsCommand, DeleteRuleCommand, RemoveTargetsCommand } from '@aws-sdk/client-eventbridge';
 import { randomUUID } from 'crypto';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const sesClient = new SESClient({});
-// const eventBridgeClient = new EventBridgeClient({});
+const eventBridgeClient = new EventBridgeClient({});
 
 interface ScheduleReportRequest {
   reportConfigId: string;
@@ -45,6 +46,7 @@ interface ScheduledReport {
   schedule: ScheduleConfig;
   delivery: DeliveryConfig;
   enabled: boolean;
+  enabledStr?: string; // For GSI compatibility
   createdAt: string;
   updatedAt: string;
   lastRun?: string;
@@ -67,24 +69,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     console.log('Schedule report request:', JSON.stringify(event, null, 2));
 
     // Extract user info from authorizer context
-    const userId = event.requestContext.authorizer?.claims?.sub;
-    const userRole = event.requestContext.authorizer?.claims?.['custom:role'] || 'employee';
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
     
     if (!userId) {
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User authentication required',
-          },
-        }),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     const httpMethod = event.httpMethod;
@@ -184,20 +174,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
     try {
       scheduleRequest = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields
@@ -276,13 +253,15 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
     }
 
     // Create scheduled report
+    const enabled = scheduleRequest.enabled !== false;
     const scheduledReport: ScheduledReport = {
       scheduleId: randomUUID(),
       userId,
       reportConfigId: scheduleRequest.reportConfigId,
       schedule: scheduleRequest.schedule,
       delivery: scheduleRequest.delivery,
-      enabled: scheduleRequest.enabled !== false,
+      enabled,
+      enabledStr: enabled ? 'true' : 'false', // For GSI compatibility
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       nextRun: calculateNextRun(scheduleRequest.schedule),
@@ -456,28 +435,17 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
     try {
       updateData = JSON.parse(event.body || '{}');
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Update the schedule
+    const enabled = updateData.enabled !== undefined ? updateData.enabled : existingSchedule.enabled;
     const updatedSchedule: ScheduledReport = {
       ...existingSchedule,
       schedule: updateData.schedule || existingSchedule.schedule,
       delivery: updateData.delivery || existingSchedule.delivery,
-      enabled: updateData.enabled !== undefined ? updateData.enabled : existingSchedule.enabled,
+      enabled,
+      enabledStr: enabled ? 'true' : 'false', // For GSI compatibility
       updatedAt: new Date().toISOString(),
     };
 
@@ -690,21 +658,68 @@ async function deleteScheduledReportFromDB(scheduleId: string): Promise<void> {
   await docClient.send(command);
 }
 
-// EventBridge operations (commented out - requires @aws-sdk/client-eventbridge package)
+// EventBridge operations
 async function createEventBridgeRule(scheduledReport: ScheduledReport): Promise<string> {
   const ruleName = `aerotage-report-${scheduledReport.scheduleId}`;
-  // const scheduleExpression = generateScheduleExpression(scheduledReport.schedule);
+  const scheduleExpression = generateScheduleExpression(scheduledReport.schedule);
 
-  // In production, create EventBridge rule with proper SDK
-  console.log(`Would create EventBridge rule: ${ruleName}`);
-  
-  return ruleName;
+  try {
+    // Create the EventBridge rule
+    const putRuleCommand = new PutRuleCommand({
+      Name: ruleName,
+      Description: `Scheduled report for ${scheduledReport.reportConfigId}`,
+      ScheduleExpression: scheduleExpression,
+      State: 'ENABLED',
+    });
+
+    await eventBridgeClient.send(putRuleCommand);
+
+    // Add target (Lambda function that will execute the report)
+    // For now, we'll create the rule without a target since the execution function doesn't exist yet
+    // In Phase 7, we'll add the actual execution Lambda function
+    const putTargetsCommand = new PutTargetsCommand({
+      Rule: ruleName,
+      Targets: [
+        {
+          Id: '1',
+          Arn: `arn:aws:lambda:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:function:aerotage-schedulereport-${process.env.STAGE}`,
+          Input: JSON.stringify({
+            scheduleId: scheduledReport.scheduleId,
+            reportConfigId: scheduledReport.reportConfigId,
+            action: 'execute',
+          }),
+        },
+      ],
+    });
+
+    await eventBridgeClient.send(putTargetsCommand);
+
+    console.log(`Created EventBridge rule: ${ruleName} with schedule: ${scheduleExpression}`);
+    return ruleName;
+  } catch (error) {
+    console.error('Error creating EventBridge rule:', error);
+    throw new Error(`Failed to create EventBridge rule: ${error}`);
+  }
 }
 
 async function deleteEventBridgeRule(ruleName: string): Promise<void> {
   try {
-    // In production, delete EventBridge rule with proper SDK
-    console.log(`Would delete EventBridge rule: ${ruleName}`);
+    // Remove targets first
+    const removeTargetsCommand = new RemoveTargetsCommand({
+      Rule: ruleName,
+      Ids: ['1'],
+    });
+
+    await eventBridgeClient.send(removeTargetsCommand);
+
+    // Delete the rule
+    const deleteRuleCommand = new DeleteRuleCommand({
+      Name: ruleName,
+    });
+
+    await eventBridgeClient.send(deleteRuleCommand);
+
+    console.log(`Deleted EventBridge rule: ${ruleName}`);
   } catch (error) {
     console.error('Error deleting EventBridge rule:', error);
     // Don't throw - rule might not exist

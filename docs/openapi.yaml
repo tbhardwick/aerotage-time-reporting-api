@@ -404,6 +404,533 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    # Phase 6 - Reporting & Analytics Schemas
+    TimeReport:
+      type: object
+      properties:
+        reportId:
+          type: string
+          description: Unique report identifier
+        reportType:
+          type: string
+          example: "time"
+        generatedAt:
+          type: string
+          format: date-time
+        filters:
+          type: object
+          description: Applied filters
+        summary:
+          type: object
+          properties:
+            totalHours:
+              type: number
+              format: float
+            totalRevenue:
+              type: number
+              format: float
+            billableHours:
+              type: number
+              format: float
+            nonBillableHours:
+              type: number
+              format: float
+            projectCount:
+              type: integer
+            userCount:
+              type: integer
+            clientCount:
+              type: integer
+            averageHourlyRate:
+              type: number
+              format: float
+            utilizationRate:
+              type: number
+              format: float
+        data:
+          type: array
+          items:
+            type: object
+            description: Time entry data grouped by specified criteria
+        pagination:
+          type: object
+          properties:
+            hasMore:
+              type: boolean
+            totalCount:
+              type: integer
+        cacheInfo:
+          type: object
+          properties:
+            cached:
+              type: boolean
+            cacheKey:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+
+    ProjectReport:
+      type: object
+      properties:
+        reportId:
+          type: string
+        reportType:
+          type: string
+          example: "project"
+        generatedAt:
+          type: string
+          format: date-time
+        summary:
+          type: object
+          properties:
+            totalProjects:
+              type: integer
+            activeProjects:
+              type: integer
+            completedProjects:
+              type: integer
+            totalBudget:
+              type: number
+              format: float
+            totalSpent:
+              type: number
+              format: float
+            averageCompletion:
+              type: number
+              format: float
+            onTimeDelivery:
+              type: number
+              format: float
+        data:
+          type: array
+          items:
+            type: object
+            description: Project performance data
+
+    ClientReport:
+      type: object
+      properties:
+        reportId:
+          type: string
+        reportType:
+          type: string
+          example: "client"
+        generatedAt:
+          type: string
+          format: date-time
+        summary:
+          type: object
+          properties:
+            totalClients:
+              type: integer
+            activeClients:
+              type: integer
+            totalRevenue:
+              type: number
+              format: float
+            averageProjectValue:
+              type: number
+              format: float
+            clientRetentionRate:
+              type: number
+              format: float
+        data:
+          type: array
+          items:
+            type: object
+            description: Client performance and billing data
+
+    ScheduleConfig:
+      type: object
+      required:
+        - frequency
+        - time
+        - timezone
+      properties:
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, custom]
+          description: Schedule frequency
+        time:
+          type: string
+          pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'
+          example: "09:00"
+          description: Time in HH:MM format
+        timezone:
+          type: string
+          example: "America/New_York"
+          description: Timezone for the schedule
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: Day of week for weekly schedules (0 = Sunday)
+        dayOfMonth:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of month for monthly schedules
+        customCron:
+          type: string
+          description: Custom cron expression for custom frequency
+        startDate:
+          type: string
+          format: date
+          description: Schedule start date
+        endDate:
+          type: string
+          format: date
+          description: Schedule end date
+
+    DeliveryConfig:
+      type: object
+      required:
+        - recipients
+        - format
+      properties:
+        recipients:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Email recipients
+        subject:
+          type: string
+          description: Email subject
+        message:
+          type: string
+          description: Email message
+        format:
+          type: string
+          enum: [pdf, csv, excel]
+          description: Report format
+        includeAttachment:
+          type: boolean
+          default: true
+          description: Include report as attachment
+        includeDownloadLink:
+          type: boolean
+          default: true
+          description: Include download link
+
+    ScheduledReport:
+      type: object
+      properties:
+        scheduleId:
+          type: string
+        userId:
+          type: string
+        reportConfigId:
+          type: string
+        schedule:
+          $ref: '#/components/schemas/ScheduleConfig'
+        delivery:
+          $ref: '#/components/schemas/DeliveryConfig'
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastRun:
+          type: string
+          format: date-time
+        nextRun:
+          type: string
+          format: date-time
+        runCount:
+          type: integer
+        failureCount:
+          type: integer
+        lastError:
+          type: string
+        eventBridgeRuleName:
+          type: string
+
+    ScheduleResponse:
+      type: object
+      properties:
+        scheduleId:
+          type: string
+        status:
+          type: string
+          enum: [created, updated, deleted]
+        nextRun:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    DashboardWidget:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [kpi, chart, gauge, table, metric]
+        title:
+          type: string
+        size:
+          type: string
+          enum: [small, medium, large, full]
+        position:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+        config:
+          type: object
+          description: Widget-specific configuration
+
+    EnhancedDashboard:
+      type: object
+      properties:
+        dashboardId:
+          type: string
+        widgets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardWidget'
+        summary:
+          type: object
+          properties:
+            totalRevenue:
+              type: number
+              format: float
+            totalHours:
+              type: number
+              format: float
+            activeProjects:
+              type: integer
+            teamUtilization:
+              type: number
+              format: float
+        lastUpdated:
+          type: string
+          format: date-time
+        refreshInterval:
+          type: integer
+        forecasting:
+          type: object
+          description: Forecasting data
+        benchmarks:
+          type: object
+          description: Benchmark comparisons
+
+    RealTimeAnalytics:
+      type: object
+      properties:
+        metrics:
+          type: object
+          properties:
+            activeUsers:
+              type: integer
+            currentSessions:
+              type: integer
+            todayHours:
+              type: number
+              format: float
+            todayRevenue:
+              type: number
+              format: float
+            liveTimers:
+              type: integer
+        activities:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+              action:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+        sessions:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+              startTime:
+                type: string
+                format: date-time
+              lastActivity:
+                type: string
+                format: date-time
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              message:
+                type: string
+              severity:
+                type: string
+                enum: [low, medium, high, critical]
+        nextRefresh:
+          type: string
+          format: date-time
+
+    PerformanceMonitoring:
+      type: object
+      properties:
+        timeframe:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        system:
+          type: object
+          description: System performance metrics
+        api:
+          type: object
+          description: API performance metrics
+        database:
+          type: object
+          description: Database performance metrics
+        userExperience:
+          type: object
+          description: User experience metrics
+        recommendations:
+          type: array
+          items:
+            type: string
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+              severity:
+                type: string
+              title:
+                type: string
+              message:
+                type: string
+        comparisons:
+          type: object
+          description: Performance comparisons
+        summary:
+          type: object
+          properties:
+            overallScore:
+              type: integer
+              minimum: 0
+              maximum: 100
+            performanceGrade:
+              type: string
+              enum: [A, B, C, D, F]
+            keyMetrics:
+              type: object
+              properties:
+                responseTime:
+                  type: integer
+                  description: Average response time in milliseconds
+                throughput:
+                  type: integer
+                  description: Requests per minute
+                errorRate:
+                  type: number
+                  format: float
+                  description: Error rate percentage
+                availability:
+                  type: number
+                  format: float
+                  description: Availability percentage
+
+    FilterCondition:
+      type: object
+      required:
+        - field
+        - operator
+        - value
+      properties:
+        field:
+          type: string
+          description: Field to filter on
+        operator:
+          type: string
+          enum: [equals, not_equals, greater_than, less_than, greater_equal, less_equal, contains, starts_with, ends_with, in, not_in, between, date_range]
+          description: Filter operator
+        value:
+          description: Filter value (type varies by field and operator)
+        secondValue:
+          description: Second value for range operators
+        logicalOperator:
+          type: string
+          enum: [AND, OR]
+          default: AND
+          description: Logical operator to combine with next condition
+
+    Aggregation:
+      type: object
+      required:
+        - field
+        - function
+      properties:
+        field:
+          type: string
+          description: Field to aggregate
+        function:
+          type: string
+          enum: [sum, avg, min, max, count, count_distinct]
+          description: Aggregation function
+        alias:
+          type: string
+          description: Alias for the aggregated field
+
+    FilterResult:
+      type: object
+      properties:
+        filterId:
+          type: string
+        dataSource:
+          type: string
+        appliedFilters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterCondition'
+        resultCount:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+        groupedData:
+          type: array
+          items:
+            type: object
+        aggregations:
+          type: object
+          description: Aggregation results
+        pagination:
+          type: object
+          properties:
+            hasMore:
+              type: boolean
+            totalCount:
+              type: integer
+        executionTime:
+          type: integer
+          description: Query execution time in milliseconds
+        generatedAt:
+          type: string
+          format: date-time
           
     ApiResponse:
       type: object
@@ -2097,6 +2624,767 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # Phase 6 - Reporting & Analytics Endpoints
+  /reports/time:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Generate time report
+      description: Generate comprehensive time tracking reports with filtering and grouping options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                  description: Report start date (YYYY-MM-DD)
+                endDate:
+                  type: string
+                  format: date
+                  description: Report end date (YYYY-MM-DD)
+                groupBy:
+                  type: string
+                  enum: [date, week, month, project, user, client]
+                  default: date
+                  description: How to group the report data
+                includeDetails:
+                  type: boolean
+                  default: true
+                  description: Include detailed time entries
+                filters:
+                  type: object
+                  properties:
+                    userId:
+                      type: string
+                      description: Filter by specific user
+                    projectId:
+                      type: string
+                      description: Filter by specific project
+                    clientId:
+                      type: string
+                      description: Filter by specific client
+                    billable:
+                      type: boolean
+                      description: Filter by billable status
+                    status:
+                      type: string
+                      enum: [draft, submitted, approved, rejected]
+                      description: Filter by entry status
+                sortBy:
+                  type: string
+                  enum: [date, hours, revenue, project, user]
+                  default: date
+                  description: Sort field
+                sortOrder:
+                  type: string
+                  enum: [asc, desc]
+                  default: desc
+                  description: Sort order
+                limit:
+                  type: integer
+                  default: 100
+                  maximum: 1000
+                  description: Maximum number of results
+                offset:
+                  type: integer
+                  default: 0
+                  description: Pagination offset
+      responses:
+        '200':
+          description: Time report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TimeReport'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reports/projects:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Generate project report
+      description: Generate comprehensive project performance and analytics reports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+                includeFinancials:
+                  type: boolean
+                  default: true
+                  description: Include financial metrics
+                includeTeamMetrics:
+                  type: boolean
+                  default: true
+                  description: Include team performance metrics
+                groupBy:
+                  type: string
+                  enum: [project, client, status, month]
+                  default: project
+                filters:
+                  type: object
+                  properties:
+                    projectId:
+                      type: string
+                    clientId:
+                      type: string
+                    status:
+                      type: string
+                      enum: [active, completed, on_hold, cancelled]
+                    managerId:
+                      type: string
+      responses:
+        '200':
+          description: Project report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProjectReport'
+
+  /reports/clients:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Generate client report
+      description: Generate client performance, billing, and activity reports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+                includeBilling:
+                  type: boolean
+                  default: true
+                includeActivity:
+                  type: boolean
+                  default: true
+                includeInvoices:
+                  type: boolean
+                  default: true
+                filters:
+                  type: object
+                  properties:
+                    clientId:
+                      type: string
+                    isActive:
+                      type: boolean
+                    minRevenue:
+                      type: number
+                      format: float
+      responses:
+        '200':
+          description: Client report generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ClientReport'
+
+  /reports/export:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Export report
+      description: Export reports in various formats (PDF, CSV, Excel)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reportData
+                - format
+              properties:
+                reportData:
+                  type: object
+                  description: Report data to export
+                format:
+                  type: string
+                  enum: [pdf, csv, excel]
+                  description: Export format
+                options:
+                  type: object
+                  properties:
+                    includeCharts:
+                      type: boolean
+                      default: true
+                    includeRawData:
+                      type: boolean
+                      default: true
+                    orientation:
+                      type: string
+                      enum: [portrait, landscape]
+                      default: portrait
+                    pageSize:
+                      type: string
+                      enum: [A4, Letter, Legal]
+                      default: A4
+                delivery:
+                  type: object
+                  properties:
+                    email:
+                      type: array
+                      items:
+                        type: string
+                        format: email
+                      description: Email addresses to send the report
+                    subject:
+                      type: string
+                      description: Email subject
+                    message:
+                      type: string
+                      description: Email message
+                    downloadLink:
+                      type: boolean
+                      default: true
+                      description: Include download link
+                    expiresIn:
+                      type: integer
+                      default: 24
+                      description: Download link expiration in hours
+      responses:
+        '200':
+          description: Report export initiated (placeholder implementation)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Placeholder endpoint - implementation pending"
+
+  /reports/schedule:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Schedule report
+      description: Create automated report scheduling with EventBridge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reportConfigId
+                - schedule
+                - delivery
+              properties:
+                reportConfigId:
+                  type: string
+                  description: Report configuration ID
+                schedule:
+                  $ref: '#/components/schemas/ScheduleConfig'
+                delivery:
+                  $ref: '#/components/schemas/DeliveryConfig'
+                enabled:
+                  type: boolean
+                  default: true
+                  description: Whether the schedule is enabled
+      responses:
+        '201':
+          description: Report schedule created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ScheduleResponse'
+        '400':
+          description: Invalid schedule configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Reporting & Analytics
+      summary: List scheduled reports
+      description: Get list of scheduled reports for the current user
+      parameters:
+        - name: enabled
+          in: query
+          schema:
+            type: boolean
+          description: Filter by enabled status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Number of results to return
+      responses:
+        '200':
+          description: List of scheduled reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      schedules:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ScheduledReport'
+                      totalCount:
+                        type: integer
+
+  /reports/schedule/{scheduleId}:
+    parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Schedule ID
+
+    get:
+      tags:
+        - Reporting & Analytics
+      summary: Get scheduled report
+      description: Get details of a specific scheduled report
+      responses:
+        '200':
+          description: Scheduled report details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ScheduledReport'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Reporting & Analytics
+      summary: Update scheduled report
+      description: Update an existing report schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schedule:
+                  $ref: '#/components/schemas/ScheduleConfig'
+                delivery:
+                  $ref: '#/components/schemas/DeliveryConfig'
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Schedule updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ScheduleResponse'
+
+    delete:
+      tags:
+        - Reporting & Analytics
+      summary: Delete scheduled report
+      description: Delete a report schedule and associated EventBridge rule
+      responses:
+        '200':
+          description: Schedule deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ScheduleResponse'
+
+  /analytics/dashboard/enhanced:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Generate enhanced dashboard
+      description: Generate customizable dashboard with widgets, KPIs, and real-time data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                widgets:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DashboardWidget'
+                  description: Dashboard widgets configuration
+                timeframe:
+                  type: string
+                  enum: [day, week, month, quarter, year]
+                  default: month
+                  description: Data timeframe
+                realTime:
+                  type: boolean
+                  default: false
+                  description: Enable real-time updates
+                includeForecasting:
+                  type: boolean
+                  default: true
+                  description: Include forecasting data
+                includeBenchmarks:
+                  type: boolean
+                  default: true
+                  description: Include benchmark comparisons
+      responses:
+        '200':
+          description: Enhanced dashboard generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/EnhancedDashboard'
+
+  /analytics/real-time:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Get real-time analytics
+      description: Retrieve real-time system and user analytics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metrics:
+                  type: array
+                  items:
+                    type: string
+                    enum: [activeUsers, currentSessions, todayHours, todayRevenue, liveTimers]
+                  description: Metrics to include
+                includeActivities:
+                  type: boolean
+                  default: true
+                  description: Include recent activities
+                includeSessions:
+                  type: boolean
+                  default: true
+                  description: Include session information
+                includeAlerts:
+                  type: boolean
+                  default: true
+                  description: Include system alerts
+                refreshInterval:
+                  type: integer
+                  default: 30
+                  description: Refresh interval in seconds
+      responses:
+        '200':
+          description: Real-time analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RealTimeAnalytics'
+
+  /analytics/performance:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Get performance monitoring
+      description: Retrieve system performance metrics and monitoring data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timeframe:
+                  type: string
+                  enum: [hour, day, week, month]
+                  default: day
+                  description: Performance data timeframe
+                metrics:
+                  type: array
+                  items:
+                    type: string
+                    enum: [system, api, database, user]
+                  description: Metric categories to include
+                includeRecommendations:
+                  type: boolean
+                  default: true
+                  description: Include performance recommendations
+                includeAlerts:
+                  type: boolean
+                  default: true
+                  description: Include performance alerts
+                includeComparisons:
+                  type: boolean
+                  default: true
+                  description: Include period comparisons
+      responses:
+        '200':
+          description: Performance monitoring data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/PerformanceMonitoring'
+
+  /analytics/events:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Track analytics event
+      description: Track user actions and system events for analytics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - eventType
+              properties:
+                eventType:
+                  type: string
+                  enum: [
+                    user_login, user_logout, user_profile_update, user_preferences_update, user_action,
+                    timer_start, timer_stop, timer_pause, time_entry_create, time_entry_update, time_entry_delete,
+                    time_entry_submit, time_entry_approve, time_entry_reject, project_create, project_update,
+                    project_delete, project_view, client_create, client_update, client_delete, client_view,
+                    report_generate, report_export, report_schedule, dashboard_view, api_error,
+                    performance_metric, feature_usage
+                  ]
+                  description: Type of event to track
+                metadata:
+                  type: object
+                  description: Additional event metadata
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: Event timestamp (defaults to current time)
+      responses:
+        '201':
+          description: Event tracked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      eventId:
+                        type: string
+                        description: Unique event identifier
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: Event timestamp
+                      message:
+                        type: string
+                        example: "Event tracked successfully"
+        '400':
+          description: Invalid event type or data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "RATE_LIMIT_EXCEEDED"
+                      message:
+                        type: string
+                        example: "Too many events. Please try again later."
+                      retryAfter:
+                        type: integer
+                        example: 60
+
+  /analytics/filter:
+    post:
+      tags:
+        - Reporting & Analytics
+      summary: Advanced data filtering
+      description: Apply complex filters, aggregations, and transformations to data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dataSource
+                - filters
+              properties:
+                dataSource:
+                  type: string
+                  enum: [time-entries, projects, clients, users, analytics-events]
+                  description: Data source to filter
+                filters:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FilterCondition'
+                  description: Filter conditions
+                groupBy:
+                  type: object
+                  properties:
+                    fields:
+                      type: array
+                      items:
+                        type: string
+                      description: Fields to group by
+                    dateGrouping:
+                      type: string
+                      enum: [hour, day, week, month, quarter, year]
+                      description: Date grouping interval
+                aggregations:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Aggregation'
+                  description: Aggregation functions
+                sorting:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      field:
+                        type: string
+                      direction:
+                        type: string
+                        enum: [asc, desc]
+                  description: Sorting configuration
+                pagination:
+                  type: object
+                  properties:
+                    limit:
+                      type: integer
+                      default: 50
+                      maximum: 1000
+                    offset:
+                      type: integer
+                      default: 0
+                outputFormat:
+                  type: string
+                  enum: [summary, detailed, raw]
+                  default: detailed
+                  description: Output format
+      responses:
+        '200':
+          description: Filtered data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/FilterResult'
+
 tags:
   - name: User Management
     description: User account management operations
@@ -2110,14 +3398,13 @@ tags:
     description: User session management
   - name: User Invitations
     description: User invitation system
-
   - name: Project Management
     description: Project lifecycle management
   - name: Client Management
     description: Client information management
   - name: Time Tracking
     description: Time entry and tracking operations
-  - name: Reporting
-    description: Reports and analytics
+  - name: Reporting & Analytics
+    description: Advanced reporting, analytics, and business intelligence
   - name: Invoice Management
     description: Invoice generation and management
