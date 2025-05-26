@@ -531,4 +531,371 @@ export interface PasswordHistoryDynamoItem {
   userId: string;
   passwordHash: string; // Bcrypted
   createdAt: string;
+}
+
+// ==========================
+// Time Entry Types - Phase 4
+// ==========================
+
+// Core Time Entry Types
+export interface TimeEntry {
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId?: string;
+  description: string;
+  date: string; // ISO date (YYYY-MM-DD)
+  startTime?: string; // ISO datetime for timer entries
+  endTime?: string; // ISO datetime for timer entries
+  duration: number; // minutes
+  isBillable: boolean;
+  hourlyRate?: number; // Override project rate if specified
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  tags: string[];
+  notes?: string;
+  attachments?: string[]; // S3 URLs
+  submittedAt?: string; // ISO datetime
+  approvedAt?: string; // ISO datetime
+  rejectedAt?: string; // ISO datetime
+  approvedBy?: string; // User ID
+  rejectionReason?: string;
+  isTimerEntry: boolean; // True if created via timer
+  timerStartedAt?: string; // ISO datetime
+  createdAt: string; // ISO datetime
+  updatedAt: string; // ISO datetime
+}
+
+// Time Entry Request Types
+export interface CreateTimeEntryRequest {
+  projectId: string;
+  taskId?: string;
+  description: string;
+  date: string; // ISO date
+  startTime?: string; // ISO datetime
+  endTime?: string; // ISO datetime
+  duration?: number; // minutes - calculated if not provided
+  isBillable?: boolean; // Defaults to project setting
+  hourlyRate?: number; // Override project rate
+  tags?: string[];
+  notes?: string;
+  attachments?: string[];
+}
+
+export interface UpdateTimeEntryRequest {
+  projectId?: string;
+  taskId?: string;
+  description?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number;
+  isBillable?: boolean;
+  hourlyRate?: number;
+  tags?: string[];
+  notes?: string;
+  attachments?: string[];
+}
+
+export interface TimeEntryFilters {
+  userId?: string;
+  projectId?: string;
+  taskId?: string;
+  status?: 'draft' | 'submitted' | 'approved' | 'rejected';
+  isBillable?: boolean;
+  dateFrom?: string; // ISO date
+  dateTo?: string; // ISO date
+  tags?: string[];
+  limit?: number;
+  offset?: number;
+  sortBy?: 'date' | 'duration' | 'createdAt' | 'updatedAt';
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Timer Types
+export interface TimerSession {
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId?: string;
+  description: string;
+  startTime: string; // ISO datetime
+  isActive: boolean;
+  tags: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+export interface StartTimerRequest {
+  projectId: string;
+  taskId?: string;
+  description: string;
+  tags?: string[];
+  notes?: string;
+}
+
+export interface StopTimerRequest {
+  timeEntryData?: {
+    isBillable?: boolean;
+    hourlyRate?: number;
+    finalDescription?: string;
+    finalTags?: string[];
+    finalNotes?: string;
+  };
+}
+
+// Bulk Operations
+export interface SubmitTimeEntriesRequest {
+  timeEntryIds: string[];
+  submissionNotes?: string;
+}
+
+export interface ApproveTimeEntriesRequest {
+  timeEntryIds: string[];
+  approvalNotes?: string;
+}
+
+export interface RejectTimeEntriesRequest {
+  timeEntryIds: string[];
+  rejectionReason: string;
+  rejectionNotes?: string;
+}
+
+export interface BulkTimeEntryResponse {
+  successful: string[]; // Time entry IDs
+  failed: {
+    id: string;
+    error: string;
+  }[];
+}
+
+// Time Entry Analytics
+export interface TimeEntryStats {
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  totalEntries: number;
+  averageHoursPerDay: number;
+  mostUsedProject: {
+    projectId: string;
+    projectName: string;
+    hours: number;
+  };
+  dailyBreakdown: {
+    date: string;
+    hours: number;
+    billableHours: number;
+    entries: number;
+  }[];
+}
+
+// Project and Task Types (for time entry context)
+export interface Project {
+  id: string;
+  name: string;
+  clientId: string;
+  clientName: string;
+  description?: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  defaultHourlyRate?: number;
+  defaultBillable: boolean;
+  budget?: {
+    type: 'hours' | 'amount';
+    value: number;
+    spent: number;
+  };
+  deadline?: string; // ISO date
+  teamMembers: string[]; // User IDs
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface Task {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'completed' | 'cancelled';
+  assignedTo?: string; // User ID
+  estimatedHours?: number;
+  actualHours: number;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  dueDate?: string; // ISO date
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+// Client Types (for project context)
+export interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+// Time Entry Error Types
+export enum TimeEntryErrorCodes {
+  // Time entry errors
+  TIME_ENTRY_NOT_FOUND = 'TIME_ENTRY_NOT_FOUND',
+  UNAUTHORIZED_TIME_ENTRY_ACCESS = 'UNAUTHORIZED_TIME_ENTRY_ACCESS',
+  INVALID_TIME_ENTRY_DATA = 'INVALID_TIME_ENTRY_DATA',
+  TIME_ENTRY_ALREADY_SUBMITTED = 'TIME_ENTRY_ALREADY_SUBMITTED',
+  TIME_ENTRY_ALREADY_APPROVED = 'TIME_ENTRY_ALREADY_APPROVED',
+  TIME_ENTRY_NOT_SUBMITTED = 'TIME_ENTRY_NOT_SUBMITTED',
+  
+  // Timer errors
+  TIMER_ALREADY_RUNNING = 'TIMER_ALREADY_RUNNING',
+  NO_ACTIVE_TIMER = 'NO_ACTIVE_TIMER',
+  TIMER_SESSION_NOT_FOUND = 'TIMER_SESSION_NOT_FOUND',
+  
+  // Project/Task errors
+  PROJECT_NOT_FOUND = 'PROJECT_NOT_FOUND',
+  TASK_NOT_FOUND = 'TASK_NOT_FOUND',
+  PROJECT_ACCESS_DENIED = 'PROJECT_ACCESS_DENIED',
+  TASK_ACCESS_DENIED = 'TASK_ACCESS_DENIED',
+  
+  // Validation errors
+  INVALID_DATE_RANGE = 'INVALID_DATE_RANGE',
+  INVALID_TIME_RANGE = 'INVALID_TIME_RANGE',
+  DURATION_MISMATCH = 'DURATION_MISMATCH',
+  NEGATIVE_DURATION = 'NEGATIVE_DURATION',
+  FUTURE_DATE_NOT_ALLOWED = 'FUTURE_DATE_NOT_ALLOWED',
+  
+  // Approval workflow errors
+  INSUFFICIENT_APPROVAL_PERMISSIONS = 'INSUFFICIENT_APPROVAL_PERMISSIONS',
+  CANNOT_APPROVE_OWN_ENTRIES = 'CANNOT_APPROVE_OWN_ENTRIES',
+  BULK_OPERATION_PARTIAL_FAILURE = 'BULK_OPERATION_PARTIAL_FAILURE',
+}
+
+// DynamoDB Item Types for Time Entries
+export interface TimeEntryDynamoItem {
+  PK: string; // "TIME_ENTRY#{id}"
+  SK: string; // "TIME_ENTRY#{id}"
+  GSI1PK: string; // "USER#{userId}"
+  GSI1SK: string; // "DATE#{date}#TIME_ENTRY#{id}"
+  GSI2PK: string; // "PROJECT#{projectId}"
+  GSI2SK: string; // "DATE#{date}#TIME_ENTRY#{id}"
+  GSI3PK: string; // "STATUS#{status}"
+  GSI3SK: string; // "DATE#{date}#TIME_ENTRY#{id}"
+  GSI4PK?: string; // "APPROVAL#{status}" (for approval workflow)
+  GSI4SK?: string; // "SUBMITTED_AT#{submittedAt}#TIME_ENTRY#{id}"
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId?: string;
+  description: string;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  duration: number;
+  isBillable: boolean;
+  hourlyRate?: number;
+  status: string;
+  tags: string; // JSON serialized array
+  notes?: string;
+  attachments?: string; // JSON serialized array
+  submittedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  approvedBy?: string;
+  rejectionReason?: string;
+  isTimerEntry: boolean;
+  timerStartedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimerSessionDynamoItem {
+  PK: string; // "TIMER#{userId}"
+  SK: string; // "ACTIVE"
+  id: string;
+  userId: string;
+  projectId: string;
+  taskId?: string;
+  description: string;
+  startTime: string;
+  isActive: boolean;
+  tags: string; // JSON serialized array
+  notes?: string;
+  createdAt: string;
+  expiresAt: string; // TTL for cleanup
+}
+
+export interface ProjectDynamoItem {
+  PK: string; // "PROJECT#{id}"
+  SK: string; // "PROJECT#{id}"
+  GSI1PK: string; // "CLIENT#{clientId}"
+  GSI1SK: string; // "PROJECT#{name}"
+  GSI2PK: string; // "STATUS#{status}"
+  GSI2SK: string; // "PROJECT#{createdAt}"
+  id: string;
+  name: string;
+  clientId: string;
+  clientName: string;
+  description?: string;
+  status: string;
+  defaultHourlyRate?: number;
+  defaultBillable: boolean;
+  budget?: string; // JSON serialized
+  deadline?: string;
+  teamMembers: string; // JSON serialized array
+  tags: string; // JSON serialized array
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface TaskDynamoItem {
+  PK: string; // "TASK#{id}"
+  SK: string; // "TASK#{id}"
+  GSI1PK: string; // "PROJECT#{projectId}"
+  GSI1SK: string; // "TASK#{name}"
+  GSI2PK: string; // "STATUS#{status}"
+  GSI2SK: string; // "TASK#{createdAt}"
+  GSI3PK?: string; // "ASSIGNED#{assignedTo}"
+  GSI3SK?: string; // "TASK#{dueDate}#{id}"
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  status: string;
+  assignedTo?: string;
+  estimatedHours?: number;
+  actualHours: number;
+  priority: string;
+  dueDate?: string;
+  tags: string; // JSON serialized array
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface ClientDynamoItem {
+  PK: string; // "CLIENT#{id}"
+  SK: string; // "CLIENT#{id}"
+  GSI1PK: string; // "STATUS#{isActive}"
+  GSI1SK: string; // "CLIENT#{name}"
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
 } 
