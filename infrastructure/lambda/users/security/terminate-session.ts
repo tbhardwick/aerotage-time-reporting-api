@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import { 
   SuccessResponse, 
@@ -40,25 +40,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current session identifier from JWT token
-    const authHeader = event.headers.Authorization || event.headers.authorization;
-    const currentToken = authHeader?.replace('Bearer ', '');
-    let currentSessionIdentifier: string | null = null;
-
-    if (currentToken) {
-      try {
-        // Decode JWT token without verification to extract claims
-        const decodedToken = jwt.decode(currentToken) as any;
-        if (decodedToken) {
-          // Use jti (JWT ID) if available, otherwise use iat (issued at) + sub combination
-          currentSessionIdentifier = decodedToken.jti || 
-                                   `${decodedToken.sub}_${decodedToken.iat}`;
-          console.log('Current session identifier:', currentSessionIdentifier);
-        }
-      } catch (error) {
-        console.error('Error decoding JWT token for session identification:', error);
-      }
-    }
+    // Get current request's user agent and IP for session matching
+    const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
+    const currentIP = getClientIP(event);
+    
+    console.log('Current request details for session matching:');
+    console.log(`  User Agent: ${currentUserAgent}`);
+    console.log(`  IP Address: ${currentIP}`);
 
     // Get the session to verify it exists and belongs to the user
     const getCommand = new GetCommand({
@@ -83,29 +71,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Prevent users from terminating their current session
-    let isCurrentSession = false;
-    if (currentSessionIdentifier && session.sessionIdentifier) {
-      isCurrentSession = session.sessionIdentifier === currentSessionIdentifier;
-    } else if (currentToken && session.sessionToken) {
-      // Fallback: compare tokens (less reliable but maintains backward compatibility)
-      isCurrentSession = session.sessionToken === currentToken;
-    }
-
-    if (isCurrentSession) {
-      console.log('Preventing termination of current session:', {
-        sessionId,
-        currentSessionIdentifier,
-        sessionIdentifier: session.sessionIdentifier,
-        tokenMatch: session.sessionToken === currentToken
-      });
-      return createErrorResponse(
-        400, 
-        ProfileSettingsErrorCodes.CANNOT_TERMINATE_CURRENT_SESSION, 
-        'You cannot terminate your current session'
-      );
-    }
-
     // Check if session is already inactive
     if (!session.isActive) {
       return createErrorResponse(
@@ -121,6 +86,60 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         400, 
         ProfileSettingsErrorCodes.SESSION_NOT_FOUND, 
         'Session has already expired'
+      );
+    }
+
+    // Use the same logic as list-sessions.ts to determine if this is the current session
+    // We need to check if this session would be identified as "current" by list-sessions
+    
+    // Query all active sessions for the user to find the current one
+    const queryCommand = new QueryCommand({
+      TableName: process.env.USER_SESSIONS_TABLE!,
+      IndexName: 'UserIndex',
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: 'isActive = :isActive AND expiresAt > :now',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':isActive': true,
+        ':now': new Date().toISOString(),
+      },
+    });
+
+    const queryResult = await docClient.send(queryCommand);
+    const activeSessions = queryResult.Items || [];
+
+    // Find all sessions that match current UA and IP
+    const matchingSessions = activeSessions.filter(s => 
+      s.userAgent === currentUserAgent && s.ipAddress === currentIP
+    );
+
+    let currentSessionId: string | null = null;
+    
+    if (matchingSessions.length > 0) {
+      // Sort by last activity (most recent first)
+      matchingSessions.sort((a, b) => {
+        const aTime = new Date(a.lastActivity || a.loginTime).getTime();
+        const bTime = new Date(b.lastActivity || b.loginTime).getTime();
+        return bTime - aTime;
+      });
+      
+      // The most recently active matching session is the current one
+      currentSessionId = matchingSessions[0].sessionId;
+      console.log(`Identified current session: ${currentSessionId} (most recent of ${matchingSessions.length} matching sessions)`);
+    }
+
+    // Check if the session being terminated is the current session
+    const isCurrentSession = sessionId === currentSessionId;
+
+    if (isCurrentSession) {
+      console.log('Preventing termination of current session:', {
+        sessionId,
+        reason: 'Cannot terminate current session'
+      });
+      return createErrorResponse(
+        400, 
+        ProfileSettingsErrorCodes.CANNOT_TERMINATE_CURRENT_SESSION, 
+        'You cannot terminate your current session'
       );
     }
 
@@ -164,6 +183,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
   }
 };
+
+function getClientIP(event: APIGatewayProxyEvent): string {
+  // Check various headers in order of preference
+  const xForwardedFor = event.headers['x-forwarded-for'] || event.headers['X-Forwarded-For'];
+  const xRealIP = event.headers['x-real-ip'] || event.headers['X-Real-IP'];
+  const cfConnectingIP = event.headers['cf-connecting-ip'] || event.headers['CF-Connecting-IP'];
+  const sourceIP = event.requestContext.identity.sourceIp;
+  
+  if (xForwardedFor) {
+    // X-Forwarded-For can contain multiple IPs, take the first (original client)
+    return xForwardedFor.split(',')[0].trim();
+  }
+  
+  return xRealIP || cfConnectingIP || sourceIP || 'unknown';
+}
 
 function createErrorResponse(
   statusCode: number,

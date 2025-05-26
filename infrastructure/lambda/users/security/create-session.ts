@@ -99,22 +99,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const authHeader = event.headers.Authorization || event.headers.authorization;
     const sessionToken = authHeader?.replace('Bearer ', '') || '';
 
-    // Extract session identifier from JWT token for reliable session matching
-    let sessionIdentifier: string | null = null;
-    if (sessionToken) {
-      try {
-        // Decode JWT token without verification to extract claims
-        const decodedToken = jwt.decode(sessionToken) as any;
-        if (decodedToken) {
-          // Use jti (JWT ID) if available, otherwise use iat (issued at) + sub combination
-          sessionIdentifier = decodedToken.jti || 
-                             `${decodedToken.sub}_${decodedToken.iat}`;
-          console.log('Session identifier extracted from JWT:', sessionIdentifier);
-        }
-      } catch (error) {
-        console.error('Error decoding JWT token for session identifier:', error);
-      }
-    }
+    // Generate a stable session identifier that doesn't depend on JWT token changes
+    // Use the session ID itself as the identifier for consistency
+    const sessionId = uuidv4();
+    const sessionIdentifier = sessionId; // Use session ID as the stable identifier
+    
+    // Ensure the new session has the most recent timestamp
+    const currentTime = new Date().toISOString();
+
+    console.log('Generated stable session identifier:', sessionIdentifier);
+    console.log('Session creation time:', currentTime);
 
     // Check user security settings for multiple sessions
     const securitySettings = await getUserSecuritySettings(userId);
@@ -124,9 +118,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       await terminateUserSessions(userId, sessionToken);
     }
 
-    // Generate unique session ID
-    const sessionId = uuidv4();
-    
     // Calculate session expiry based on security settings
     const sessionTimeoutMs = securitySettings.sessionTimeout * 60 * 1000; // Convert minutes to milliseconds
     const expiresAt = new Date(loginTimestamp.getTime() + sessionTimeoutMs).toISOString();
@@ -139,20 +130,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       PK: `SESSION#${sessionId}`,
       SK: `SESSION#${sessionId}`,
       GSI1PK: `USER#${userId}`,
-      GSI1SK: `SESSION#${loginTime}`,
+      GSI1SK: `SESSION#${currentTime}`,
       sessionId,
       userId,
       sessionToken,
-      sessionIdentifier, // Store the session identifier for reliable matching
+      sessionIdentifier, // Store the stable session identifier
       ipAddress,
       userAgent,
       loginTime,
-      lastActivity: loginTime,
+      lastActivity: currentTime, // Use current time to ensure this is the most recent
       expiresAt,
       isActive: true,
       locationData: location ? JSON.stringify(location) : undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: currentTime,
+      updatedAt: currentTime,
     };
 
     console.log('Session data to be stored:', {
