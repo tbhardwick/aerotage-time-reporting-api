@@ -1,4 +1,4 @@
-import { CreateInvitationRequest, AcceptInvitationRequest, InvitationErrorCodes } from './types';
+import { CreateInvitationRequest, AcceptInvitationRequest, InvitationErrorCodes, Project, Client } from './types';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -272,6 +272,324 @@ export class ValidationService {
 
     if (filters.sortBy && !['createdAt', 'expiresAt', 'email'].includes(filters.sortBy)) {
       errors.push('SortBy must be one of: createdAt, expiresAt, email');
+    }
+
+    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
+      errors.push('SortOrder must be either "asc" or "desc"');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates create project request
+   */
+  static validateCreateProjectRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // Required fields
+    if (!request.name || typeof request.name !== 'string') {
+      errors.push('Project name is required and must be a string');
+    } else if (request.name.length < 2 || request.name.length > 100) {
+      errors.push('Project name must be between 2 and 100 characters');
+    }
+
+    if (!request.clientId || typeof request.clientId !== 'string') {
+      errors.push('Client ID is required and must be a string');
+    }
+
+    if (!request.clientName || typeof request.clientName !== 'string') {
+      errors.push('Client name is required and must be a string');
+    }
+
+    if (!request.status || !['active', 'paused', 'completed', 'cancelled'].includes(request.status)) {
+      errors.push('Status must be one of: active, paused, completed, cancelled');
+    }
+
+    if (typeof request.defaultBillable !== 'boolean') {
+      errors.push('Default billable status is required and must be a boolean');
+    }
+
+    if (!request.teamMembers || !Array.isArray(request.teamMembers)) {
+      errors.push('Team members must be an array');
+    }
+
+    if (!request.tags || !Array.isArray(request.tags)) {
+      errors.push('Tags must be an array');
+    }
+
+    if (!request.createdBy || typeof request.createdBy !== 'string') {
+      errors.push('Created by is required and must be a string');
+    }
+
+    // Optional fields validation
+    if (request.description && typeof request.description !== 'string') {
+      errors.push('Description must be a string');
+    }
+
+    if (request.defaultHourlyRate !== undefined && !this.validateHourlyRate(request.defaultHourlyRate)) {
+      errors.push('Default hourly rate must be a positive number less than 1000');
+    }
+
+    if (request.budget) {
+      if (typeof request.budget !== 'object') {
+        errors.push('Budget must be an object');
+      } else {
+        if (!['hours', 'amount'].includes(request.budget.type)) {
+          errors.push('Budget type must be either "hours" or "amount"');
+        }
+        if (typeof request.budget.value !== 'number' || request.budget.value <= 0) {
+          errors.push('Budget value must be a positive number');
+        }
+        if (typeof request.budget.spent !== 'number' || request.budget.spent < 0) {
+          errors.push('Budget spent must be a non-negative number');
+        }
+      }
+    }
+
+    if (request.deadline && typeof request.deadline !== 'string') {
+      errors.push('Deadline must be a string (ISO date)');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates update project request
+   */
+  static validateUpdateProjectRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // All fields are optional for updates, but if provided must be valid
+    if (request.name !== undefined) {
+      if (typeof request.name !== 'string' || request.name.length < 2 || request.name.length > 100) {
+        errors.push('Project name must be a string between 2 and 100 characters');
+      }
+    }
+
+    if (request.clientId !== undefined && typeof request.clientId !== 'string') {
+      errors.push('Client ID must be a string');
+    }
+
+    if (request.clientName !== undefined && typeof request.clientName !== 'string') {
+      errors.push('Client name must be a string');
+    }
+
+    if (request.status !== undefined && !['active', 'paused', 'completed', 'cancelled'].includes(request.status)) {
+      errors.push('Status must be one of: active, paused, completed, cancelled');
+    }
+
+    if (request.defaultBillable !== undefined && typeof request.defaultBillable !== 'boolean') {
+      errors.push('Default billable status must be a boolean');
+    }
+
+    if (request.teamMembers !== undefined && !Array.isArray(request.teamMembers)) {
+      errors.push('Team members must be an array');
+    }
+
+    if (request.tags !== undefined && !Array.isArray(request.tags)) {
+      errors.push('Tags must be an array');
+    }
+
+    if (request.description !== undefined && typeof request.description !== 'string') {
+      errors.push('Description must be a string');
+    }
+
+    if (request.defaultHourlyRate !== undefined && !this.validateHourlyRate(request.defaultHourlyRate)) {
+      errors.push('Default hourly rate must be a positive number less than 1000');
+    }
+
+    if (request.budget !== undefined) {
+      if (typeof request.budget !== 'object') {
+        errors.push('Budget must be an object');
+      } else {
+        if (!['hours', 'amount'].includes(request.budget.type)) {
+          errors.push('Budget type must be either "hours" or "amount"');
+        }
+        if (typeof request.budget.value !== 'number' || request.budget.value <= 0) {
+          errors.push('Budget value must be a positive number');
+        }
+        if (typeof request.budget.spent !== 'number' || request.budget.spent < 0) {
+          errors.push('Budget spent must be a non-negative number');
+        }
+      }
+    }
+
+    if (request.deadline !== undefined && typeof request.deadline !== 'string') {
+      errors.push('Deadline must be a string (ISO date)');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates create client request
+   */
+  static validateCreateClientRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // Required fields
+    if (!request.name || typeof request.name !== 'string') {
+      errors.push('Client name is required and must be a string');
+    } else if (request.name.length < 2 || request.name.length > 100) {
+      errors.push('Client name must be between 2 and 100 characters');
+    }
+
+    if (typeof request.isActive !== 'boolean') {
+      errors.push('Active status is required and must be a boolean');
+    }
+
+    if (!request.createdBy || typeof request.createdBy !== 'string') {
+      errors.push('Created by is required and must be a string');
+    }
+
+    // Optional fields validation
+    if (request.email && (typeof request.email !== 'string' || !this.validateEmail(request.email))) {
+      errors.push('Email must be a valid email address');
+    }
+
+    if (request.phone && typeof request.phone !== 'string') {
+      errors.push('Phone must be a string');
+    }
+
+    if (request.address && typeof request.address !== 'string') {
+      errors.push('Address must be a string');
+    }
+
+    if (request.contactPerson && typeof request.contactPerson !== 'string') {
+      errors.push('Contact person must be a string');
+    }
+
+    if (request.defaultHourlyRate !== undefined && !this.validateHourlyRate(request.defaultHourlyRate)) {
+      errors.push('Default hourly rate must be a positive number less than 1000');
+    }
+
+    if (request.notes && typeof request.notes !== 'string') {
+      errors.push('Notes must be a string');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates update client request
+   */
+  static validateUpdateClientRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // All fields are optional for updates, but if provided must be valid
+    if (request.name !== undefined) {
+      if (typeof request.name !== 'string' || request.name.length < 2 || request.name.length > 100) {
+        errors.push('Client name must be a string between 2 and 100 characters');
+      }
+    }
+
+    if (request.isActive !== undefined && typeof request.isActive !== 'boolean') {
+      errors.push('Active status must be a boolean');
+    }
+
+    if (request.email !== undefined && (typeof request.email !== 'string' || !this.validateEmail(request.email))) {
+      errors.push('Email must be a valid email address');
+    }
+
+    if (request.phone !== undefined && typeof request.phone !== 'string') {
+      errors.push('Phone must be a string');
+    }
+
+    if (request.address !== undefined && typeof request.address !== 'string') {
+      errors.push('Address must be a string');
+    }
+
+    if (request.contactPerson !== undefined && typeof request.contactPerson !== 'string') {
+      errors.push('Contact person must be a string');
+    }
+
+    if (request.defaultHourlyRate !== undefined && !this.validateHourlyRate(request.defaultHourlyRate)) {
+      errors.push('Default hourly rate must be a positive number less than 1000');
+    }
+
+    if (request.notes !== undefined && typeof request.notes !== 'string') {
+      errors.push('Notes must be a string');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates project filters for listing
+   */
+  static validateProjectFilters(filters: any): ValidationResult {
+    const errors: string[] = [];
+
+    if (filters.clientId && typeof filters.clientId !== 'string') {
+      errors.push('Client ID must be a string');
+    }
+
+    if (filters.status && !['active', 'paused', 'completed', 'cancelled'].includes(filters.status)) {
+      errors.push('Status must be one of: active, paused, completed, cancelled');
+    }
+
+    if (filters.teamMember && typeof filters.teamMember !== 'string') {
+      errors.push('Team member must be a string');
+    }
+
+    if (filters.limit && (typeof filters.limit !== 'number' || filters.limit < 1 || filters.limit > 100)) {
+      errors.push('Limit must be a number between 1 and 100');
+    }
+
+    if (filters.offset && (typeof filters.offset !== 'number' || filters.offset < 0)) {
+      errors.push('Offset must be a non-negative number');
+    }
+
+    if (filters.sortBy && !['name', 'createdAt', 'deadline'].includes(filters.sortBy)) {
+      errors.push('SortBy must be one of: name, createdAt, deadline');
+    }
+
+    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
+      errors.push('SortOrder must be either "asc" or "desc"');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates client filters for listing
+   */
+  static validateClientFilters(filters: any): ValidationResult {
+    const errors: string[] = [];
+
+    if (filters.isActive !== undefined && typeof filters.isActive !== 'boolean') {
+      errors.push('Active status must be a boolean');
+    }
+
+    if (filters.limit && (typeof filters.limit !== 'number' || filters.limit < 1 || filters.limit > 100)) {
+      errors.push('Limit must be a number between 1 and 100');
+    }
+
+    if (filters.offset && (typeof filters.offset !== 'number' || filters.offset < 0)) {
+      errors.push('Offset must be a non-negative number');
+    }
+
+    if (filters.sortBy && !['name', 'createdAt'].includes(filters.sortBy)) {
+      errors.push('SortBy must be one of: name, createdAt');
     }
 
     if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
