@@ -13,17 +13,20 @@
     "diff": "cdk diff",
     "destroy": "cdk destroy",
     "bootstrap": "cdk bootstrap",
-    "deploy:dev": "STAGE=dev cdk deploy --all",
-    "deploy:staging": "STAGE=staging cdk deploy --all",
-    "deploy:prod": "STAGE=prod cdk deploy --all"
+    "build:docs": "node ../scripts/build-openapi.js",
+    "build:docs:dev": "node ../scripts/build-openapi.js dev https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev",
+    "build:docs:prod": "node ../scripts/build-openapi.js prod https://api.aerotage.com",
+    "deploy:dev": "npm run build:docs:dev && STAGE=dev cdk deploy --all",
+    "deploy:staging": "npm run build:docs:dev && STAGE=staging cdk deploy --all",
+    "deploy:prod": "npm run build:docs:prod && STAGE=prod cdk deploy --all"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.0",
-    "@types/uuid": "^10.0.0",
-    "@types/node": "^20.0.0",
     "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^10.0.0",
     "aws-cdk": "^2.165.0",
     "esbuild": "^0.25.4",
     "jest": "^29.5.0",
@@ -31,18 +34,19 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.165.0",
-    "constructs": "^10.3.0",
-    "source-map-support": "^0.5.21",
+    "@aws-sdk/client-cognito-identity-provider": "^3.658.1",
     "@aws-sdk/client-dynamodb": "^3.658.1",
+    "@aws-sdk/client-ses": "^3.658.1",
     "@aws-sdk/lib-dynamodb": "^3.658.1",
     "@aws-sdk/util-dynamodb": "^3.658.1",
-    "@aws-sdk/client-ses": "^3.658.1",
-    "@aws-sdk/client-cognito-identity-provider": "^3.658.1",
+    "aws-cdk-lib": "^2.165.0",
     "bcryptjs": "^2.4.3",
-    "uuid": "^10.0.0",
+    "constructs": "^10.3.0",
+    "js-yaml": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
-    "jwks-rsa": "^3.1.0"
+    "jwks-rsa": "^3.1.0",
+    "source-map-support": "^0.5.21",
+    "uuid": "^10.0.0"
   },
   "keywords": [
     "aws",

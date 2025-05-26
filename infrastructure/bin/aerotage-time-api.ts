@@ -7,6 +7,7 @@ import { SesStack } from '../lib/ses-stack';
 import { ApiStack } from '../lib/api-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
+import { DocumentationStack } from '../lib/documentation-stack';
 
 const app = new cdk.App();
 
@@ -72,6 +73,14 @@ const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
 
 
 
+// Documentation Stack (S3 + CloudFront for Swagger UI)
+const documentationStack = new DocumentationStack(app, `AerotageDocumentation-${stage}`, {
+  stage,
+  apiGatewayUrl: apiStack.api.url,
+  env,
+  tags: commonTags,
+});
+
 // Monitoring Stack (CloudWatch)
 const monitoringStack = new MonitoringStack(app, `AerotageMonitoring-${stage}`, {
   stage,
@@ -88,6 +97,7 @@ apiStack.addDependency(cognitoStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(storageStack);
 apiStack.addDependency(sesStack);
+documentationStack.addDependency(apiStack);
 monitoringStack.addDependency(apiStack);
 monitoringStack.addDependency(databaseStack);
 monitoringStack.addDependency(cognitoStack); 

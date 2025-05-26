@@ -1,0 +1,1210 @@
+openapi: 3.0.3
+info:
+  title: Aerotage Time Reporting API
+  description: |
+    Comprehensive time tracking and project management API for Aerotage.
+    
+    ## Authentication
+    All endpoints (except public invitation endpoints) require JWT authentication via AWS Cognito.
+    Include the JWT token in the Authorization header: `Bearer {token}`
+    
+    ## Base URL
+    - Development: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+    - Production: `https://api.aerotage.com/`
+  version: 1.0.0
+  contact:
+    name: Aerotage Support
+    email: support@aerotage.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev
+    description: Development server
+  - url: https://api.aerotage.com
+    description: Production server
+
+security:
+  - CognitoAuth: []
+
+components:
+  securitySchemes:
+    CognitoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: AWS Cognito JWT token
+      
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique user identifier
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        status:
+          type: string
+          enum: [active, inactive, pending]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        jobTitle:
+          type: string
+        department:
+          type: string
+        hourlyRate:
+          type: number
+          format: float
+        timezone:
+          type: string
+        profilePicture:
+          type: string
+          format: uri
+        bio:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    UserPreferences:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark]
+        language:
+          type: string
+          default: en
+        dateFormat:
+          type: string
+          enum: [MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD]
+        timeFormat:
+          type: string
+          enum: [12h, 24h]
+        timezone:
+          type: string
+        notifications:
+          $ref: '#/components/schemas/NotificationSettings'
+        dashboard:
+          $ref: '#/components/schemas/DashboardSettings'
+          
+    NotificationSettings:
+      type: object
+      properties:
+        email:
+          type: boolean
+        desktop:
+          type: boolean
+        mobile:
+          type: boolean
+        weeklyReports:
+          type: boolean
+        projectUpdates:
+          type: boolean
+        teamMessages:
+          type: boolean
+          
+    DashboardSettings:
+      type: object
+      properties:
+        defaultView:
+          type: string
+          enum: [dashboard, timesheet, projects]
+        showWeekends:
+          type: boolean
+        autoStartTimer:
+          type: boolean
+        reminderInterval:
+          type: integer
+          description: Reminder interval in minutes
+          
+    SecuritySettings:
+      type: object
+      properties:
+        twoFactorEnabled:
+          type: boolean
+        sessionTimeout:
+          type: integer
+          description: Session timeout in minutes
+        allowMultipleSessions:
+          type: boolean
+        passwordChangeRequired:
+          type: boolean
+        passwordLastChanged:
+          type: string
+          format: date-time
+        passwordExpiresAt:
+          type: string
+          format: date-time
+        securitySettings:
+          type: object
+          properties:
+            requirePasswordChangeEvery:
+              type: integer
+              description: Days between required password changes
+            maxFailedLoginAttempts:
+              type: integer
+            accountLockoutDuration:
+              type: integer
+              description: Account lockout duration in minutes
+              
+    UserSession:
+      type: object
+      properties:
+        id:
+          type: string
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+        loginTime:
+          type: string
+          format: date-time
+        lastActivity:
+          type: string
+          format: date-time
+        isCurrent:
+          type: boolean
+        location:
+          type: object
+          properties:
+            city:
+              type: string
+            country:
+              type: string
+              
+    UserInvitation:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        status:
+          type: string
+          enum: [pending, accepted, expired, cancelled]
+        invitationToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        invitedBy:
+          type: string
+          format: email
+        teamId:
+          type: string
+        department:
+          type: string
+        jobTitle:
+          type: string
+        hourlyRate:
+          type: number
+          format: float
+          
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        managerId:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    TeamMember:
+      type: object
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [manager, member]
+        joinedAt:
+          type: string
+          format: date-time
+          
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        clientId:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, on_hold, cancelled]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        budget:
+          type: number
+          format: float
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    Client:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        address:
+          type: string
+        contactPerson:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    TimeEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        projectId:
+          type: string
+        description:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+          description: Duration in minutes
+        status:
+          type: string
+          enum: [draft, submitted, approved, rejected]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        projectId:
+          type: string
+        invoiceNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        amount:
+          type: number
+          format: float
+        dueDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+paths:
+  # User Management
+  /users:
+    get:
+      tags:
+        - User Management
+      summary: List all users
+      description: Retrieve a list of all users (admin/manager only)
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+    post:
+      tags:
+        - User Management
+      summary: Create new user
+      description: Create a new user account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - name
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, manager, employee]
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    get:
+      tags:
+        - User Management
+      summary: Get user by ID
+      description: Retrieve user information by ID
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+    put:
+      tags:
+        - User Management
+      summary: Update user
+      description: Update user information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, manager, employee]
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+                    
+    delete:
+      tags:
+        - User Management
+      summary: Delete user
+      description: Delete user account (admin only)
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: User deleted successfully
+                        
+  # User Profile
+  /users/{id}/profile:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    get:
+      tags:
+        - User Profile
+      summary: Get user profile
+      description: Retrieve detailed user profile information
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+                    
+    put:
+      tags:
+        - User Profile
+      summary: Update user profile
+      description: Update user profile information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                jobTitle:
+                  type: string
+                department:
+                  type: string
+                hourlyRate:
+                  type: number
+                  format: float
+                timezone:
+                  type: string
+                bio:
+                  type: string
+                skills:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+                    
+  # User Preferences
+  /users/{id}/preferences:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    get:
+      tags:
+        - User Preferences
+      summary: Get user preferences
+      description: Retrieve user preferences and settings
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserPreferences'
+                    
+    put:
+      tags:
+        - User Preferences
+      summary: Update user preferences
+      description: Update user preferences and settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferences'
+      responses:
+        '200':
+          description: Preferences updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserPreferences'
+                    
+  # Security & Authentication
+  /users/{id}/password:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    put:
+      tags:
+        - Security
+      summary: Change password
+      description: Change user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: Must contain uppercase, lowercase, number, and special character
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Password updated successfully
+                        
+  /users/{id}/security-settings:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    get:
+      tags:
+        - Security
+      summary: Get security settings
+      description: Retrieve user security settings
+      responses:
+        '200':
+          description: Security settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/SecuritySettings'
+                    
+    put:
+      tags:
+        - Security
+      summary: Update security settings
+      description: Update user security settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionTimeout:
+                  type: integer
+                allowMultipleSessions:
+                  type: boolean
+                requirePasswordChangeEvery:
+                  type: integer
+      responses:
+        '200':
+          description: Security settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/SecuritySettings'
+                    
+  # Session Management
+  /users/{id}/sessions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+        
+    get:
+      tags:
+        - Session Management
+      summary: List user sessions
+      description: Retrieve list of active user sessions
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserSession'
+                      
+    post:
+      tags:
+        - Session Management
+      summary: Create session
+      description: Create a new user session record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userAgent
+                - loginTime
+              properties:
+                userAgent:
+                  type: string
+                loginTime:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserSession'
+                    
+  /users/{id}/sessions/{sessionId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: User ID
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Session ID
+        
+    delete:
+      tags:
+        - Session Management
+      summary: Terminate session
+      description: Terminate a specific user session
+      responses:
+        '200':
+          description: Session terminated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Session terminated successfully
+                        
+  # User Invitations
+  /user-invitations:
+    get:
+      tags:
+        - User Invitations
+      summary: List invitations
+      description: List user invitations with optional filtering
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, expired, cancelled]
+          description: Filter by invitation status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Number of results to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        '200':
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserInvitation'
+                      
+    post:
+      tags:
+        - User Invitations
+      summary: Create invitation
+      description: Create a new user invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [admin, manager, employee]
+                teamId:
+                  type: string
+                department:
+                  type: string
+                jobTitle:
+                  type: string
+                hourlyRate:
+                  type: number
+                  format: float
+                permissions:
+                  type: object
+                  properties:
+                    features:
+                      type: array
+                      items:
+                        type: string
+                    projects:
+                      type: array
+                      items:
+                        type: string
+                personalMessage:
+                  type: string
+      responses:
+        '201':
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserInvitation'
+                    
+  /user-invitations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Invitation ID
+        
+    delete:
+      tags:
+        - User Invitations
+      summary: Cancel invitation
+      description: Cancel a pending invitation
+      responses:
+        '200':
+          description: Invitation cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Invitation cancelled successfully
+                        
+  /user-invitations/{id}/resend:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Invitation ID
+        
+    post:
+      tags:
+        - User Invitations
+      summary: Resend invitation
+      description: Resend an invitation email
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                extendExpiration:
+                  type: boolean
+                  default: true
+                personalMessage:
+                  type: string
+      responses:
+        '200':
+          description: Invitation resent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserInvitation'
+                    
+  /user-invitations/validate/{token}:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Invitation token
+        
+    get:
+      tags:
+        - User Invitations
+      summary: Validate invitation token
+      description: Validate an invitation token (public endpoint)
+      security: []
+      responses:
+        '200':
+          description: Token validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      invitation:
+                        $ref: '#/components/schemas/UserInvitation'
+                        
+  /user-invitations/accept:
+    post:
+      tags:
+        - User Invitations
+      summary: Accept invitation
+      description: Accept an invitation and create user account (public endpoint)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - userData
+              properties:
+                token:
+                  type: string
+                userData:
+                  type: object
+                  required:
+                    - name
+                    - password
+                  properties:
+                    name:
+                      type: string
+                    password:
+                      type: string
+                      minLength: 8
+                    preferences:
+                      $ref: '#/components/schemas/UserPreferences'
+      responses:
+        '201':
+          description: Invitation accepted and user created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+                      message:
+                        type: string
+                        example: Account created successfully
+
+tags:
+  - name: User Management
+    description: User account management operations
+  - name: User Profile
+    description: User profile information management
+  - name: User Preferences
+    description: User preferences and settings
+  - name: Security
+    description: Security and authentication operations
+  - name: Session Management
+    description: User session management
+  - name: User Invitations
+    description: User invitation system
+  - name: Team Management
+    description: Team and member management
+  - name: Project Management
+    description: Project lifecycle management
+  - name: Client Management
+    description: Client information management
+  - name: Time Tracking
+    description: Time entry and tracking operations
+  - name: Reporting
+    description: Reports and analytics
+  - name: Invoice Management
+    description: Invoice generation and management 

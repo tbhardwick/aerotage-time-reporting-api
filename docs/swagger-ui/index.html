@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aerotage Time Reporting API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5.10.3/favicon-32x32.png" sizes="32x32" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5.10.3/favicon-16x16.png" sizes="16x16" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+
+    body {
+      margin:0;
+      background: #fafafa;
+    }
+
+    .swagger-ui .topbar {
+      background-color: #1f2937;
+      border-bottom: 1px solid #374151;
+    }
+
+    .swagger-ui .topbar .download-url-wrapper {
+      display: none;
+    }
+
+    .swagger-ui .info {
+      margin: 50px 0;
+    }
+
+    .swagger-ui .info .title {
+      color: #1f2937;
+      font-size: 36px;
+    }
+
+    .swagger-ui .scheme-container {
+      background: #fff;
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.1);
+      border-radius: 4px;
+      padding: 30px;
+      margin: 30px 0;
+    }
+
+    .custom-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 0;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .custom-header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      font-weight: 300;
+    }
+
+    .custom-header p {
+      margin: 10px 0 0 0;
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+
+    .api-info {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+      padding: 30px;
+    }
+
+    .api-info h2 {
+      color: #1f2937;
+      margin-top: 0;
+    }
+
+    .api-info .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-top: 20px;
+    }
+
+    .info-card {
+      background: #f8fafc;
+      padding: 20px;
+      border-radius: 6px;
+      border-left: 4px solid #667eea;
+    }
+
+    .info-card h3 {
+      margin: 0 0 10px 0;
+      color: #374151;
+    }
+
+    .info-card p {
+      margin: 0;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    .auth-info {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+
+    .auth-info strong {
+      color: #92400e;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="custom-header">
+    <h1>Aerotage Time Reporting API</h1>
+    <p>Comprehensive time tracking and project management API documentation</p>
+  </div>
+
+  <div class="api-info">
+    <h2>API Information</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <h3>🚀 Base URL</h3>
+        <p><strong>Development:</strong><br>
+        <code>https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/</code></p>
+        <p><strong>Production:</strong><br>
+        <code>https://api.aerotage.com/</code></p>
+      </div>
+      
+      <div class="info-card">
+        <h3>🔐 Authentication</h3>
+        <p>All endpoints require JWT authentication via AWS Cognito.</p>
+        <p><strong>Header:</strong> <code>Authorization: Bearer {token}</code></p>
+      </div>
+      
+      <div class="info-card">
+        <h3>📋 Content Type</h3>
+        <p>All requests and responses use JSON format.</p>
+        <p><strong>Header:</strong> <code>Content-Type: application/json</code></p>
+      </div>
+      
+      <div class="info-card">
+        <h3>📊 Current Status</h3>
+        <p><strong>Version:</strong> 1.0.0</p>
+        <p><strong>Environment:</strong> <span id="current-env">Development</span></p>
+        <p><strong>Endpoints:</strong> 30+ Live</p>
+      </div>
+    </div>
+
+    <div class="auth-info">
+      <strong>🔑 Authentication Note:</strong> To test the API endpoints, you'll need a valid JWT token from AWS Cognito. 
+      Contact your system administrator for access credentials or use the frontend application to obtain a token.
+    </div>
+  </div>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-bundle.js" charset="UTF-8"> </script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-standalone-preset.js" charset="UTF-8"> </script>
+  <script>
+    window.onload = function() {
+      // Determine the current environment based on URL
+      const currentHost = window.location.hostname;
+      const envElement = document.getElementById('current-env');
+      
+      if (currentHost.includes('cloudfront') || currentHost.includes('amazonaws')) {
+        envElement.textContent = currentHost.includes('prod') ? 'Production' : 'Development';
+      }
+
+      // Build a system
+      const ui = SwaggerUIBundle({
+        url: './openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        docExpansion: "list",
+        filter: true,
+        showExtensions: true,
+        showCommonExtensions: true,
+        tryItOutEnabled: true,
+        requestInterceptor: function(request) {
+          // Add any custom headers or modifications here
+          console.log('API Request:', request);
+          return request;
+        },
+        responseInterceptor: function(response) {
+          // Handle responses here
+          console.log('API Response:', response);
+          return response;
+        },
+        onComplete: function() {
+          console.log('Swagger UI loaded successfully');
+        },
+        onFailure: function(error) {
+          console.error('Failed to load Swagger UI:', error);
+        }
+      });
+
+      // Custom styling and behavior
+      setTimeout(function() {
+        // Hide the Swagger UI topbar logo and make it cleaner
+        const topbar = document.querySelector('.swagger-ui .topbar');
+        if (topbar) {
+          topbar.style.display = 'none';
+        }
+
+        // Add custom styling to the info section
+        const infoSection = document.querySelector('.swagger-ui .info');
+        if (infoSection) {
+          infoSection.style.display = 'none'; // Hide default info since we have custom header
+        }
+      }, 1000);
+    };
+  </script>
+</body>
+</html> 
