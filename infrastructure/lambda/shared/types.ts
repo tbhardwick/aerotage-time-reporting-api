@@ -4,7 +4,6 @@ export interface UserInvitation {
   email: string;
   invitedBy: string;
   role: 'admin' | 'manager' | 'employee';
-  teamId?: string;
   department?: string;
   jobTitle?: string;
   hourlyRate?: number;
@@ -30,7 +29,6 @@ export interface UserInvitation {
 export interface CreateInvitationRequest {
   email: string;
   role: 'admin' | 'manager' | 'employee';
-  teamId?: string;
   department?: string;
   jobTitle?: string;
   hourlyRate?: number;
@@ -59,7 +57,6 @@ export interface InvitationValidation {
     id: string;
     email: string;
     role: 'admin' | 'manager' | 'employee';
-    teamId?: string;
     department?: string;
     jobTitle?: string;
     hourlyRate?: number;
@@ -100,7 +97,6 @@ export interface User {
   email: string;
   name: string;
   role: string;
-  teamId?: string;
   department?: string;
   jobTitle?: string;
   hourlyRate?: number;
@@ -185,7 +181,6 @@ export interface UserInvitationDynamoItem {
   email: string;
   invitedBy: string;
   role: string;
-  teamId?: string;
   department?: string;
   jobTitle?: string;
   hourlyRate?: number;
@@ -225,7 +220,6 @@ export interface UserProfile {
   startDate: string; // ISO date
   lastLogin?: string; // ISO datetime
   isActive: boolean;
-  teamId?: string;
   createdAt: string; // ISO datetime
   updatedAt: string; // ISO datetime
 }

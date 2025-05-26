@@ -20,7 +20,6 @@ export interface CreateInvitationData {
   email: string;
   invitedBy: string;
   role: 'admin' | 'manager' | 'employee';
-  teamId?: string;
   department?: string;
   jobTitle?: string;
   hourlyRate?: number;
@@ -56,7 +55,7 @@ export class InvitationRepository {
       email: data.email.toLowerCase(),
       invitedBy: data.invitedBy,
       role: data.role,
-      teamId: data.teamId,
+
       department: data.department,
       jobTitle: data.jobTitle,
       hourlyRate: data.hourlyRate,
@@ -79,7 +78,7 @@ export class InvitationRepository {
       email: invitation.email,
       invitedBy: invitation.invitedBy,
       role: invitation.role,
-      teamId: invitation.teamId,
+
       department: invitation.department,
       jobTitle: invitation.jobTitle,
       hourlyRate: invitation.hourlyRate,
@@ -356,7 +355,7 @@ export class InvitationRepository {
       email: item.email,
       invitedBy: item.invitedBy,
       role: item.role as 'admin' | 'manager' | 'employee',
-      teamId: item.teamId,
+
       department: item.department,
       jobTitle: item.jobTitle,
       hourlyRate: item.hourlyRate,

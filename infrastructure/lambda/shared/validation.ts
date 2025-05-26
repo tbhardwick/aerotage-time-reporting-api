@@ -139,10 +139,6 @@ export class ValidationService {
     }
 
     // Optional fields validation
-    if (request.teamId && typeof request.teamId !== 'string') {
-      errors.push('Team ID must be a string');
-    }
-
     if (request.department && typeof request.department !== 'string') {
       errors.push('Department must be a string');
     }

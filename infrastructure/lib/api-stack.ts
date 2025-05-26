@@ -115,7 +115,6 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [
                 tables.usersTable.tableArn,
-                tables.teamsTable.tableArn,
                 tables.projectsTable.tableArn,
                 tables.clientsTable.tableArn,
                 tables.timeEntriesTable.tableArn,
@@ -128,7 +127,6 @@ export class ApiStack extends cdk.Stack {
                 tables.userNotificationSettingsTable.tableArn,
                 tables.passwordHistoryTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
-                `${tables.teamsTable.tableArn}/index/*`,
                 `${tables.projectsTable.tableArn}/index/*`,
                 `${tables.clientsTable.tableArn}/index/*`,
                 `${tables.timeEntriesTable.tableArn}/index/*`,
@@ -185,7 +183,6 @@ export class ApiStack extends cdk.Stack {
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       USERS_TABLE: tables.usersTable.tableName,
-      TEAMS_TABLE: tables.teamsTable.tableName,
       PROJECTS_TABLE: tables.projectsTable.tableName,
       CLIENTS_TABLE: tables.clientsTable.tableName,
       TIME_ENTRIES_TABLE: tables.timeEntriesTable.tableName,
@@ -309,27 +306,7 @@ export class ApiStack extends cdk.Stack {
     const acceptInvitationPageResource = this.api.root.addResource('accept-invitation');
     acceptInvitationPageResource.addMethod('GET', new apigateway.LambdaIntegration(acceptInvitationPageFunction));
 
-    // Team Management APIs
-    const teamsResource = this.api.root.addResource('teams');
-    const getTeamsFunction = createLambdaFunction('GetTeams', 'teams/list', 'List all teams');
-    const createTeamFunction = createLambdaFunction('CreateTeam', 'teams/create', 'Create new team');
-    const updateTeamFunction = createLambdaFunction('UpdateTeam', 'teams/update', 'Update team');
-    const deleteTeamFunction = createLambdaFunction('DeleteTeam', 'teams/delete', 'Delete team');
 
-    teamsResource.addMethod('GET', new apigateway.LambdaIntegration(getTeamsFunction), {
-      authorizer: customAuthorizer,
-    });
-    teamsResource.addMethod('POST', new apigateway.LambdaIntegration(createTeamFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const teamResource = teamsResource.addResource('{id}');
-    teamResource.addMethod('PUT', new apigateway.LambdaIntegration(updateTeamFunction), {
-      authorizer: customAuthorizer,
-    });
-    teamResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteTeamFunction), {
-      authorizer: customAuthorizer,
-    });
 
     // Project APIs
     const projectsResource = this.api.root.addResource('projects');

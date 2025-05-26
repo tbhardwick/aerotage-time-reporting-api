@@ -2146,8 +2146,7 @@ tags:
     description: User session management
   - name: User Invitations
     description: User invitation system
-  - name: Team Management
-    description: Team and member management
+
   - name: Project Management
     description: Project lifecycle management
   - name: Client Management
