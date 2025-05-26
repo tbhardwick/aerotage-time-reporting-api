@@ -115,6 +115,7 @@ export class ApiStack extends cdk.Stack {
               ],
               resources: [
                 tables.usersTable.tableArn,
+                tables.teamsTable.tableArn, // DEPRECATED - kept for backward compatibility
                 tables.projectsTable.tableArn,
                 tables.clientsTable.tableArn,
                 tables.timeEntriesTable.tableArn,
@@ -127,6 +128,7 @@ export class ApiStack extends cdk.Stack {
                 tables.userNotificationSettingsTable.tableArn,
                 tables.passwordHistoryTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
+                `${tables.teamsTable.tableArn}/index/*`, // DEPRECATED - kept for backward compatibility
                 `${tables.projectsTable.tableArn}/index/*`,
                 `${tables.clientsTable.tableArn}/index/*`,
                 `${tables.timeEntriesTable.tableArn}/index/*`,
@@ -183,6 +185,7 @@ export class ApiStack extends cdk.Stack {
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       USERS_TABLE: tables.usersTable.tableName,
+      TEAMS_TABLE: tables.teamsTable.tableName, // DEPRECATED - kept for backward compatibility
       PROJECTS_TABLE: tables.projectsTable.tableName,
       CLIENTS_TABLE: tables.clientsTable.tableName,
       TIME_ENTRIES_TABLE: tables.timeEntriesTable.tableName,
