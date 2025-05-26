@@ -109,7 +109,8 @@ export class DatabaseStack extends cdk.Stack {
     // Time Entries Table
     const timeEntriesTable = new dynamodb.Table(this, 'TimeEntriesTable', {
       tableName: `aerotage-time-entries-${stage}`,
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       pointInTimeRecovery: stage === 'prod',
@@ -119,29 +120,29 @@ export class DatabaseStack extends cdk.Stack {
     // Add GSI for user lookup
     timeEntriesTable.addGlobalSecondaryIndex({
       indexName: 'UserIndex',
-      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'date', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
     });
 
     // Add GSI for project lookup
     timeEntriesTable.addGlobalSecondaryIndex({
       indexName: 'ProjectIndex',
-      partitionKey: { name: 'projectId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'date', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
     });
 
     // Add GSI for status lookup
     timeEntriesTable.addGlobalSecondaryIndex({
       indexName: 'StatusIndex',
-      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'date', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'GSI3PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI3SK', type: dynamodb.AttributeType.STRING },
     });
 
     // Add GSI for approval workflow
     timeEntriesTable.addGlobalSecondaryIndex({
       indexName: 'ApprovalIndex',
-      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'submittedAt', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'GSI4PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI4SK', type: dynamodb.AttributeType.STRING },
     });
 
     // Invoices Table

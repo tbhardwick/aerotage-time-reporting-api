@@ -141,7 +141,7 @@ export class TimeEntryRepository {
 
     // Build update expression dynamically
     Object.entries(updates).forEach(([key, value]) => {
-      if (value !== undefined) {
+      if (value !== undefined && key !== 'duration') { // Skip duration as we handle it separately
         const attrName = `#${key}`;
         const attrValue = `:${key}`;
         
@@ -149,7 +149,7 @@ export class TimeEntryRepository {
         expressionAttributeNames[attrName] = key;
         
         if (key === 'tags' || key === 'attachments') {
-          expressionAttributeValues[attrValue] = JSON.stringify(value);
+          expressionAttributeValues[attrValue] = JSON.stringify(value || []);
         } else {
           expressionAttributeValues[attrValue] = value;
         }
