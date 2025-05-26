@@ -4,7 +4,7 @@
 
 **Last Updated**: December 19, 2024  
 **Environment**: Development  
-**API Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`  
+**API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`  
 **Project Phase**: Backend Infrastructure Complete ✅
 
 ---
@@ -170,7 +170,7 @@
 
 ### **✅ Development Environment**
 - **Status**: Fully operational
-- **API URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **API URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
 - **Database**: All tables created and indexed
 - **Monitoring**: Active CloudWatch logging
 - **Email**: SES configured and tested

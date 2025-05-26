@@ -98,7 +98,7 @@ The Aerotage Time Reporting API is a production-ready serverless backend that pr
 
 ### API Base URL
 ```
-Development: https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/
+Development: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
 ```
 
 ## 📚 Documentation

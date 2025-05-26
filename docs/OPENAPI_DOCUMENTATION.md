@@ -14,7 +14,7 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 
 ### **Development Environment**
 - **Documentation URL**: https://d2xyhdliouir95.cloudfront.net
-- **API Base URL**: https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/
+- **API Base URL**: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
 
 ### **Production Environment** (When deployed)
 - **Documentation URL**: Will be provided after production deployment
@@ -77,7 +77,7 @@ vim docs/openapi.yaml
 #### **Build and Test Locally**
 ```bash
 # Convert YAML to JSON
-node scripts/build-openapi.js dev https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev
+node scripts/build-openapi.js dev https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
 
 # Serve locally for testing (optional)
 cd docs/swagger-ui

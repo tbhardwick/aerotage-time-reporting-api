@@ -12,7 +12,7 @@ alwaysApply: false
 ## 🔗 Current Integration Status
 
 ### ✅ **Backend Ready for Integration**
-- **API Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
 - **15+ Live Endpoints**: All user management and security features operational
 - **Authentication**: Cognito fully configured with JWT tokens
 - **CORS**: Enabled for frontend integration
@@ -109,7 +109,7 @@ headers: {
 ### **Base API Client Pattern**
 ```typescript
 class ApiClient {
-  private baseUrl = 'https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/';
+  private baseUrl = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//';
 
   private async request<T>(method: string, endpoint: string, options: {
     body?: any;
@@ -318,7 +318,7 @@ console.log('Response data:', data);
 - **Troubleshooting**: `/docs/TROUBLESHOOTING.md` - Common issues and solutions
 
 ### **Live Environment Details**
-- **API Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
 - **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
 - **App Client**: `148r35u6uultp1rmfdu22i8amb`
 - **Identity Pool**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
@@ -326,11 +326,11 @@ console.log('Response data:', data);
 ### **Testing Tools**
 ```bash
 # Test API endpoints with curl
-curl -X GET "https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/users" \
+curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//users" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
 # Test authentication
-curl -X POST "https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/users/USER_ID/sessions" \
+curl -X POST "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//users/USER_ID/sessions" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"userAgent": "Test Client", "loginTime": "2024-01-01T00:00:00Z"}'
@@ -348,7 +348,7 @@ curl -X POST "https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/users/U
 
 ### **Common Frontend Questions**
 - "How do I authenticate with the API?" → Use AWS Amplify with provided Cognito config
-- "What's the API base URL?" → `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- "What's the API base URL?" → `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
 - "How do I handle JWT tokens?" → Store in localStorage, include in Authorization header
 - "What's the response format?" → `{ success: boolean, data: any, error?: object }`
 - "How do I manage sessions?" → Create session on login, terminate on logout

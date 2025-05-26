@@ -2,7 +2,7 @@
 
 ## 🚀 **Aerotage Time Reporting API**
 
-**Base URL**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`  
+**Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`  
 **Authentication**: AWS Cognito JWT tokens  
 **Content-Type**: `application/json`
 
@@ -676,7 +676,7 @@ Content-Type: application/json
 ## 🔧 **Development Information**
 
 ### **Environment URLs**
-- **Development**: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+- **Development**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
 - **Staging**: `https://[staging-url]/staging/`
 - **Production**: `https://[production-url]/prod/`
 

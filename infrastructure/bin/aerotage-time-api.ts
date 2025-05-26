@@ -8,6 +8,8 @@ import { ApiStack } from '../lib/api-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
 import { DocumentationStack } from '../lib/documentation-stack';
+import { DomainStack } from '../lib/domain-stack';
+import { DomainStack } from '../lib/domain-stack';
 
 const app = new cdk.App();
 

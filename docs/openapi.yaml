@@ -9,7 +9,7 @@ info:
     Include the JWT token in the Authorization header: `Bearer {token}`
     
     ## Base URL
-    - Development: `https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/`
+    - Development: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
     - Production: `https://api.aerotage.com/`
   version: 1.0.0
   contact:
@@ -19,7 +19,7 @@ info:
     name: Proprietary
     
 servers:
-  - url: https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev
+  - url: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
     description: Development server
   - url: https://api.aerotage.com
     description: Production server

@@ -6,7 +6,7 @@ echo "Testing bootstrap endpoint..."
 echo "============================="
 
 curl -v -X POST \
-  "https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev/users/0408a498-40c1-7071-acc9-90665ef117c3/sessions" \
+  "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//users/0408a498-40c1-7071-acc9-90665ef117c3/sessions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"userAgent":"test-bootstrap","loginTime":"2025-05-25T19:50:00Z"}' 

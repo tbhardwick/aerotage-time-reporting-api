@@ -14,7 +14,7 @@
     "destroy": "cdk destroy",
     "bootstrap": "cdk bootstrap",
     "build:docs": "node ../scripts/build-openapi.js",
-    "build:docs:dev": "node ../scripts/build-openapi.js dev https://0z6kxagbh2.execute-api.us-east-1.amazonaws.com/dev",
+    "build:docs:dev": "node ../scripts/build-openapi.js dev https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/",
     "build:docs:prod": "node ../scripts/build-openapi.js prod https://api.aerotage.com",
     "deploy:dev": "npm run build:docs:dev && STAGE=dev cdk deploy --all",
     "deploy:staging": "npm run build:docs:dev && STAGE=staging cdk deploy --all",
