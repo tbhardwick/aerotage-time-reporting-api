@@ -13,8 +13,8 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 ## 📍 **Live Documentation URLs**
 
 ### **Development Environment**
-- **Documentation URL**: https://d1g30r0bcfgd1s.cloudfront.net
-- **API Base URL**: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
+- **Documentation URL**: https://djfreip4iwrq0.cloudfront.net
+- **API Base URL**: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
 
 ### **Production Environment** (When deployed)
 - **Documentation URL**: Will be provided after production deployment
@@ -24,7 +24,7 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 
 ### **Infrastructure Components**
 1. **S3 Bucket**: `aerotage-api-docs-dev` - Hosts static documentation files
-2. **CloudFront Distribution**: `E19YKBHW6A0RLE` - Global CDN for fast access
+2. **CloudFront Distribution**: `E2OTETJI5CMZ09` - Global CDN for fast access
 3. **Swagger UI**: Latest version (5.10.3) with custom styling
 4. **OpenAPI Specification**: YAML source converted to JSON for deployment
 
@@ -266,7 +266,7 @@ The documentation includes clear instructions for users on how to obtain and use
 #### **Documentation Not Updating**
 ```bash
 # Clear CloudFront cache
-aws cloudfront create-invalidation --distribution-id E19YKBHW6A0RLE --paths "/*"
+aws cloudfront create-invalidation --distribution-id E2OTETJI5CMZ09 --paths "/*"
 
 # Rebuild and redeploy
 npm run build:docs:dev

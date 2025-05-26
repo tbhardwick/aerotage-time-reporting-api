@@ -130,5 +130,10 @@
     "ExportsOutputRefGetAnalytics467F2385B75083B5": "aerotage-getanalytics-dev",
     "ExportsOutputRefValidateInvitation54F2C43C8E9F716E": "aerotage-validateinvitation-dev",
     "ExportsOutputRefUpdateUserPreferencesFE7841A051B2688B": "aerotage-updateuserpreferences-dev"
+  },
+  "AerotageDocumentation-dev": {
+    "DocumentationBucketName": "aerotage-api-docs-dev",
+    "CloudFrontDistributionId": "E2OTETJI5CMZ09",
+    "DocumentationUrl": "https://djfreip4iwrq0.cloudfront.net"
   }
 }
