@@ -8,6 +8,7 @@ export interface DatabaseStackProps extends cdk.StackProps {
 
 export interface DatabaseTables {
   usersTable: dynamodb.Table;
+  teamsTable: dynamodb.Table; // Keep for backward compatibility in dev
   projectsTable: dynamodb.Table;
   clientsTable: dynamodb.Table;
   timeEntriesTable: dynamodb.Table;
@@ -45,7 +46,21 @@ export class DatabaseStack extends cdk.Stack {
       partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
     });
 
+    // Teams Table (DEPRECATED - kept for backward compatibility in dev)
+    const teamsTable = new dynamodb.Table(this, 'TeamsTable', {
+      tableName: `aerotage-teams-${stage}`,
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
+    // Add GSI for manager lookup (DEPRECATED)
+    teamsTable.addGlobalSecondaryIndex({
+      indexName: 'ManagerIndex',
+      partitionKey: { name: 'managerId', type: dynamodb.AttributeType.STRING },
+    });
 
     // Projects Table
     const projectsTable = new dynamodb.Table(this, 'ProjectsTable', {
@@ -253,6 +268,7 @@ export class DatabaseStack extends cdk.Stack {
     // Store all tables for easy access
     this.tables = {
       usersTable,
+      teamsTable, // DEPRECATED - kept for backward compatibility
       projectsTable,
       clientsTable,
       timeEntriesTable,
@@ -273,7 +289,11 @@ export class DatabaseStack extends cdk.Stack {
       exportName: `UsersTableName-${stage}`,
     });
 
-
+    new cdk.CfnOutput(this, 'TeamsTableName', {
+      value: teamsTable.tableName,
+      description: 'Teams DynamoDB Table Name (DEPRECATED)',
+      exportName: `TeamsTableName-${stage}`,
+    });
 
     new cdk.CfnOutput(this, 'ProjectsTableName', {
       value: projectsTable.tableName,

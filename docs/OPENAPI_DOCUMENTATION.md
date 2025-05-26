@@ -59,7 +59,6 @@ scripts/
 - **Client Management** (4 endpoints) - ✅ **Phase 5 Complete**
 
 ### **📋 Planned Documentation** (Future phases)
-- **Team Management** (4 endpoints)
 - **Time Tracking** (7 endpoints)
 - **Reporting & Analytics** (5 endpoints)
 - **Invoice Management** (5 endpoints)
