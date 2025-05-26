@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
   SuccessResponse, 
@@ -98,6 +99,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const authHeader = event.headers.Authorization || event.headers.authorization;
     const sessionToken = authHeader?.replace('Bearer ', '') || '';
 
+    // Extract session identifier from JWT token for reliable session matching
+    let sessionIdentifier: string | null = null;
+    if (sessionToken) {
+      try {
+        // Decode JWT token without verification to extract claims
+        const decodedToken = jwt.decode(sessionToken) as any;
+        if (decodedToken) {
+          // Use jti (JWT ID) if available, otherwise use iat (issued at) + sub combination
+          sessionIdentifier = decodedToken.jti || 
+                             `${decodedToken.sub}_${decodedToken.iat}`;
+          console.log('Session identifier extracted from JWT:', sessionIdentifier);
+        }
+      } catch (error) {
+        console.error('Error decoding JWT token for session identifier:', error);
+      }
+    }
+
     // Check user security settings for multiple sessions
     const securitySettings = await getUserSecuritySettings(userId);
     
@@ -125,6 +143,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       sessionId,
       userId,
       sessionToken,
+      sessionIdentifier, // Store the session identifier for reliable matching
       ipAddress,
       userAgent,
       loginTime,
@@ -135,6 +154,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    console.log('Session data to be stored:', {
+      sessionId,
+      userId,
+      sessionIdentifier,
+      ipAddress,
+      userAgent,
+      loginTime,
+      expiresAt
+    });
 
     // Save session to DynamoDB
     const command = new PutCommand({

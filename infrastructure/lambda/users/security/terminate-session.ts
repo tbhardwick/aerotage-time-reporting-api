@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import jwt from 'jsonwebtoken';
 import { 
   SuccessResponse, 
   ErrorResponse, 
@@ -39,9 +40,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current session token from Authorization header
+    // Get current session identifier from JWT token
     const authHeader = event.headers.Authorization || event.headers.authorization;
     const currentToken = authHeader?.replace('Bearer ', '');
+    let currentSessionIdentifier: string | null = null;
+
+    if (currentToken) {
+      try {
+        // Decode JWT token without verification to extract claims
+        const decodedToken = jwt.decode(currentToken) as any;
+        if (decodedToken) {
+          // Use jti (JWT ID) if available, otherwise use iat (issued at) + sub combination
+          currentSessionIdentifier = decodedToken.jti || 
+                                   `${decodedToken.sub}_${decodedToken.iat}`;
+          console.log('Current session identifier:', currentSessionIdentifier);
+        }
+      } catch (error) {
+        console.error('Error decoding JWT token for session identification:', error);
+      }
+    }
 
     // Get the session to verify it exists and belongs to the user
     const getCommand = new GetCommand({
@@ -67,7 +84,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Prevent users from terminating their current session
-    if (session.sessionToken === currentToken) {
+    let isCurrentSession = false;
+    if (currentSessionIdentifier && session.sessionIdentifier) {
+      isCurrentSession = session.sessionIdentifier === currentSessionIdentifier;
+    } else if (currentToken && session.sessionToken) {
+      // Fallback: compare tokens (less reliable but maintains backward compatibility)
+      isCurrentSession = session.sessionToken === currentToken;
+    }
+
+    if (isCurrentSession) {
+      console.log('Preventing termination of current session:', {
+        sessionId,
+        currentSessionIdentifier,
+        sessionIdentifier: session.sessionIdentifier,
+        tokenMatch: session.sessionToken === currentToken
+      });
       return createErrorResponse(
         400, 
         ProfileSettingsErrorCodes.CANNOT_TERMINATE_CURRENT_SESSION, 
@@ -105,6 +136,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     await docClient.send(updateCommand);
+
+    console.log('Session terminated successfully:', {
+      sessionId,
+      userId,
+      terminatedBy: authenticatedUserId
+    });
 
     const response: SuccessResponse<{ message: string }> = {
       success: true,

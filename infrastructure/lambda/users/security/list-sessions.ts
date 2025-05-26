@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
   SuccessResponse, 
@@ -34,9 +35,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current session token from Authorization header
+    // Get current session identifier from JWT token
     const authHeader = event.headers.Authorization || event.headers.authorization;
     const currentToken = authHeader?.replace('Bearer ', '');
+    let currentSessionIdentifier: string | null = null;
+
+    if (currentToken) {
+      try {
+        // Decode JWT token without verification to extract claims
+        const decodedToken = jwt.decode(currentToken) as any;
+        if (decodedToken) {
+          // Use jti (JWT ID) if available, otherwise use iat (issued at) + sub combination
+          currentSessionIdentifier = decodedToken.jti || 
+                                   `${decodedToken.sub}_${decodedToken.iat}`;
+          console.log('Current session identifier:', currentSessionIdentifier);
+        }
+      } catch (error) {
+        console.error('Error decoding JWT token for session identification:', error);
+      }
+    }
 
     // Query active sessions for the user using GSI
     const command = new QueryCommand({
@@ -68,13 +85,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
       }
 
+      // Determine if this is the current session
+      let isCurrent = false;
+      if (currentSessionIdentifier && item.sessionIdentifier) {
+        isCurrent = item.sessionIdentifier === currentSessionIdentifier;
+      } else if (currentToken && item.sessionToken) {
+        // Fallback: compare tokens (less reliable but maintains backward compatibility)
+        isCurrent = item.sessionToken === currentToken;
+      }
+
       return {
         id: item.sessionId,
         ipAddress: item.ipAddress || 'Unknown',
         userAgent: item.userAgent || 'Unknown',
         loginTime: item.loginTime,
         lastActivity: item.lastActivity,
-        isCurrent: item.sessionToken === currentToken,
+        isCurrent,
         location,
       };
     });
@@ -85,6 +111,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       if (!a.isCurrent && b.isCurrent) return 1;
       return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
     });
+
+    console.log(`Found ${sessions.length} sessions, current session identified: ${sessions.some(s => s.isCurrent)}`);
 
     const response: SuccessResponse<UserSession[]> = {
       success: true,
