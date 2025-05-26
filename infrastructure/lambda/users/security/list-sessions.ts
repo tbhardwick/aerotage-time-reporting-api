@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
@@ -70,9 +70,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     const result = await docClient.send(command);
+    const rawSessions = result.Items || [];
+
+    console.log(`Found ${rawSessions.length} active sessions for user ${userId}`);
+
+    // Check if any sessions lack sessionIdentifier (legacy sessions)
+    const legacySessions = rawSessions.filter(session => !session.sessionIdentifier);
+    
+    if (legacySessions.length > 0) {
+      console.log(`Found ${legacySessions.length} legacy sessions without sessionIdentifier. Clearing all sessions to force re-login.`);
+      
+      // Invalidate all sessions for this user
+      await invalidateAllUserSessions(userId);
+      
+      // Return error to force re-login
+      return createErrorResponse(
+        401, 
+        ProfileSettingsErrorCodes.SESSION_MIGRATION_REQUIRED, 
+        'Your sessions have been updated for improved security. Please log in again.'
+      );
+    }
 
     // Transform DynamoDB items to UserSession format
-    const sessions: UserSession[] = (result.Items || []).map(item => {
+    const sessions: UserSession[] = rawSessions.map(item => {
       // Parse location data if it exists
       let location: { city: string; country: string } | undefined;
       if (item.locationData) {
@@ -85,14 +105,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         }
       }
 
-      // Determine if this is the current session
-      let isCurrent = false;
-      if (currentSessionIdentifier && item.sessionIdentifier) {
-        isCurrent = item.sessionIdentifier === currentSessionIdentifier;
-      } else if (currentToken && item.sessionToken) {
-        // Fallback: compare tokens (less reliable but maintains backward compatibility)
-        isCurrent = item.sessionToken === currentToken;
-      }
+      // Determine if this is the current session using sessionIdentifier
+      const isCurrent = currentSessionIdentifier && item.sessionIdentifier
+        ? item.sessionIdentifier === currentSessionIdentifier
+        : false; // Don't fall back to broken token comparison
 
       return {
         id: item.sessionId,
@@ -112,7 +128,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
     });
 
-    console.log(`Found ${sessions.length} sessions, current session identified: ${sessions.some(s => s.isCurrent)}`);
+    console.log(`Returning ${sessions.length} sessions, current session identified: ${sessions.some(s => s.isCurrent)}`);
 
     const response: SuccessResponse<UserSession[]> = {
       success: true,
@@ -133,6 +149,57 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
   }
 };
+
+/**
+ * Invalidate all active sessions for a user
+ */
+async function invalidateAllUserSessions(userId: string): Promise<void> {
+  try {
+    console.log(`Invalidating all sessions for user: ${userId}`);
+
+    // Query all active sessions for the user
+    const command = new QueryCommand({
+      TableName: process.env.USER_SESSIONS_TABLE!,
+      IndexName: 'UserIndex',
+      KeyConditionExpression: 'userId = :userId',
+      FilterExpression: 'isActive = :isActive',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':isActive': true,
+      },
+    });
+
+    const result = await docClient.send(command);
+    const sessions = result.Items || [];
+
+    if (sessions.length === 0) {
+      console.log('No active sessions found to invalidate');
+      return;
+    }
+
+    // Mark all sessions as inactive
+    const updatePromises = sessions.map(session => {
+      const updateCommand = new UpdateCommand({
+        TableName: process.env.USER_SESSIONS_TABLE!,
+        Key: { sessionId: session.sessionId },
+        UpdateExpression: 'SET isActive = :false, updatedAt = :now, invalidationReason = :reason',
+        ExpressionAttributeValues: {
+          ':false': false,
+          ':now': new Date().toISOString(),
+          ':reason': 'session_migration_security_update'
+        },
+      });
+      return docClient.send(updateCommand);
+    });
+
+    await Promise.all(updatePromises);
+    console.log(`Successfully invalidated ${sessions.length} sessions for user ${userId}`);
+
+  } catch (error) {
+    console.error(`Error invalidating sessions for user ${userId}:`, error);
+    throw error;
+  }
+}
 
 function createErrorResponse(
   statusCode: number,
