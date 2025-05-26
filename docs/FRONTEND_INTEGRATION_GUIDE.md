@@ -30,7 +30,7 @@ Update your frontend configuration with these current values:
 // src/config/aws-config.ts
 export const awsConfig = {
   // API Configuration
-  apiBaseUrl: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//',
+  apiBaseUrl: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/',
   
   // AWS Cognito Configuration
   Auth: {
@@ -58,7 +58,7 @@ export const awsConfig = {
 
 ```bash
 # .env.development
-REACT_APP_API_BASE_URL=https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
+REACT_APP_API_BASE_URL=https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
 REACT_APP_AWS_REGION=us-east-1
 REACT_APP_USER_POOL_ID=us-east-1_EsdlgX9Qg
 REACT_APP_USER_POOL_WEB_CLIENT_ID=148r35u6uultp1rmfdu22i8amb
@@ -701,6 +701,195 @@ class InvitationApi {
 }
 
 export const invitationApi = new InvitationApi();
+```
+
+### **6. Project Management API** ✅ **Phase 5 - NEW**
+
+```typescript
+// src/services/project-api.ts
+import { apiClient } from './api-client';
+
+export interface Project {
+  id: string;
+  name: string;
+  clientId: string;
+  clientName: string;
+  description?: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  defaultHourlyRate: number;
+  defaultBillable: boolean;
+  budget?: {
+    type: 'hours' | 'fixed';
+    value: number;
+    spent: number;
+  };
+  deadline?: string;
+  teamMembers: Array<{
+    userId: string;
+    name?: string;
+    role: string;
+  }>;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface CreateProjectRequest {
+  name: string;
+  clientId: string;
+  clientName: string;
+  description?: string;
+  status?: 'active' | 'paused' | 'completed' | 'cancelled';
+  defaultHourlyRate?: number;
+  defaultBillable?: boolean;
+  budget?: {
+    type: 'hours' | 'fixed';
+    value: number;
+    spent?: number;
+  };
+  deadline?: string;
+  teamMembers?: Array<{
+    userId: string;
+    role: string;
+  }>;
+  tags?: string[];
+}
+
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string;
+  status?: 'active' | 'paused' | 'completed' | 'cancelled';
+  defaultHourlyRate?: number;
+  defaultBillable?: boolean;
+  budget?: {
+    type: 'hours' | 'fixed';
+    value: number;
+    spent: number;
+  };
+  deadline?: string;
+  teamMembers?: Array<{
+    userId: string;
+    role: string;
+  }>;
+  tags?: string[];
+}
+
+export interface ProjectFilters {
+  clientId?: string;
+  status?: 'active' | 'paused' | 'completed' | 'cancelled';
+  limit?: number;
+  offset?: number;
+}
+
+class ProjectApi {
+  // List projects
+  async listProjects(filters?: ProjectFilters): Promise<{ projects: Project[]; pagination: any }> {
+    const params = new URLSearchParams();
+    if (filters?.clientId) params.append('clientId', filters.clientId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiClient.get<{ projects: Project[]; pagination: any }>(`projects${query}`);
+  }
+
+  // Create project
+  async createProject(request: CreateProjectRequest): Promise<Project> {
+    return apiClient.post<Project>('projects', request);
+  }
+
+  // Update project
+  async updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
+    return apiClient.put<Project>(`projects/${id}`, updates);
+  }
+
+  // Delete project
+  async deleteProject(id: string): Promise<void> {
+    return apiClient.delete(`projects/${id}`);
+  }
+}
+
+export const projectApi = new ProjectApi();
+```
+
+### **7. Client Management API** ✅ **Phase 5 - NEW**
+
+```typescript
+// src/services/client-api.ts
+import { apiClient } from './api-client';
+
+export interface Client {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface CreateClientRequest {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  notes?: string;
+}
+
+export interface UpdateClientRequest {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  notes?: string;
+}
+
+export interface ClientFilters {
+  isActive?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+class ClientApi {
+  // List clients
+  async listClients(filters?: ClientFilters): Promise<{ clients: Client[]; pagination: any }> {
+    const params = new URLSearchParams();
+    if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+    
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiClient.get<{ clients: Client[]; pagination: any }>(`clients${query}`);
+  }
+
+  // Create client
+  async createClient(request: CreateClientRequest): Promise<Client> {
+    return apiClient.post<Client>('clients', request);
+  }
+
+  // Update client
+  async updateClient(id: string, updates: UpdateClientRequest): Promise<Client> {
+    return apiClient.put<Client>(`clients/${id}`, updates);
+  }
+
+  // Delete client (soft delete)
+  async deleteClient(id: string): Promise<void> {
+    return apiClient.delete(`clients/${id}`);
+  }
+}
+
+export const clientApi = new ClientApi();
 ```
 
 ---
