@@ -230,7 +230,7 @@ export class ValidationService {
     try {
       Intl.DateTimeFormat(undefined, { timeZone: timezone });
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -735,7 +735,7 @@ export class ValidationService {
   /**
    * Validates invoice filters for listing
    */
-  static validateInvoiceFilters(filters: any): ValidationResult {
+  static validateInvoiceFilters(filters: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     if (filters.clientId && typeof filters.clientId !== 'string') {
