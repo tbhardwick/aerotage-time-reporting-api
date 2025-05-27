@@ -1015,15 +1015,85 @@ Authorization: Bearer {token}
 
 ---
 
-## 🧾 **Invoicing**
+## 🧾 **Invoice Management** ✅ **Phase 7 - COMPLETE**
 
 ### **List Invoices**
 ```http
-GET /invoices
+GET /invoices?status=draft&clientId=client-123&limit=50&offset=0
 Authorization: Bearer {token}
 ```
 
-### **Create Invoice**
+**Query Parameters:**
+- `status`: Filter by status (`draft`, `sent`, `viewed`, `paid`, `overdue`, `cancelled`, `refunded`)
+- `clientId`: Filter by client ID
+- `projectId`: Filter by project ID
+- `dateFrom`: Filter invoices from date (YYYY-MM-DD)
+- `dateTo`: Filter invoices to date (YYYY-MM-DD)
+- `amountMin`: Minimum invoice amount
+- `amountMax`: Maximum invoice amount
+- `isRecurring`: Filter by recurring status (`true`, `false`)
+- `sortBy`: Sort field (`invoiceNumber`, `issueDate`, `dueDate`, `totalAmount`, `status`, `clientName`)
+- `sortOrder`: Sort order (`asc`, `desc`)
+- `limit`: Number of results (default: 10, max: 100)
+- `offset`: Pagination offset (default: 0)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "invoice_1748304106141_3p09dziuq",
+        "invoiceNumber": "INV-2025-05-006",
+        "clientId": "test-client-123",
+        "clientName": "Acme Corporation",
+        "projectIds": ["project-456"],
+        "timeEntryIds": ["te_123", "te_124"],
+        "status": "sent",
+        "issueDate": "2025-01-15",
+        "dueDate": "2025-02-14",
+        "subtotal": 2500.00,
+        "taxRate": 0.08,
+        "taxAmount": 200.00,
+        "discountRate": 0.05,
+        "discountAmount": 125.00,
+        "totalAmount": 2575.00,
+        "currency": "USD",
+        "lineItems": [
+          {
+            "id": "line_123",
+            "type": "time",
+            "description": "Frontend Development",
+            "quantity": 20,
+            "rate": 125.00,
+            "amount": 2500.00,
+            "taxable": true,
+            "timeEntryId": "te_123",
+            "projectId": "project-456"
+          }
+        ],
+        "paymentTerms": "Net 30",
+        "isRecurring": false,
+        "remindersSent": 1,
+        "notes": "Monthly development work",
+        "clientNotes": "Thank you for your business!",
+        "createdAt": "2025-01-15T10:30:00Z",
+        "updatedAt": "2025-01-15T14:45:00Z",
+        "createdBy": "user-id-123"
+      }
+    ],
+    "pagination": {
+      "total": 25,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
+```
+
+### **Generate Invoice**
 ```http
 POST /invoices
 Authorization: Bearer {token}
@@ -1031,12 +1101,162 @@ Content-Type: application/json
 
 {
   "clientId": "client-123",
-  "projectId": "project-123",
-  "startDate": "2024-01-01",
-  "endDate": "2024-01-31",
-  "description": "Monthly development work"
+  "projectIds": ["project-456"],
+  "timeEntryIds": ["te_123", "te_124"],
+  "issueDate": "2025-01-15",
+  "paymentTerms": "Net 30",
+  "currency": "USD",
+  "taxRate": 0.08,
+  "discountRate": 0.05,
+  "additionalLineItems": [
+    {
+      "type": "fixed",
+      "description": "Setup Fee",
+      "quantity": 1,
+      "rate": 500.00,
+      "amount": 500.00,
+      "taxable": true
+    }
+  ],
+  "notes": "Monthly development invoice",
+  "clientNotes": "Thank you for your business!",
+  "isRecurring": false,
+  "templateId": "template-123"
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "invoice_1748304106141_3p09dziuq",
+    "invoiceNumber": "INV-2025-05-006",
+    "clientId": "client-123",
+    "clientName": "Acme Corporation",
+    "projectIds": ["project-456"],
+    "timeEntryIds": ["te_123", "te_124"],
+    "status": "draft",
+    "issueDate": "2025-01-15",
+    "dueDate": "2025-02-14",
+    "subtotal": 3000.00,
+    "taxRate": 0.08,
+    "taxAmount": 240.00,
+    "discountRate": 0.05,
+    "discountAmount": 150.00,
+    "totalAmount": 3090.00,
+    "currency": "USD",
+    "lineItems": [
+      {
+        "id": "line_123",
+        "type": "time",
+        "description": "Frontend Development",
+        "quantity": 20,
+        "rate": 125.00,
+        "amount": 2500.00,
+        "taxable": true,
+        "timeEntryId": "te_123",
+        "projectId": "project-456"
+      },
+      {
+        "id": "line_124",
+        "type": "fixed",
+        "description": "Setup Fee",
+        "quantity": 1,
+        "rate": 500.00,
+        "amount": 500.00,
+        "taxable": true
+      }
+    ],
+    "paymentTerms": "Net 30",
+    "isRecurring": false,
+    "remindersSent": 0,
+    "notes": "Monthly development invoice",
+    "clientNotes": "Thank you for your business!",
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-01-15T10:30:00Z",
+    "createdBy": "user-id-123"
+  },
+  "message": "Invoice generated successfully"
+}
+```
+
+### **Generate Recurring Invoice**
+```http
+POST /invoices
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "clientId": "client-123",
+  "projectIds": ["project-456"],
+  "issueDate": "2025-01-15",
+  "paymentTerms": "Net 15",
+  "currency": "USD",
+  "taxRate": 0.08,
+  "additionalLineItems": [
+    {
+      "type": "fixed",
+      "description": "Monthly Retainer",
+      "quantity": 1,
+      "rate": 5000.00,
+      "amount": 5000.00,
+      "taxable": true
+    }
+  ],
+  "isRecurring": true,
+  "recurringConfig": {
+    "frequency": "monthly",
+    "interval": 1,
+    "startDate": "2025-01-15",
+    "isActive": true,
+    "autoSend": false,
+    "generateDaysBefore": 3
+  },
+  "notes": "Monthly retainer invoice",
+  "clientNotes": "Monthly retainer for ongoing services"
+}
+```
+
+### **Update Invoice**
+```http
+PUT /invoices/{invoiceId}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "dueDate": "2025-03-15",
+  "paymentTerms": "Net 45",
+  "taxRate": 0.10,
+  "discountRate": 0.10,
+  "notes": "Updated payment terms",
+  "clientNotes": "Extended payment terms as requested"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "invoice_1748304106141_3p09dziuq",
+    "invoiceNumber": "INV-2025-05-006",
+    "dueDate": "2025-03-15",
+    "paymentTerms": "Net 45",
+    "taxRate": 0.10,
+    "taxAmount": 300.00,
+    "discountRate": 0.10,
+    "discountAmount": 300.00,
+    "totalAmount": 3000.00,
+    "notes": "Updated payment terms",
+    "clientNotes": "Extended payment terms as requested",
+    "updatedAt": "2025-01-16T09:15:00Z"
+  },
+  "message": "Invoice updated successfully"
+}
+```
+
+**Note**: Only draft invoices can be updated. Sent invoices require status changes or payment recording.
 
 ### **Send Invoice**
 ```http
@@ -1045,10 +1265,447 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "recipientEmail": "client@example.com",
-  "message": "Please find attached your invoice for January 2024."
+  "recipientEmails": ["client@acme.com", "accounting@acme.com"],
+  "subject": "Invoice INV-2025-05-006 from Aerotage",
+  "message": "Please find your invoice attached. Payment is due within 30 days.",
+  "attachPdf": true,
+  "sendCopy": false,
+  "scheduleDate": "2025-01-16T09:00:00Z"
 }
 ```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "invoice_1748304106141_3p09dziuq",
+    "status": "sent",
+    "updatedAt": "2025-01-16T09:00:00Z"
+  },
+  "message": "Invoice sent successfully"
+}
+```
+
+### **Update Invoice Status**
+```http
+PUT /invoices/{invoiceId}/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "status": "viewed"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "invoice": {
+      "id": "invoice_1748304106141_3p09dziuq",
+      "status": "viewed",
+      "updatedAt": "2025-01-16T10:30:00Z"
+    }
+  },
+  "message": "Invoice status updated successfully"
+}
+```
+
+### **Record Payment**
+```http
+PUT /invoices/{invoiceId}/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "operation": "recordPayment",
+  "amount": 1500.00,
+  "paymentDate": "2025-01-20",
+  "paymentMethod": "Bank Transfer",
+  "reference": "TXN-20250120-001",
+  "notes": "Partial payment received",
+  "externalPaymentId": "stripe_pi_1234567890",
+  "processorFee": 43.50
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "invoice": {
+      "id": "invoice_1748304106141_3p09dziuq",
+      "status": "viewed",
+      "totalAmount": 3000.00,
+      "updatedAt": "2025-01-20T14:30:00Z"
+    },
+    "payment": {
+      "id": "payment_1748304109093_d5txnin9j",
+      "invoiceId": "invoice_1748304106141_3p09dziuq",
+      "amount": 1500.00,
+      "currency": "USD",
+      "paymentDate": "2025-01-20",
+      "paymentMethod": "Bank Transfer",
+      "reference": "TXN-20250120-001",
+      "notes": "Partial payment received",
+      "status": "completed",
+      "externalPaymentId": "stripe_pi_1234567890",
+      "processorFee": 43.50,
+      "createdAt": "2025-01-20T14:30:00Z",
+      "recordedBy": "user-id-123"
+    }
+  },
+  "message": "Payment recorded successfully"
+}
+```
+
+### **Record Full Payment**
+```http
+PUT /invoices/{invoiceId}/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "operation": "recordPayment",
+  "amount": 3000.00,
+  "paymentDate": "2025-01-25",
+  "paymentMethod": "Credit Card",
+  "reference": "CC-20250125-002",
+  "notes": "Full payment received",
+  "externalPaymentId": "stripe_pi_0987654321",
+  "processorFee": 87.00
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "invoice": {
+      "id": "invoice_1748304106141_3p09dziuq",
+      "status": "paid",
+      "paidDate": "2025-01-25",
+      "totalAmount": 3000.00,
+      "updatedAt": "2025-01-25T11:45:00Z"
+    },
+    "payment": {
+      "id": "payment_1748304172353_fwl0d6m37",
+      "invoiceId": "invoice_1748304106141_3p09dziuq",
+      "amount": 3000.00,
+      "currency": "USD",
+      "paymentDate": "2025-01-25",
+      "paymentMethod": "Credit Card",
+      "reference": "CC-20250125-002",
+      "notes": "Full payment received",
+      "status": "completed",
+      "externalPaymentId": "stripe_pi_0987654321",
+      "processorFee": 87.00,
+      "createdAt": "2025-01-25T11:45:00Z",
+      "recordedBy": "user-id-123"
+    }
+  },
+  "message": "Payment recorded successfully"
+}
+```
+
+**Note**: When full payment is recorded, invoice status automatically changes to "paid".
+
+### **Download Invoice PDF**
+```http
+GET /invoices/{invoiceId}/pdf?templateId=template-123
+Authorization: Bearer {token}
+```
+
+**Response:**
+- **Content-Type**: `application/pdf`
+- **Content-Disposition**: `attachment; filename="INV-2025-05-006.pdf"`
+- Binary PDF data
+
+### **List Invoice Payments**
+```http
+GET /invoices/{invoiceId}/payments
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "payments": [
+      {
+        "id": "payment_1748304109093_d5txnin9j",
+        "amount": 1500.00,
+        "paymentDate": "2025-01-20",
+        "paymentMethod": "Bank Transfer",
+        "reference": "TXN-20250120-001",
+        "status": "completed",
+        "processorFee": 43.50,
+        "createdAt": "2025-01-20T14:30:00Z"
+      },
+      {
+        "id": "payment_1748304172353_fwl0d6m37",
+        "amount": 1500.00,
+        "paymentDate": "2025-01-25",
+        "paymentMethod": "Credit Card",
+        "reference": "CC-20250125-002",
+        "status": "completed",
+        "processorFee": 43.50,
+        "createdAt": "2025-01-25T11:45:00Z"
+      }
+    ],
+    "totalPaid": 3000.00,
+    "remainingBalance": 0.00
+  }
+}
+```
+
+### **List Recurring Invoices**
+```http
+GET /invoices/recurring?isActive=true&frequency=monthly
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `isActive`: Filter by active status (`true`, `false`)
+- `frequency`: Filter by frequency (`weekly`, `monthly`, `quarterly`, `yearly`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "invoice_1748304106457_rduz9ienj",
+      "invoiceNumber": "INV-2025-05-007",
+      "clientId": "client-123",
+      "clientName": "Acme Corporation",
+      "isRecurring": true,
+      "recurringConfig": {
+        "frequency": "monthly",
+        "interval": 1,
+        "startDate": "2025-01-15",
+        "isActive": true,
+        "autoSend": false,
+        "generateDaysBefore": 3,
+        "invoicesGenerated": 3,
+        "nextInvoiceDate": "2025-04-15"
+      },
+      "totalAmount": 5400.00,
+      "status": "draft"
+    }
+  ]
+}
+```
+
+### **Process Recurring Invoices**
+```http
+POST /invoices/recurring
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "processed": 2,
+    "invoices": [
+      {
+        "id": "invoice_1748304180001_auto1",
+        "invoiceNumber": "INV-2025-05-020",
+        "clientId": "client-123",
+        "totalAmount": 5400.00,
+        "status": "draft"
+      },
+      {
+        "id": "invoice_1748304180002_auto2",
+        "invoiceNumber": "INV-2025-05-021",
+        "clientId": "client-456",
+        "totalAmount": 3200.00,
+        "status": "draft"
+      }
+    ]
+  }
+}
+```
+
+### **Update Recurring Configuration**
+```http
+PUT /invoices/{invoiceId}/recurring
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "frequency": "quarterly",
+  "interval": 1,
+  "isActive": true,
+  "autoSend": true,
+  "generateDaysBefore": 7
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "invoice_1748304106457_rduz9ienj",
+    "recurringConfig": {
+      "frequency": "quarterly",
+      "interval": 1,
+      "startDate": "2025-01-15",
+      "isActive": true,
+      "autoSend": true,
+      "generateDaysBefore": 7,
+      "invoicesGenerated": 3,
+      "nextInvoiceDate": "2025-07-15"
+    },
+    "updatedAt": "2025-01-30T10:00:00Z"
+  }
+}
+```
+
+### **Stop Recurring Invoice**
+```http
+DELETE /invoices/{invoiceId}/recurring
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Recurring invoice stopped"
+}
+```
+
+### **Invoice Templates**
+
+#### **List Templates**
+```http
+GET /invoice-templates
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "template-123",
+      "name": "Standard Invoice",
+      "isDefault": true,
+      "layout": "standard",
+      "colors": {
+        "primary": "#2563eb",
+        "secondary": "#64748b",
+        "accent": "#059669"
+      },
+      "logo": "https://s3.amazonaws.com/company-logo.png",
+      "companyInfo": {
+        "name": "Aerotage Design Group",
+        "address": "123 Business St, Suite 100",
+        "phone": "+1-555-0123",
+        "email": "billing@aerotage.com",
+        "website": "https://aerotage.com"
+      },
+      "createdAt": "2025-01-01T00:00:00Z",
+      "updatedAt": "2025-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+#### **Create Template**
+```http
+POST /invoice-templates
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "Modern Invoice",
+  "layout": "modern",
+  "colors": {
+    "primary": "#7c3aed",
+    "secondary": "#6b7280",
+    "accent": "#10b981"
+  },
+  "logo": "https://s3.amazonaws.com/new-logo.png",
+  "companyInfo": {
+    "name": "Aerotage Design Group",
+    "address": "123 Business St, Suite 100",
+    "phone": "+1-555-0123",
+    "email": "billing@aerotage.com",
+    "website": "https://aerotage.com"
+  },
+  "customFields": [
+    {
+      "name": "Project Manager",
+      "value": "John Doe",
+      "position": "header"
+    }
+  ],
+  "isDefault": false
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "template-456",
+    "name": "Modern Invoice",
+    "isDefault": false,
+    "layout": "modern",
+    "colors": {
+      "primary": "#7c3aed",
+      "secondary": "#6b7280",
+      "accent": "#10b981"
+    },
+    "logo": "https://s3.amazonaws.com/new-logo.png",
+    "companyInfo": {
+      "name": "Aerotage Design Group",
+      "address": "123 Business St, Suite 100",
+      "phone": "+1-555-0123",
+      "email": "billing@aerotage.com",
+      "website": "https://aerotage.com"
+    },
+    "customFields": [
+      {
+        "name": "Project Manager",
+        "value": "John Doe",
+        "position": "header"
+      }
+    ],
+    "createdAt": "2025-01-30T14:20:00Z",
+    "updatedAt": "2025-01-30T14:20:00Z"
+  }
+}
+```
+
+### **Invoice Status Workflow**
+
+**Status Transitions:**
+1. `draft` → `sent` (via send endpoint)
+2. `sent` → `viewed` (client views invoice)
+3. `viewed` → `paid` (payment recorded)
+4. `sent/viewed` → `overdue` (past due date)
+5. `any` → `cancelled` (manual cancellation)
+6. `paid` → `refunded` (refund processed)
+
+**Business Rules:**
+- Only `draft` invoices can be edited
+- Payments can be recorded for `sent`, `viewed`, or `overdue` invoices
+- Recurring invoices generate new drafts automatically
+- Full payment automatically sets status to `paid`
+- Partial payments keep current status until fully paid
 
 ---
 
