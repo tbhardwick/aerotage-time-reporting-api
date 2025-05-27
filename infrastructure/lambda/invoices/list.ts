@@ -11,16 +11,32 @@ import { createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Log request for debugging in development
+  console.log('📋 Invoice List Handler - Request received:', {
+    httpMethod: event.httpMethod,
+    path: event.path,
+    queryStringParameters: event.queryStringParameters,
+    headers: {
+      authorization: event.headers.authorization ? 'Bearer [REDACTED]' : 'None',
+      'content-type': event.headers['content-type']
+    }
+  });
 
   try {
     // Get current user from authorization context
+    console.log('🔐 Extracting user from authorization context...');
     const currentUserId = getCurrentUserId(event);
+    console.log('👤 Current user ID:', currentUserId);
+    
     if (!currentUserId) {
+      console.log('❌ No user ID found in authorization context');
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Parse query parameters
+    console.log('📝 Parsing query parameters...');
     const queryParams = event.queryStringParameters || {};
+    console.log('🔍 Query parameters:', queryParams);
+    
     const filters: InvoiceFilters = {
       clientId: queryParams.clientId,
       projectId: queryParams.projectId,
@@ -38,17 +54,30 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       sortBy: queryParams.sortBy as 'invoiceNumber' | 'issueDate' | 'dueDate' | 'totalAmount' | 'status' | undefined,
       sortOrder: queryParams.sortOrder as 'asc' | 'desc' | undefined,
     };
+    
+    console.log('🎯 Parsed filters:', filters);
 
     // Validate filters
-    const validation = ValidationService.validateInvoiceFilters(filters);
+    console.log('✅ Validating filters...');
+    const validation = ValidationService.validateInvoiceFilters(filters as Record<string, unknown>);
+    console.log('📊 Validation result:', validation);
+    
     if (!validation.isValid) {
+      console.log('❌ Validation failed:', validation.errors);
       return createErrorResponse(400, 'VALIDATION_ERROR', validation.errors.join(', '));
     }
 
+    console.log('🏗️ Creating InvoiceRepository instance...');
     const invoiceRepository = new InvoiceRepository();
 
     // Get invoices with pagination
+    console.log('📋 Fetching invoices from repository...');
     const result = await invoiceRepository.listInvoices(filters);
+    console.log('📊 Repository result:', {
+      invoiceCount: result.invoices.length,
+      total: result.total,
+      hasMore: result.hasMore
+    });
 
     // TODO: Implement role-based filtering
     // For now, return all invoices. In the future, we should:
@@ -69,6 +98,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       },
     };
 
+    console.log('✅ Successfully prepared response:', {
+      itemCount: response.data.items.length,
+      pagination: response.data.pagination
+    });
+
     return {
       statusCode: 200,
       headers: {
@@ -80,6 +114,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     // Log error for debugging
+    console.error('❌ Invoice List Handler - Error occurred:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
+    });
     
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }

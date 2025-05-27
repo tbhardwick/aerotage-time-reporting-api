@@ -239,23 +239,24 @@ async function runUserManagementTests() {
       return testResults;
     }
 
-    const { token: accessToken, userId } = authResult;
+    const token = authResult.token;
+    const userId = authResult.userId;
     console.log(`✅ Authentication successful for user: ${userId}`);
     testResults.authentication = true;
 
     // Step 2: List Users
     console.log(`\n👥 Step 2: List Users`);
-    const listUsersResult = await testListUsers(accessToken);
+    const listUsersResult = await testListUsers(token);
     testResults.listUsers = listUsersResult.success;
 
     // Step 3: Get Current User
     console.log(`\n👤 Step 3: Get Current User`);
-    const getUserResult = await testGetUser(accessToken, userId);
+    const getUserResult = await testGetUser(token, userId);
     testResults.getUser = getUserResult.success;
 
     // Step 4: Update Current User
     console.log(`\n✏️ Step 4: Update Current User`);
-    const updateUserResult = await testUpdateUser(accessToken, userId);
+    const updateUserResult = await testUpdateUser(token, userId);
     testResults.updateUser = updateUserResult.success;
 
   } catch (error) {
