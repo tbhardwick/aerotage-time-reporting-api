@@ -31,6 +31,15 @@ Complete frontend integration guide for **all phases (1-7)**:
 - **Complete invoicing and billing integration patterns** ✅ **NEW**
 - Testing integration and debugging
 
+#### **[TIME_ENTRY_SUBMISSION_GUIDE.md](./TIME_ENTRY_SUBMISSION_GUIDE.md)** ✅ **NEW**
+Comprehensive time entry submission implementation guide for frontend developers:
+- Complete workflow from creation to approval
+- Required API endpoints and data structures
+- Validation rules and business logic requirements
+- React component examples with error handling
+- Testing patterns and best practices
+- Manager approval process implementation
+
 #### **[PHASE_COMPLETION_ARCHIVE.md](./PHASE_COMPLETION_ARCHIVE.md)** ✅ **COMPLETE**
 Consolidated archive of all phase completion documentation:
 - Complete implementation details for **Phases 1-7** ✅ **ALL PHASES**
@@ -127,6 +136,9 @@ Comprehensive testing validation:
 **🔌 Integrate with frontend**
 → Go to [FRONTEND_INTEGRATION_GUIDE.md](./FRONTEND_INTEGRATION_GUIDE.md) and [API_REFERENCE.md](./API_REFERENCE.md)
 
+**⏱️ Implement time entry submission**
+→ Follow [TIME_ENTRY_SUBMISSION_GUIDE.md](./TIME_ENTRY_SUBMISSION_GUIDE.md)
+
 **🛠️ Set up development environment**
 → Follow [DEVELOPMENT.md](./DEVELOPMENT.md) and [LINTING_GUIDE.md](./LINTING_GUIDE.md)
 
@@ -159,6 +171,7 @@ Comprehensive testing validation:
 
 ### **🎨 Frontend Developers**
 - [FRONTEND_INTEGRATION_GUIDE.md](./FRONTEND_INTEGRATION_GUIDE.md) - Complete integration guide
+- [TIME_ENTRY_SUBMISSION_GUIDE.md](./TIME_ENTRY_SUBMISSION_GUIDE.md) - Time entry submission implementation ✅ **NEW**
 - [API_REFERENCE.md](./API_REFERENCE.md) - API endpoints and authentication
 - [SECURITY_GUIDE.md](./SECURITY_GUIDE.md) - Security features and implementation
 
@@ -174,7 +187,7 @@ Comprehensive testing validation:
 
 ## 📊 **Documentation Metrics**
 
-- **Total Documents**: **11 comprehensive guides** ✅ **ENHANCED**
+- **Total Documents**: **12 comprehensive guides** ✅ **ENHANCED**
 - **Total Pages**: **400+ pages** of documentation ✅ **EXPANDED**
 - **Coverage**: **100% of implemented features** documented (Phases 1-7 complete)
 - **API Endpoints**: **46+ endpoints** fully documented ✅ **COMPLETE**
