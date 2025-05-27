@@ -13,6 +13,8 @@ export interface DatabaseTables {
   clientsTable: dynamodb.Table;
   timeEntriesTable: dynamodb.Table;
   invoicesTable: dynamodb.Table;
+  invoiceTemplatesTable: dynamodb.Table; // ✅ NEW - Phase 7 Invoice Templates
+  paymentsTable: dynamodb.Table; // ✅ NEW - Phase 7 Payment Tracking
   userSessionsTable: dynamodb.Table;
   userActivityTable: dynamodb.Table;
   userInvitationsTable: dynamodb.Table;
@@ -174,6 +176,54 @@ export class DatabaseStack extends cdk.Stack {
     invoicesTable.addGlobalSecondaryIndex({
       indexName: 'InvoiceNumberIndex',
       partitionKey: { name: 'invoiceNumber', type: dynamodb.AttributeType.STRING },
+    });
+
+    // ✅ NEW - Phase 7: Invoice Templates Table
+    const invoiceTemplatesTable = new dynamodb.Table(this, 'InvoiceTemplatesTable', {
+      tableName: `aerotage-invoice-templates-${stage}`,
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for template type lookup
+    invoiceTemplatesTable.addGlobalSecondaryIndex({
+      indexName: 'TemplateTypeIndex',
+      partitionKey: { name: 'templateType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'name', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for active templates lookup
+    invoiceTemplatesTable.addGlobalSecondaryIndex({
+      indexName: 'ActiveIndex',
+      partitionKey: { name: 'isActive', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+    });
+
+    // ✅ NEW - Phase 7: Payments Table
+    const paymentsTable = new dynamodb.Table(this, 'PaymentsTable', {
+      tableName: `aerotage-payments-${stage}`,
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for invoice lookup
+    paymentsTable.addGlobalSecondaryIndex({
+      indexName: 'InvoiceIndex',
+      partitionKey: { name: 'invoiceId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'paymentDate', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for status lookup
+    paymentsTable.addGlobalSecondaryIndex({
+      indexName: 'StatusIndex',
+      partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'paymentDate', type: dynamodb.AttributeType.STRING },
     });
 
     // User Sessions Table
@@ -366,6 +416,8 @@ export class DatabaseStack extends cdk.Stack {
       clientsTable,
       timeEntriesTable,
       invoicesTable,
+      invoiceTemplatesTable, // ✅ NEW - Phase 7 Invoice Templates
+      paymentsTable, // ✅ NEW - Phase 7 Payment Tracking
       userSessionsTable,
       userActivityTable,
       userInvitationsTable,
@@ -415,6 +467,18 @@ export class DatabaseStack extends cdk.Stack {
       value: invoicesTable.tableName,
       description: 'Invoices DynamoDB Table Name',
       exportName: `InvoicesTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'InvoiceTemplatesTableName', {
+      value: invoiceTemplatesTable.tableName,
+      description: 'Invoice Templates DynamoDB Table Name',
+      exportName: `InvoiceTemplatesTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'PaymentsTableName', {
+      value: paymentsTable.tableName,
+      description: 'Payments DynamoDB Table Name',
+      exportName: `PaymentsTableName-${stage}`,
     });
 
     new cdk.CfnOutput(this, 'UserSessionsTableName', {

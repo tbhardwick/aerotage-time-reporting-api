@@ -120,6 +120,8 @@ export class ApiStack extends cdk.Stack {
                 tables.clientsTable.tableArn,
                 tables.timeEntriesTable.tableArn,
                 tables.invoicesTable.tableArn,
+                tables.invoiceTemplatesTable.tableArn, // ✅ NEW - Phase 7
+                tables.paymentsTable.tableArn, // ✅ NEW - Phase 7
                 tables.userSessionsTable.tableArn,
                 tables.userActivityTable.tableArn,
                 tables.userInvitationsTable.tableArn,
@@ -138,6 +140,8 @@ export class ApiStack extends cdk.Stack {
                 `${tables.clientsTable.tableArn}/index/*`,
                 `${tables.timeEntriesTable.tableArn}/index/*`,
                 `${tables.invoicesTable.tableArn}/index/*`,
+                `${tables.invoiceTemplatesTable.tableArn}/index/*`, // ✅ NEW - Phase 7
+                `${tables.paymentsTable.tableArn}/index/*`, // ✅ NEW - Phase 7
                 `${tables.userSessionsTable.tableArn}/index/*`,
                 `${tables.userActivityTable.tableArn}/index/*`,
                 `${tables.userInvitationsTable.tableArn}/index/*`,
@@ -232,6 +236,8 @@ export class ApiStack extends cdk.Stack {
       CLIENTS_TABLE: tables.clientsTable.tableName,
       TIME_ENTRIES_TABLE: tables.timeEntriesTable.tableName,
       INVOICES_TABLE: tables.invoicesTable.tableName,
+      INVOICE_TEMPLATES_TABLE: tables.invoiceTemplatesTable.tableName, // ✅ NEW - Phase 7
+      PAYMENTS_TABLE: tables.paymentsTable.tableName, // ✅ NEW - Phase 7
       USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
       USER_ACTIVITY_TABLE: tables.userActivityTable.tableName,
       USER_INVITATIONS_TABLE: tables.userInvitationsTable.tableName,

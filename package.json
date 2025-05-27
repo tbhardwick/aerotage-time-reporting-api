@@ -10,6 +10,10 @@
   "scripts": {
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:invoices": "node scripts/test-invoices.js",
+    "test:invoices:quick": "node scripts/test-invoices-quick.js",
+    "test:time-entries": "node scripts/test-time-entries.js",
+    "test:api": "npm run test:invoices && npm run test:time-entries",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",

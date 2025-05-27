@@ -892,4 +892,486 @@ export interface ClientDynamoItem {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+}
+
+// ==========================
+// Invoice & Billing Types - Phase 7
+// ==========================
+
+// Core Invoice Types
+export interface Invoice {
+  id: string;
+  invoiceNumber: string; // Auto-generated unique number (e.g., "INV-2024-001")
+  clientId: string;
+  clientName: string;
+  projectIds: string[]; // Projects included in this invoice
+  timeEntryIds: string[]; // Time entries included in this invoice
+  status: 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  
+  // Invoice Details
+  issueDate: string; // ISO date
+  dueDate: string; // ISO date
+  paidDate?: string; // ISO date when payment was received
+  
+  // Financial Information
+  subtotal: number; // Total before tax
+  taxRate?: number; // Tax percentage (e.g., 0.08 for 8%)
+  taxAmount?: number; // Calculated tax amount
+  discountRate?: number; // Discount percentage
+  discountAmount?: number; // Calculated discount amount
+  totalAmount: number; // Final amount after tax and discount
+  currency: string; // e.g., "USD", "EUR"
+  
+  // Line Items
+  lineItems: InvoiceLineItem[];
+  
+  // Template and Customization
+  templateId?: string; // Reference to invoice template
+  customFields?: Record<string, any>; // Custom fields from template
+  
+  // Payment Information
+  paymentTerms: string; // e.g., "Net 30", "Due on receipt"
+  paymentMethod?: string; // e.g., "Bank Transfer", "Credit Card"
+  paymentReference?: string; // Payment confirmation number
+  
+  // Recurring Invoice Information
+  isRecurring: boolean;
+  recurringConfig?: RecurringInvoiceConfig;
+  parentInvoiceId?: string; // For recurring invoices, reference to original
+  
+  // File Storage
+  pdfUrl?: string; // S3 URL to generated PDF
+  attachments?: string[]; // Additional file attachments
+  
+  // Communication
+  sentAt?: string; // ISO datetime when invoice was sent
+  viewedAt?: string; // ISO datetime when client first viewed
+  remindersSent: number; // Count of payment reminders sent
+  lastReminderSent?: string; // ISO datetime of last reminder
+  
+  // Notes and Comments
+  notes?: string; // Internal notes
+  clientNotes?: string; // Notes visible to client
+  
+  // Audit Trail
+  createdAt: string; // ISO datetime
+  updatedAt: string; // ISO datetime
+  createdBy: string; // User ID who created the invoice
+  sentBy?: string; // User ID who sent the invoice
+}
+
+// Invoice Line Item
+export interface InvoiceLineItem {
+  id: string;
+  type: 'time' | 'expense' | 'fixed' | 'discount';
+  description: string;
+  quantity: number; // Hours for time entries, quantity for other items
+  rate: number; // Hourly rate or unit price
+  amount: number; // quantity * rate
+  
+  // Time Entry Reference (for time-based line items)
+  timeEntryId?: string;
+  projectId?: string;
+  projectName?: string;
+  date?: string; // ISO date for time entries
+  
+  // Tax Information
+  taxable: boolean;
+  taxRate?: number;
+  taxAmount?: number;
+}
+
+// Recurring Invoice Configuration
+export interface RecurringInvoiceConfig {
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  interval: number; // e.g., 2 for "every 2 months"
+  startDate: string; // ISO date when recurring starts
+  endDate?: string; // ISO date when recurring ends (null for indefinite)
+  nextInvoiceDate: string; // ISO date for next invoice generation
+  maxInvoices?: number; // Maximum number of invoices to generate
+  invoicesGenerated: number; // Count of invoices generated so far
+  isActive: boolean; // Whether recurring is currently active
+  
+  // Auto-generation settings
+  autoSend: boolean; // Automatically send generated invoices
+  generateDaysBefore: number; // Days before due date to generate
+  
+  // Template settings for recurring invoices
+  templateId?: string;
+  customFields?: Record<string, any>;
+}
+
+// Invoice Template
+export interface InvoiceTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  
+  // Template Design
+  layout: 'standard' | 'modern' | 'minimal' | 'detailed';
+  colorScheme: {
+    primary: string; // Hex color
+    secondary: string; // Hex color
+    accent: string; // Hex color
+  };
+  
+  // Company Information
+  companyInfo: {
+    name: string;
+    logo?: string; // S3 URL to logo image
+    address: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    taxId?: string; // Tax identification number
+  };
+  
+  // Template Fields
+  fields: {
+    showProjectDetails: boolean;
+    showTimeEntryDetails: boolean;
+    showTaskBreakdown: boolean;
+    showHourlyRates: boolean;
+    groupByProject: boolean;
+    groupByDate: boolean;
+    includeNotes: boolean;
+    includeAttachments: boolean;
+  };
+  
+  // Custom Fields
+  customFields: InvoiceTemplateField[];
+  
+  // Terms and Conditions
+  paymentTerms: string;
+  termsAndConditions?: string;
+  footerText?: string;
+  
+  // Audit
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+// Invoice Template Custom Field
+export interface InvoiceTemplateField {
+  id: string;
+  name: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'boolean' | 'select';
+  required: boolean;
+  defaultValue?: any;
+  options?: string[]; // For select type
+  placeholder?: string;
+  helpText?: string;
+}
+
+// Payment Tracking
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  currency: string;
+  paymentDate: string; // ISO date
+  paymentMethod: string; // e.g., "Bank Transfer", "Credit Card", "Check"
+  reference?: string; // Payment reference number
+  notes?: string;
+  
+  // Payment Status
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  
+  // External Integration
+  externalPaymentId?: string; // ID from payment processor
+  processorFee?: number; // Fee charged by payment processor
+  
+  // Audit
+  createdAt: string;
+  updatedAt: string;
+  recordedBy: string; // User ID who recorded the payment
+}
+
+// Invoice Request Types
+export interface CreateInvoiceRequest {
+  clientId: string;
+  projectIds?: string[];
+  timeEntryIds?: string[];
+  templateId?: string;
+  
+  // Invoice Details
+  issueDate?: string; // Defaults to today
+  dueDate?: string; // Calculated based on payment terms
+  paymentTerms?: string; // Defaults to client's default
+  
+  // Financial
+  currency?: string; // Defaults to client's default
+  taxRate?: number;
+  discountRate?: number;
+  
+  // Additional Items
+  additionalLineItems?: Omit<InvoiceLineItem, 'id'>[];
+  
+  // Notes
+  notes?: string;
+  clientNotes?: string;
+  
+  // Recurring
+  isRecurring?: boolean;
+  recurringConfig?: Omit<RecurringInvoiceConfig, 'invoicesGenerated' | 'nextInvoiceDate'>;
+}
+
+export interface UpdateInvoiceRequest {
+  status?: 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  dueDate?: string;
+  paymentTerms?: string;
+  taxRate?: number;
+  discountRate?: number;
+  lineItems?: InvoiceLineItem[];
+  notes?: string;
+  clientNotes?: string;
+  customFields?: Record<string, any>;
+}
+
+export interface InvoiceFilters {
+  clientId?: string;
+  projectId?: string;
+  status?: 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  isRecurring?: boolean;
+  dateFrom?: string; // ISO date
+  dateTo?: string; // ISO date
+  dueDateFrom?: string; // ISO date
+  dueDateTo?: string; // ISO date
+  amountMin?: number;
+  amountMax?: number;
+  currency?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: 'invoiceNumber' | 'issueDate' | 'dueDate' | 'totalAmount' | 'status';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface SendInvoiceRequest {
+  recipientEmails?: string[]; // Override default client email
+  subject?: string; // Custom email subject
+  message?: string; // Custom email message
+  attachPdf: boolean; // Whether to attach PDF
+  sendCopy: boolean; // Send copy to sender
+  scheduleDate?: string; // ISO datetime to schedule sending
+}
+
+export interface RecordPaymentRequest {
+  amount: number;
+  paymentDate: string; // ISO date
+  paymentMethod: string;
+  reference?: string;
+  notes?: string;
+  externalPaymentId?: string;
+  processorFee?: number;
+}
+
+// Invoice Generation Options
+export interface GenerateInvoiceOptions {
+  timeEntryFilters?: {
+    dateFrom: string;
+    dateTo: string;
+    projectIds?: string[];
+    status?: 'approved'; // Only approved time entries
+    isBillable?: boolean; // Only billable time entries
+  };
+  grouping: {
+    byProject: boolean;
+    byDate: boolean;
+    byTask: boolean;
+  };
+  includeExpenses: boolean;
+  templateId?: string;
+  autoCalculateTax: boolean;
+  roundingPrecision: number; // Decimal places for rounding
+}
+
+// Invoice Statistics
+export interface InvoiceStats {
+  totalInvoices: number;
+  totalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  overdueAmount: number;
+  averagePaymentTime: number; // Days
+  
+  // Status Breakdown
+  statusBreakdown: {
+    draft: number;
+    sent: number;
+    viewed: number;
+    paid: number;
+    overdue: number;
+    cancelled: number;
+  };
+  
+  // Monthly Breakdown
+  monthlyBreakdown: {
+    month: string; // YYYY-MM
+    invoiced: number;
+    paid: number;
+    outstanding: number;
+  }[];
+}
+
+// Invoice Error Types
+export enum InvoiceErrorCodes {
+  // Invoice errors
+  INVOICE_NOT_FOUND = 'INVOICE_NOT_FOUND',
+  UNAUTHORIZED_INVOICE_ACCESS = 'UNAUTHORIZED_INVOICE_ACCESS',
+  INVALID_INVOICE_DATA = 'INVALID_INVOICE_DATA',
+  INVOICE_ALREADY_SENT = 'INVOICE_ALREADY_SENT',
+  INVOICE_ALREADY_PAID = 'INVOICE_ALREADY_PAID',
+  INVOICE_CANNOT_BE_MODIFIED = 'INVOICE_CANNOT_BE_MODIFIED',
+  
+  // Template errors
+  TEMPLATE_NOT_FOUND = 'TEMPLATE_NOT_FOUND',
+  INVALID_TEMPLATE_DATA = 'INVALID_TEMPLATE_DATA',
+  TEMPLATE_IN_USE = 'TEMPLATE_IN_USE',
+  
+  // Payment errors
+  PAYMENT_NOT_FOUND = 'PAYMENT_NOT_FOUND',
+  INVALID_PAYMENT_AMOUNT = 'INVALID_PAYMENT_AMOUNT',
+  PAYMENT_EXCEEDS_INVOICE = 'PAYMENT_EXCEEDS_INVOICE',
+  PAYMENT_ALREADY_RECORDED = 'PAYMENT_ALREADY_RECORDED',
+  
+  // Generation errors
+  NO_BILLABLE_TIME_ENTRIES = 'NO_BILLABLE_TIME_ENTRIES',
+  INVALID_TIME_ENTRY_SELECTION = 'INVALID_TIME_ENTRY_SELECTION',
+  TIME_ENTRIES_ALREADY_INVOICED = 'TIME_ENTRIES_ALREADY_INVOICED',
+  
+  // Recurring invoice errors
+  INVALID_RECURRING_CONFIG = 'INVALID_RECURRING_CONFIG',
+  RECURRING_INVOICE_LIMIT_REACHED = 'RECURRING_INVOICE_LIMIT_REACHED',
+  RECURRING_INVOICE_ENDED = 'RECURRING_INVOICE_ENDED',
+  
+  // Email errors
+  EMAIL_SEND_FAILED = 'EMAIL_SEND_FAILED',
+  INVALID_EMAIL_RECIPIENTS = 'INVALID_EMAIL_RECIPIENTS',
+  
+  // PDF errors
+  PDF_GENERATION_FAILED = 'PDF_GENERATION_FAILED',
+  PDF_UPLOAD_FAILED = 'PDF_UPLOAD_FAILED',
+  
+  // Validation errors
+  INVALID_CURRENCY = 'INVALID_CURRENCY',
+  INVALID_TAX_RATE = 'INVALID_TAX_RATE',
+  INVALID_DATE_RANGE = 'INVALID_DATE_RANGE',
+  NEGATIVE_AMOUNT = 'NEGATIVE_AMOUNT',
+}
+
+// DynamoDB Item Types for Invoices
+export interface InvoiceDynamoItem {
+  PK: string; // "INVOICE#{id}"
+  SK: string; // "INVOICE#{id}"
+  GSI1PK: string; // "CLIENT#{clientId}"
+  GSI1SK: string; // "INVOICE#{issueDate}#{invoiceNumber}"
+  GSI2PK: string; // "STATUS#{status}"
+  GSI2SK: string; // "INVOICE#{dueDate}#{id}"
+  GSI3PK: string; // "INVOICE_NUMBER#{invoiceNumber}"
+  GSI3SK: string; // "INVOICE#{id}"
+  
+  id: string;
+  invoiceNumber: string;
+  clientId: string;
+  clientName: string;
+  projectIds: string; // JSON serialized array
+  timeEntryIds: string; // JSON serialized array
+  status: string;
+  
+  issueDate: string;
+  dueDate: string;
+  paidDate?: string;
+  
+  subtotal: number;
+  taxRate?: number;
+  taxAmount?: number;
+  discountRate?: number;
+  discountAmount?: number;
+  totalAmount: number;
+  currency: string;
+  
+  lineItems: string; // JSON serialized array
+  templateId?: string;
+  customFields?: string; // JSON serialized
+  
+  paymentTerms: string;
+  paymentMethod?: string;
+  paymentReference?: string;
+  
+  isRecurring: boolean;
+  recurringConfig?: string; // JSON serialized
+  parentInvoiceId?: string;
+  
+  pdfUrl?: string;
+  attachments?: string; // JSON serialized array
+  
+  sentAt?: string;
+  viewedAt?: string;
+  remindersSent: number;
+  lastReminderSent?: string;
+  
+  notes?: string;
+  clientNotes?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  sentBy?: string;
+}
+
+export interface InvoiceTemplateDynamoItem {
+  PK: string; // "TEMPLATE#{id}"
+  SK: string; // "TEMPLATE#{id}"
+  GSI1PK: string; // "TEMPLATE_TYPE#invoice"
+  GSI1SK: string; // "TEMPLATE#{name}"
+  
+  id: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  
+  layout: string;
+  colorScheme: string; // JSON serialized
+  companyInfo: string; // JSON serialized
+  fields: string; // JSON serialized
+  customFields: string; // JSON serialized array
+  
+  paymentTerms: string;
+  termsAndConditions?: string;
+  footerText?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface PaymentDynamoItem {
+  PK: string; // "PAYMENT#{id}"
+  SK: string; // "PAYMENT#{id}"
+  GSI1PK: string; // "INVOICE#{invoiceId}"
+  GSI1SK: string; // "PAYMENT#{paymentDate}#{id}"
+  GSI2PK: string; // "STATUS#{status}"
+  GSI2SK: string; // "PAYMENT#{paymentDate}#{id}"
+  
+  id: string;
+  invoiceId: string;
+  amount: number;
+  currency: string;
+  paymentDate: string;
+  paymentMethod: string;
+  reference?: string;
+  notes?: string;
+  
+  status: string;
+  externalPaymentId?: string;
+  processorFee?: number;
+  
+  createdAt: string;
+  updatedAt: string;
+  recordedBy: string;
 } 

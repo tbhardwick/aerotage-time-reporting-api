@@ -154,9 +154,10 @@
       
       <div class="info-card">
         <h3>📊 Current Status</h3>
-        <p><strong>Version:</strong> 1.0.0</p>
+        <p><strong>Version:</strong> <span id="api-version">Loading...</span></p>
         <p><strong>Environment:</strong> <span id="current-env">Development</span></p>
-        <p><strong>Endpoints:</strong> 34+ Live</p>
+        <p><strong>Endpoints:</strong> <span id="endpoint-count">Loading...</span></p>
+        <p><strong>Last Updated:</strong> <span id="last-updated">Loading...</span></p>
       </div>
     </div>
 
@@ -180,9 +181,48 @@
         envElement.textContent = currentHost.includes('prod') ? 'Production' : 'Development';
       }
 
+      // Add cache-busting timestamp to OpenAPI URL
+      const cacheBuster = new Date().getTime();
+      const openApiUrl = `./openapi.json?v=${cacheBuster}`;
+      
+      // Load OpenAPI spec and update status information
+      fetch(openApiUrl)
+        .then(response => response.json())
+        .then(spec => {
+          // Update version information
+          document.getElementById('api-version').textContent = spec.info.version || '1.0.0';
+          
+          // Count endpoints
+          const pathCount = Object.keys(spec.paths || {}).length;
+          let methodCount = 0;
+          Object.values(spec.paths || {}).forEach(path => {
+            Object.keys(path).forEach(method => {
+              if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
+                methodCount++;
+              }
+            });
+          });
+          document.getElementById('endpoint-count').textContent = `${pathCount} paths, ${methodCount} operations`;
+          
+          // Extract last updated from description
+          const description = spec.info.description || '';
+          const lastUpdatedMatch = description.match(/\*\*Last Updated:\*\* ([^\\n]+)/);
+          if (lastUpdatedMatch) {
+            document.getElementById('last-updated').textContent = lastUpdatedMatch[1];
+          } else {
+            document.getElementById('last-updated').textContent = 'Unknown';
+          }
+        })
+        .catch(error => {
+          console.error('Failed to load OpenAPI spec for status:', error);
+          document.getElementById('api-version').textContent = 'Error loading';
+          document.getElementById('endpoint-count').textContent = 'Error loading';
+          document.getElementById('last-updated').textContent = 'Error loading';
+        });
+
       // Build a system
       const ui = SwaggerUIBundle({
-        url: './openapi.json',
+        url: openApiUrl,
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [

@@ -31,9 +31,18 @@ function buildOpenApiSpec() {
       }
     ];
     
-    // Add environment-specific information
-    openApiSpec.info.version = `1.0.0-${stage}`;
-    openApiSpec.info.description += `\n\n**Environment:** ${stage.toUpperCase()}`;
+    // Add environment-specific information with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    openApiSpec.info.version = `1.0.0-${stage}-${timestamp}`;
+    openApiSpec.info.description += `\n\n**Environment:** ${stage.toUpperCase()}\n**Last Updated:** ${new Date().toLocaleString('en-US', { 
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })}`;
     
     // Ensure output directory exists
     const outputDir = path.join(__dirname, '../docs/swagger-ui');

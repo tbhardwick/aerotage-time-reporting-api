@@ -597,4 +597,382 @@ export class ValidationService {
       errors,
     };
   }
+
+  /**
+   * Validates invoice filters for listing
+   */
+  static validateInvoiceFilters(filters: any): ValidationResult {
+    const errors: string[] = [];
+
+    if (filters.clientId && typeof filters.clientId !== 'string') {
+      errors.push('Client ID must be a string');
+    }
+
+    if (filters.projectId && typeof filters.projectId !== 'string') {
+      errors.push('Project ID must be a string');
+    }
+
+    if (filters.status && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(filters.status)) {
+      errors.push('Status must be one of: draft, sent, viewed, paid, overdue, cancelled, refunded');
+    }
+
+    if (filters.isRecurring !== undefined && typeof filters.isRecurring !== 'boolean') {
+      errors.push('Recurring status must be a boolean');
+    }
+
+    if (filters.dateFrom && typeof filters.dateFrom !== 'string') {
+      errors.push('Date from must be a string (ISO date)');
+    }
+
+    if (filters.dateTo && typeof filters.dateTo !== 'string') {
+      errors.push('Date to must be a string (ISO date)');
+    }
+
+    if (filters.dueDateFrom && typeof filters.dueDateFrom !== 'string') {
+      errors.push('Due date from must be a string (ISO date)');
+    }
+
+    if (filters.dueDateTo && typeof filters.dueDateTo !== 'string') {
+      errors.push('Due date to must be a string (ISO date)');
+    }
+
+    if (filters.amountMin !== undefined && (typeof filters.amountMin !== 'number' || filters.amountMin < 0)) {
+      errors.push('Amount minimum must be a non-negative number');
+    }
+
+    if (filters.amountMax !== undefined && (typeof filters.amountMax !== 'number' || filters.amountMax < 0)) {
+      errors.push('Amount maximum must be a non-negative number');
+    }
+
+    if (filters.amountMin !== undefined && filters.amountMax !== undefined && filters.amountMin > filters.amountMax) {
+      errors.push('Amount minimum cannot be greater than amount maximum');
+    }
+
+    if (filters.currency && typeof filters.currency !== 'string') {
+      errors.push('Currency must be a string');
+    }
+
+    if (filters.limit && (typeof filters.limit !== 'number' || filters.limit < 1 || filters.limit > 100)) {
+      errors.push('Limit must be a number between 1 and 100');
+    }
+
+    if (filters.offset && (typeof filters.offset !== 'number' || filters.offset < 0)) {
+      errors.push('Offset must be a non-negative number');
+    }
+
+    if (filters.sortBy && !['invoiceNumber', 'issueDate', 'dueDate', 'totalAmount', 'status'].includes(filters.sortBy)) {
+      errors.push('SortBy must be one of: invoiceNumber, issueDate, dueDate, totalAmount, status');
+    }
+
+    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
+      errors.push('SortOrder must be either "asc" or "desc"');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates create invoice request
+   */
+  static validateCreateInvoiceRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // Required fields
+    if (!request.clientId || typeof request.clientId !== 'string') {
+      errors.push('Client ID is required and must be a string');
+    }
+
+    // Optional fields validation
+    if (request.projectIds && !Array.isArray(request.projectIds)) {
+      errors.push('Project IDs must be an array');
+    }
+
+    if (request.timeEntryIds && !Array.isArray(request.timeEntryIds)) {
+      errors.push('Time entry IDs must be an array');
+    }
+
+    if (request.templateId && typeof request.templateId !== 'string') {
+      errors.push('Template ID must be a string');
+    }
+
+    if (request.issueDate && typeof request.issueDate !== 'string') {
+      errors.push('Issue date must be a string (ISO date)');
+    }
+
+    if (request.dueDate && typeof request.dueDate !== 'string') {
+      errors.push('Due date must be a string (ISO date)');
+    }
+
+    if (request.paymentTerms && typeof request.paymentTerms !== 'string') {
+      errors.push('Payment terms must be a string');
+    }
+
+    if (request.currency && typeof request.currency !== 'string') {
+      errors.push('Currency must be a string');
+    }
+
+    if (request.taxRate !== undefined && (typeof request.taxRate !== 'number' || request.taxRate < 0 || request.taxRate > 1)) {
+      errors.push('Tax rate must be a number between 0 and 1 (e.g., 0.08 for 8%)');
+    }
+
+    if (request.discountRate !== undefined && (typeof request.discountRate !== 'number' || request.discountRate < 0 || request.discountRate > 1)) {
+      errors.push('Discount rate must be a number between 0 and 1 (e.g., 0.1 for 10%)');
+    }
+
+    if (request.additionalLineItems && !Array.isArray(request.additionalLineItems)) {
+      errors.push('Additional line items must be an array');
+    } else if (request.additionalLineItems) {
+      // Validate each line item
+      request.additionalLineItems.forEach((item: any, index: number) => {
+        if (!item.type || !['time', 'expense', 'fixed', 'discount'].includes(item.type)) {
+          errors.push(`Line item ${index + 1}: type must be one of: time, expense, fixed, discount`);
+        }
+        if (!item.description || typeof item.description !== 'string') {
+          errors.push(`Line item ${index + 1}: description is required and must be a string`);
+        }
+        if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+          errors.push(`Line item ${index + 1}: quantity must be a positive number`);
+        }
+        if (typeof item.rate !== 'number' || item.rate < 0) {
+          errors.push(`Line item ${index + 1}: rate must be a non-negative number`);
+        }
+        if (typeof item.amount !== 'number' || item.amount < 0) {
+          errors.push(`Line item ${index + 1}: amount must be a non-negative number`);
+        }
+        if (typeof item.taxable !== 'boolean') {
+          errors.push(`Line item ${index + 1}: taxable must be a boolean`);
+        }
+      });
+    }
+
+    if (request.notes && typeof request.notes !== 'string') {
+      errors.push('Notes must be a string');
+    }
+
+    if (request.clientNotes && typeof request.clientNotes !== 'string') {
+      errors.push('Client notes must be a string');
+    }
+
+    if (request.isRecurring !== undefined && typeof request.isRecurring !== 'boolean') {
+      errors.push('Recurring status must be a boolean');
+    }
+
+    if (request.recurringConfig) {
+      if (typeof request.recurringConfig !== 'object') {
+        errors.push('Recurring config must be an object');
+      } else {
+        const config = request.recurringConfig;
+        
+        if (!config.frequency || !['weekly', 'monthly', 'quarterly', 'yearly'].includes(config.frequency)) {
+          errors.push('Recurring frequency must be one of: weekly, monthly, quarterly, yearly');
+        }
+        
+        if (typeof config.interval !== 'number' || config.interval < 1) {
+          errors.push('Recurring interval must be a positive number');
+        }
+        
+        if (!config.startDate || typeof config.startDate !== 'string') {
+          errors.push('Recurring start date is required and must be a string (ISO date)');
+        }
+        
+        if (config.endDate && typeof config.endDate !== 'string') {
+          errors.push('Recurring end date must be a string (ISO date)');
+        }
+        
+        if (config.maxInvoices !== undefined && (typeof config.maxInvoices !== 'number' || config.maxInvoices < 1)) {
+          errors.push('Max invoices must be a positive number');
+        }
+        
+        if (typeof config.isActive !== 'boolean') {
+          errors.push('Recurring active status must be a boolean');
+        }
+        
+        if (typeof config.autoSend !== 'boolean') {
+          errors.push('Auto send must be a boolean');
+        }
+        
+        if (typeof config.generateDaysBefore !== 'number' || config.generateDaysBefore < 0) {
+          errors.push('Generate days before must be a non-negative number');
+        }
+      }
+    }
+
+    // Validate that at least one of projectIds or timeEntryIds is provided
+    if ((!request.projectIds || request.projectIds.length === 0) && 
+        (!request.timeEntryIds || request.timeEntryIds.length === 0) &&
+        (!request.additionalLineItems || request.additionalLineItems.length === 0)) {
+      errors.push('At least one of projectIds, timeEntryIds, or additionalLineItems must be provided');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates update invoice request
+   */
+  static validateUpdateInvoiceRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // All fields are optional for updates, but if provided must be valid
+    if (request.status !== undefined && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(request.status)) {
+      errors.push('Status must be one of: draft, sent, viewed, paid, overdue, cancelled, refunded');
+    }
+
+    if (request.dueDate !== undefined && typeof request.dueDate !== 'string') {
+      errors.push('Due date must be a string (ISO date)');
+    }
+
+    if (request.paymentTerms !== undefined && typeof request.paymentTerms !== 'string') {
+      errors.push('Payment terms must be a string');
+    }
+
+    if (request.taxRate !== undefined && (typeof request.taxRate !== 'number' || request.taxRate < 0 || request.taxRate > 1)) {
+      errors.push('Tax rate must be a number between 0 and 1 (e.g., 0.08 for 8%)');
+    }
+
+    if (request.discountRate !== undefined && (typeof request.discountRate !== 'number' || request.discountRate < 0 || request.discountRate > 1)) {
+      errors.push('Discount rate must be a number between 0 and 1 (e.g., 0.1 for 10%)');
+    }
+
+    if (request.lineItems !== undefined) {
+      if (!Array.isArray(request.lineItems)) {
+        errors.push('Line items must be an array');
+      } else {
+        // Validate each line item
+        request.lineItems.forEach((item: any, index: number) => {
+          if (!item.id || typeof item.id !== 'string') {
+            errors.push(`Line item ${index + 1}: id is required and must be a string`);
+          }
+          if (!item.type || !['time', 'expense', 'fixed', 'discount'].includes(item.type)) {
+            errors.push(`Line item ${index + 1}: type must be one of: time, expense, fixed, discount`);
+          }
+          if (!item.description || typeof item.description !== 'string') {
+            errors.push(`Line item ${index + 1}: description is required and must be a string`);
+          }
+          if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+            errors.push(`Line item ${index + 1}: quantity must be a positive number`);
+          }
+          if (typeof item.rate !== 'number' || item.rate < 0) {
+            errors.push(`Line item ${index + 1}: rate must be a non-negative number`);
+          }
+          if (typeof item.amount !== 'number' || item.amount < 0) {
+            errors.push(`Line item ${index + 1}: amount must be a non-negative number`);
+          }
+          if (typeof item.taxable !== 'boolean') {
+            errors.push(`Line item ${index + 1}: taxable must be a boolean`);
+          }
+        });
+      }
+    }
+
+    if (request.notes !== undefined && typeof request.notes !== 'string') {
+      errors.push('Notes must be a string');
+    }
+
+    if (request.clientNotes !== undefined && typeof request.clientNotes !== 'string') {
+      errors.push('Client notes must be a string');
+    }
+
+    if (request.customFields !== undefined && typeof request.customFields !== 'object') {
+      errors.push('Custom fields must be an object');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates send invoice request
+   */
+  static validateSendInvoiceRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // All fields are optional for sending invoices
+    if (request.recipientEmails !== undefined) {
+      if (!Array.isArray(request.recipientEmails)) {
+        errors.push('Recipient emails must be an array');
+      } else {
+        request.recipientEmails.forEach((email: any, index: number) => {
+          if (typeof email !== 'string' || !this.validateEmail(email)) {
+            errors.push(`Recipient email ${index + 1} must be a valid email address`);
+          }
+        });
+      }
+    }
+
+    if (request.subject !== undefined && typeof request.subject !== 'string') {
+      errors.push('Subject must be a string');
+    }
+
+    if (request.message !== undefined && typeof request.message !== 'string') {
+      errors.push('Message must be a string');
+    }
+
+    if (request.attachPdf !== undefined && typeof request.attachPdf !== 'boolean') {
+      errors.push('Attach PDF must be a boolean');
+    }
+
+    if (request.sendCopy !== undefined && typeof request.sendCopy !== 'boolean') {
+      errors.push('Send copy must be a boolean');
+    }
+
+    if (request.scheduleDate !== undefined && typeof request.scheduleDate !== 'string') {
+      errors.push('Schedule date must be a string (ISO datetime)');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Validates record payment request
+   */
+  static validateRecordPaymentRequest(request: any): ValidationResult {
+    const errors: string[] = [];
+
+    // Required fields
+    if (typeof request.amount !== 'number' || request.amount <= 0) {
+      errors.push('Amount is required and must be a positive number');
+    }
+
+    if (!request.paymentDate || typeof request.paymentDate !== 'string') {
+      errors.push('Payment date is required and must be a string (ISO date)');
+    }
+
+    if (!request.paymentMethod || typeof request.paymentMethod !== 'string') {
+      errors.push('Payment method is required and must be a string');
+    }
+
+    // Optional fields validation
+    if (request.reference !== undefined && typeof request.reference !== 'string') {
+      errors.push('Reference must be a string');
+    }
+
+    if (request.notes !== undefined && typeof request.notes !== 'string') {
+      errors.push('Notes must be a string');
+    }
+
+    if (request.externalPaymentId !== undefined && typeof request.externalPaymentId !== 'string') {
+      errors.push('External payment ID must be a string');
+    }
+
+    if (request.processorFee !== undefined && (typeof request.processorFee !== 'number' || request.processorFee < 0)) {
+      errors.push('Processor fee must be a non-negative number');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
 } 

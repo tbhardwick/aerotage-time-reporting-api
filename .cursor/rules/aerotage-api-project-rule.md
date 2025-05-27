@@ -1,8 +1,3 @@
----
-description: 
-globs: 
-alwaysApply: true
----
 # Aerotage Time Reporting API - Backend Repository - Cursor Rules
 
 ## 🏗️ Repository Architecture Overview
