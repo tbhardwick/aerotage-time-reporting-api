@@ -1041,6 +1041,300 @@ Content-Type: application/json
 
 ---
 
+## 📅 **Daily and Weekly Time Tracking** ✅ **NEW FEATURE**
+
+### **Get User Work Schedule**
+```http
+GET /users/work-schedule
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "0408a498-40c1-7071-acc9-90665ef117c3",
+    "schedule": {
+      "monday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "tuesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "wednesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "thursday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "friday": { "start": "09:00", "end": "16:00", "targetHours": 7 },
+      "saturday": { "start": null, "end": null, "targetHours": 0 },
+      "sunday": { "start": null, "end": null, "targetHours": 0 }
+    },
+    "timezone": "America/New_York",
+    "weeklyTargetHours": 39,
+    "createdAt": "2025-05-27T18:04:53.385Z",
+    "updatedAt": "2025-05-27T18:04:53.385Z"
+  }
+}
+```
+
+### **Update User Work Schedule**
+```http
+PUT /users/work-schedule
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "schedule": {
+    "monday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+    "tuesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+    "wednesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+    "thursday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+    "friday": { "start": "09:00", "end": "16:00", "targetHours": 7 },
+    "saturday": { "start": null, "end": null, "targetHours": 0 },
+    "sunday": { "start": null, "end": null, "targetHours": 0 }
+  },
+  "timezone": "America/New_York"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "userId": "0408a498-40c1-7071-acc9-90665ef117c3",
+    "schedule": {
+      "monday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "tuesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "wednesday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "thursday": { "start": "09:00", "end": "17:00", "targetHours": 8 },
+      "friday": { "start": "09:00", "end": "16:00", "targetHours": 7 },
+      "saturday": { "start": null, "end": null, "targetHours": 0 },
+      "sunday": { "start": null, "end": null, "targetHours": 0 }
+    },
+    "timezone": "America/New_York",
+    "weeklyTargetHours": 39,
+    "createdAt": "2025-05-27T18:04:53.385Z",
+    "updatedAt": "2025-05-27T18:04:53.385Z"
+  }
+}
+```
+
+### **Get Daily Time Summary**
+```http
+GET /time-entries/daily-summary?startDate=2025-05-27&endDate=2025-05-27&includeGaps=true
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `startDate`: Start date for summary (YYYY-MM-DD) - **Required**
+- `endDate`: End date for summary (YYYY-MM-DD) - **Required**
+- `userId`: User ID (optional, defaults to current user)
+- `includeGaps`: Include time gap analysis (default: true)
+- `targetHours`: Target hours per day for completion percentage (default: 8)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "summaries": [
+      {
+        "date": "2025-05-27",
+        "dayOfWeek": "Tuesday",
+        "totalMinutes": 1082,
+        "totalHours": 18.03,
+        "billableMinutes": 1082,
+        "billableHours": 18.03,
+        "nonBillableMinutes": 0,
+        "nonBillableHours": 0,
+        "targetMinutes": 480,
+        "targetHours": 8,
+        "completionPercentage": 225.42,
+        "entriesCount": 11,
+        "projectBreakdown": [
+          {
+            "projectId": "project_1748360752534_t94ta93nq",
+            "projectName": "Website Redesign",
+            "clientName": "Acme Corp",
+            "minutes": 120,
+            "hours": 2,
+            "percentage": 11.09
+          }
+        ],
+        "timeGaps": [],
+        "workingHours": {
+          "firstEntry": "10:00",
+          "lastEntry": "11:00",
+          "totalSpan": "1h 0m"
+        }
+      }
+    ],
+    "periodSummary": {
+      "totalDays": 1,
+      "workDays": 1,
+      "totalHours": 18.03,
+      "averageHoursPerDay": 18.03,
+      "targetHours": 8,
+      "completionPercentage": 225.38
+    }
+  }
+}
+```
+
+### **Get Weekly Time Overview**
+```http
+GET /time-entries/weekly-overview?weekStartDate=2025-05-26&includeComparison=true
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `weekStartDate`: Monday of the week to analyze (YYYY-MM-DD) - **Required**
+- `userId`: User ID (optional, defaults to current user)
+- `includeComparison`: Include comparison with previous week (default: false)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "weekInfo": {
+      "weekStartDate": "2025-05-26",
+      "weekEndDate": "2025-05-30",
+      "weekNumber": 22,
+      "year": 2025
+    },
+    "dailySummaries": [
+      {
+        "date": "2025-05-26",
+        "dayOfWeek": "Monday",
+        "totalMinutes": 540,
+        "totalHours": 9,
+        "billableMinutes": 540,
+        "billableHours": 9,
+        "nonBillableMinutes": 0,
+        "nonBillableHours": 0,
+        "targetMinutes": 480,
+        "targetHours": 8,
+        "completionPercentage": 112.5,
+        "entriesCount": 4,
+        "projectBreakdown": [],
+        "timeGaps": [],
+        "workingHours": {
+          "firstEntry": null,
+          "lastEntry": null,
+          "totalSpan": null
+        }
+      }
+    ],
+    "weeklyTotals": {
+      "totalHours": 27.03,
+      "billableHours": 27.03,
+      "nonBillableHours": 0,
+      "targetHours": 39,
+      "completionPercentage": 69.31,
+      "totalEntries": 15
+    },
+    "patterns": {
+      "mostProductiveDay": "Tuesday",
+      "leastProductiveDay": "Monday",
+      "averageStartTime": "08:30",
+      "averageEndTime": "17:30",
+      "longestWorkDay": "Tuesday",
+      "shortestWorkDay": "Monday"
+    },
+    "projectDistribution": [
+      {
+        "projectId": "test-project-123",
+        "projectName": "Test Project",
+        "clientName": "Test Client",
+        "totalHours": 24,
+        "percentage": 88.78,
+        "dailyBreakdown": [
+          { "date": "2025-05-26", "hours": 9 },
+          { "date": "2025-05-27", "hours": 15 }
+        ]
+      }
+    ],
+    "comparison": {
+      "previousWeek": {
+        "totalHours": 0,
+        "change": "+0.0",
+        "changePercentage": "+0.0%"
+      }
+    }
+  }
+}
+```
+
+### **Quick Add Time Entry**
+```http
+POST /time-entries/quick-add
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "date": "2025-05-27",
+  "startTime": "14:00",
+  "endTime": "15:00",
+  "projectId": "project_1748360752534_t94ta93nq",
+  "description": "Code review and bug fixes",
+  "isBillable": true,
+  "fillGap": false
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "123f1e9b-e445-4676-bbff-8452e5974d0b",
+    "userId": "0408a498-40c1-7071-acc9-90665ef117c3",
+    "projectId": "project_1748360752534_t94ta93nq",
+    "description": "Code review and bug fixes",
+    "date": "2025-05-27",
+    "startTime": "2025-05-27T14:00:00.000Z",
+    "endTime": "2025-05-27T15:00:00.000Z",
+    "duration": 60,
+    "isBillable": true,
+    "status": "draft",
+    "tags": [],
+    "attachments": [],
+    "isTimerEntry": false,
+    "createdAt": "2025-05-27T18:09:43.637Z",
+    "updatedAt": "2025-05-27T18:09:43.637Z"
+  }
+}
+```
+
+**Features:**
+- **Simplified Entry**: Quick time entry creation with minimal required fields
+- **Time Validation**: Automatic validation for time overlaps and conflicts
+- **Gap Filling**: Optional flag to indicate this entry fills a detected time gap
+- **Auto-calculation**: Duration automatically calculated from start/end times
+- **Project Association**: Links entry to specified project for reporting
+
+**Error Responses:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "TIME_OVERLAP_DETECTED",
+    "message": "Time entry overlaps with existing entry",
+    "timestamp": "2025-05-27T18:09:43.637Z"
+  }
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FUTURE_DATE_NOT_ALLOWED",
+    "message": "Cannot create time entries for future dates",
+    "timestamp": "2025-05-27T18:09:43.637Z"
+  }
+}
+```
+
+---
+
 ## 📈 **Reporting**
 
 ### **Time Reports**

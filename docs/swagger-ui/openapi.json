@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Aerotage Time Reporting API",
-    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`\n- Production: `https://api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 27, 2025 at 01:51:01 PM",
-    "version": "1.0.0-dev-2025-05-27T17-51-01",
+    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`\n- Production: `https://api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 27, 2025 at 02:16:03 PM",
+    "version": "1.0.0-dev-2025-05-27T18-16-03",
     "contact": {
       "name": "Aerotage Support",
       "email": "support@aerotage.com"
@@ -956,6 +956,477 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "UserWorkSchedule": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "User ID"
+          },
+          "schedule": {
+            "type": "object",
+            "properties": {
+              "monday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "tuesday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "wednesday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "thursday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "friday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "saturday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              },
+              "sunday": {
+                "$ref": "#/components/schemas/WorkDaySchedule"
+              }
+            }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "User's timezone",
+            "example": "America/New_York"
+          },
+          "weeklyTargetHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Total target hours per week",
+            "example": 40
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkDaySchedule": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$",
+            "description": "Start time in HH:MM format (null for non-working days)",
+            "example": "09:00"
+          },
+          "end": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$",
+            "description": "End time in HH:MM format (null for non-working days)",
+            "example": "17:00"
+          },
+          "targetHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Target hours for this day",
+            "example": 8
+          }
+        }
+      },
+      "DailySummaryResponse": {
+        "type": "object",
+        "properties": {
+          "summaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailySummary"
+            }
+          },
+          "periodSummary": {
+            "$ref": "#/components/schemas/PeriodSummary"
+          }
+        }
+      },
+      "DailySummary": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date in YYYY-MM-DD format",
+            "example": "2024-01-15"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "description": "Day of the week",
+            "example": "Monday"
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "description": "Total minutes worked",
+            "example": 480
+          },
+          "totalHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Total hours worked",
+            "example": 8
+          },
+          "billableMinutes": {
+            "type": "integer",
+            "description": "Billable minutes",
+            "example": 420
+          },
+          "billableHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Billable hours",
+            "example": 7
+          },
+          "nonBillableMinutes": {
+            "type": "integer",
+            "description": "Non-billable minutes",
+            "example": 60
+          },
+          "nonBillableHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Non-billable hours",
+            "example": 1
+          },
+          "targetMinutes": {
+            "type": "integer",
+            "description": "Target minutes for the day",
+            "example": 480
+          },
+          "targetHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Target hours for the day",
+            "example": 8
+          },
+          "completionPercentage": {
+            "type": "number",
+            "format": "float",
+            "description": "Completion percentage vs target",
+            "example": 100
+          },
+          "entriesCount": {
+            "type": "integer",
+            "description": "Number of time entries",
+            "example": 5
+          },
+          "projectBreakdown": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectTimeBreakdown"
+            }
+          },
+          "timeGaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeGap"
+            }
+          },
+          "workingHours": {
+            "$ref": "#/components/schemas/WorkingHours"
+          }
+        }
+      },
+      "ProjectTimeBreakdown": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "Project ID"
+          },
+          "projectName": {
+            "type": "string",
+            "description": "Project name"
+          },
+          "clientName": {
+            "type": "string",
+            "description": "Client name"
+          },
+          "minutes": {
+            "type": "integer",
+            "description": "Minutes spent on project"
+          },
+          "hours": {
+            "type": "number",
+            "format": "float",
+            "description": "Hours spent on project"
+          },
+          "percentage": {
+            "type": "number",
+            "format": "float",
+            "description": "Percentage of total time"
+          }
+        }
+      },
+      "TimeGap": {
+        "type": "object",
+        "properties": {
+          "startTime": {
+            "type": "string",
+            "description": "Gap start time (HH:MM)",
+            "example": "10:00"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Gap end time (HH:MM)",
+            "example": "10:30"
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "description": "Gap duration in minutes",
+            "example": 30
+          },
+          "suggestedAction": {
+            "type": "string",
+            "description": "Suggested action for the gap",
+            "example": "break"
+          }
+        }
+      },
+      "WorkingHours": {
+        "type": "object",
+        "properties": {
+          "firstEntry": {
+            "type": "string",
+            "nullable": true,
+            "description": "Time of first entry (HH:MM)",
+            "example": "08:00"
+          },
+          "lastEntry": {
+            "type": "string",
+            "nullable": true,
+            "description": "Time of last entry (HH:MM)",
+            "example": "17:30"
+          },
+          "totalSpan": {
+            "type": "string",
+            "nullable": true,
+            "description": "Total working span",
+            "example": "9h 30m"
+          }
+        }
+      },
+      "PeriodSummary": {
+        "type": "object",
+        "properties": {
+          "totalDays": {
+            "type": "integer",
+            "description": "Total days in period"
+          },
+          "workDays": {
+            "type": "integer",
+            "description": "Work days in period"
+          },
+          "totalHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Total hours worked"
+          },
+          "averageHoursPerDay": {
+            "type": "number",
+            "format": "float",
+            "description": "Average hours per day"
+          },
+          "targetHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Target hours for period"
+          },
+          "completionPercentage": {
+            "type": "number",
+            "format": "float",
+            "description": "Completion percentage vs target"
+          }
+        }
+      },
+      "WeeklyOverview": {
+        "type": "object",
+        "properties": {
+          "weekInfo": {
+            "$ref": "#/components/schemas/WeekInfo"
+          },
+          "dailySummaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailySummary"
+            }
+          },
+          "weeklyTotals": {
+            "$ref": "#/components/schemas/WeeklyTotals"
+          },
+          "patterns": {
+            "$ref": "#/components/schemas/WeeklyPatterns"
+          },
+          "projectDistribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeeklyProjectBreakdown"
+            }
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/WeeklyComparison"
+          }
+        }
+      },
+      "WeekInfo": {
+        "type": "object",
+        "properties": {
+          "weekStartDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Monday of the week"
+          },
+          "weekEndDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Friday of the week"
+          },
+          "weekNumber": {
+            "type": "integer",
+            "description": "Week number of the year"
+          },
+          "year": {
+            "type": "integer",
+            "description": "Year"
+          }
+        }
+      },
+      "WeeklyTotals": {
+        "type": "object",
+        "properties": {
+          "totalHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Total hours for the week"
+          },
+          "billableHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Billable hours for the week"
+          },
+          "nonBillableHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Non-billable hours for the week"
+          },
+          "targetHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Target hours for the week"
+          },
+          "completionPercentage": {
+            "type": "number",
+            "format": "float",
+            "description": "Completion percentage vs target"
+          },
+          "totalEntries": {
+            "type": "integer",
+            "description": "Total number of time entries"
+          }
+        }
+      },
+      "WeeklyPatterns": {
+        "type": "object",
+        "properties": {
+          "mostProductiveDay": {
+            "type": "string",
+            "description": "Day with most hours worked"
+          },
+          "leastProductiveDay": {
+            "type": "string",
+            "description": "Day with least hours worked"
+          },
+          "averageStartTime": {
+            "type": "string",
+            "description": "Average start time"
+          },
+          "averageEndTime": {
+            "type": "string",
+            "description": "Average end time"
+          },
+          "longestWorkDay": {
+            "type": "string",
+            "description": "Day with longest work hours"
+          },
+          "shortestWorkDay": {
+            "type": "string",
+            "description": "Day with shortest work hours"
+          }
+        }
+      },
+      "WeeklyProjectBreakdown": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "description": "Project ID"
+          },
+          "projectName": {
+            "type": "string",
+            "description": "Project name"
+          },
+          "clientName": {
+            "type": "string",
+            "description": "Client name"
+          },
+          "totalHours": {
+            "type": "number",
+            "format": "float",
+            "description": "Total hours on project"
+          },
+          "percentage": {
+            "type": "number",
+            "format": "float",
+            "description": "Percentage of total week time"
+          },
+          "dailyBreakdown": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "hours": {
+                  "type": "number",
+                  "format": "float"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WeeklyComparison": {
+        "type": "object",
+        "properties": {
+          "previousWeek": {
+            "type": "object",
+            "properties": {
+              "totalHours": {
+                "type": "number",
+                "format": "float"
+              },
+              "change": {
+                "type": "string",
+                "description": "Change from previous week"
+              },
+              "changePercentage": {
+                "type": "string",
+                "description": "Percentage change"
+              }
+            }
           }
         }
       },
@@ -4384,6 +4855,386 @@
           },
           "403": {
             "description": "Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/work-schedule": {
+      "get": {
+        "tags": [
+          "Daily/Weekly Time Tracking"
+        ],
+        "summary": "Get user work schedule",
+        "description": "Retrieve the user's work schedule configuration",
+        "responses": {
+          "200": {
+            "description": "User work schedule retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserWorkSchedule"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Daily/Weekly Time Tracking"
+        ],
+        "summary": "Update user work schedule",
+        "description": "Update the user's work schedule configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "schedule",
+                  "timezone"
+                ],
+                "properties": {
+                  "schedule": {
+                    "type": "object",
+                    "properties": {
+                      "monday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "tuesday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "wednesday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "thursday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "friday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "saturday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      },
+                      "sunday": {
+                        "$ref": "#/components/schemas/WorkDaySchedule"
+                      }
+                    }
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "description": "User's timezone (e.g., America/New_York)",
+                    "example": "America/New_York"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Work schedule updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserWorkSchedule"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid work schedule data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/daily-summary": {
+      "get": {
+        "tags": [
+          "Daily/Weekly Time Tracking"
+        ],
+        "summary": "Get daily time summary",
+        "description": "Get aggregated time data for specific days with gap analysis",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start date for summary (YYYY-MM-DD)",
+            "example": "2024-01-15"
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End date for summary (YYYY-MM-DD)",
+            "example": "2024-01-15"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (optional, defaults to current user)"
+          },
+          {
+            "name": "includeGaps",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Include time gap analysis"
+          },
+          {
+            "name": "targetHours",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "float",
+              "default": 8
+            },
+            "description": "Target hours per day for completion percentage"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily summary retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DailySummaryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid date range or parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/weekly-overview": {
+      "get": {
+        "tags": [
+          "Daily/Weekly Time Tracking"
+        ],
+        "summary": "Get weekly time overview",
+        "description": "Get comprehensive weekly time analysis with patterns and trends",
+        "parameters": [
+          {
+            "name": "weekStartDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Monday of the week to analyze (YYYY-MM-DD)",
+            "example": "2024-01-15"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID (optional, defaults to current user)"
+          },
+          {
+            "name": "includeComparison",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Include comparison with previous week"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weekly overview retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/WeeklyOverview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid week start date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/quick-add": {
+      "post": {
+        "tags": [
+          "Daily/Weekly Time Tracking"
+        ],
+        "summary": "Quick add time entry",
+        "description": "Simplified time entry creation for filling gaps",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "date",
+                  "startTime",
+                  "endTime",
+                  "projectId",
+                  "description"
+                ],
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Date of work (YYYY-MM-DD)",
+                    "example": "2024-01-15"
+                  },
+                  "startTime": {
+                    "type": "string",
+                    "description": "Start time in HH:MM format",
+                    "example": "09:00"
+                  },
+                  "endTime": {
+                    "type": "string",
+                    "description": "End time in HH:MM format",
+                    "example": "10:30"
+                  },
+                  "projectId": {
+                    "type": "string",
+                    "description": "Project ID for this time entry"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Description of work performed",
+                    "example": "Code review and bug fixes"
+                  },
+                  "isBillable": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether this time is billable"
+                  },
+                  "fillGap": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether this entry is filling a detected gap"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Time entry created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TimeEntry"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid time entry data or time overlap detected",
             "content": {
               "application/json": {
                 "schema": {

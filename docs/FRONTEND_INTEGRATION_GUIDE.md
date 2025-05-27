@@ -1393,6 +1393,555 @@ class TimeEntryApi {
 export const timeEntryApi = new TimeEntryApi();
 ```
 
+### **10. Daily and Weekly Time Tracking API** ✅ **NEW FEATURE**
+
+```typescript
+// src/services/daily-weekly-api.ts
+import { apiClient } from './api-client';
+
+export interface WorkDaySchedule {
+  start: string | null; // HH:MM format or null for non-working days
+  end: string | null; // HH:MM format or null for non-working days
+  targetHours: number; // Target hours for this day
+}
+
+export interface UserWorkSchedule {
+  userId: string;
+  schedule: {
+    monday: WorkDaySchedule;
+    tuesday: WorkDaySchedule;
+    wednesday: WorkDaySchedule;
+    thursday: WorkDaySchedule;
+    friday: WorkDaySchedule;
+    saturday: WorkDaySchedule;
+    sunday: WorkDaySchedule;
+  };
+  timezone: string;
+  weeklyTargetHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateWorkScheduleRequest {
+  schedule: {
+    monday: WorkDaySchedule;
+    tuesday: WorkDaySchedule;
+    wednesday: WorkDaySchedule;
+    thursday: WorkDaySchedule;
+    friday: WorkDaySchedule;
+    saturday: WorkDaySchedule;
+    sunday: WorkDaySchedule;
+  };
+  timezone: string;
+}
+
+export interface ProjectTimeBreakdown {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  minutes: number;
+  hours: number;
+  percentage: number;
+}
+
+export interface TimeGap {
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  durationMinutes: number;
+  suggestedAction: string;
+}
+
+export interface WorkingHours {
+  firstEntry: string | null; // HH:MM
+  lastEntry: string | null; // HH:MM
+  totalSpan: string | null; // "9h 30m"
+}
+
+export interface DailySummary {
+  date: string; // YYYY-MM-DD
+  dayOfWeek: string;
+  totalMinutes: number;
+  totalHours: number;
+  billableMinutes: number;
+  billableHours: number;
+  nonBillableMinutes: number;
+  nonBillableHours: number;
+  targetMinutes: number;
+  targetHours: number;
+  completionPercentage: number;
+  entriesCount: number;
+  projectBreakdown: ProjectTimeBreakdown[];
+  timeGaps: TimeGap[];
+  workingHours: WorkingHours;
+}
+
+export interface PeriodSummary {
+  totalDays: number;
+  workDays: number;
+  totalHours: number;
+  averageHoursPerDay: number;
+  targetHours: number;
+  completionPercentage: number;
+}
+
+export interface DailySummaryResponse {
+  summaries: DailySummary[];
+  periodSummary: PeriodSummary;
+}
+
+export interface WeekInfo {
+  weekStartDate: string; // YYYY-MM-DD
+  weekEndDate: string; // YYYY-MM-DD
+  weekNumber: number;
+  year: number;
+}
+
+export interface WeeklyTotals {
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  targetHours: number;
+  completionPercentage: number;
+  totalEntries: number;
+}
+
+export interface WeeklyPatterns {
+  mostProductiveDay: string;
+  leastProductiveDay: string;
+  averageStartTime: string;
+  averageEndTime: string;
+  longestWorkDay: string;
+  shortestWorkDay: string;
+}
+
+export interface WeeklyProjectBreakdown {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  totalHours: number;
+  percentage: number;
+  dailyBreakdown: Array<{
+    date: string;
+    hours: number;
+  }>;
+}
+
+export interface WeeklyComparison {
+  previousWeek: {
+    totalHours: number;
+    change: string;
+    changePercentage: string;
+  };
+}
+
+export interface WeeklyOverview {
+  weekInfo: WeekInfo;
+  dailySummaries: DailySummary[];
+  weeklyTotals: WeeklyTotals;
+  patterns: WeeklyPatterns;
+  projectDistribution: WeeklyProjectBreakdown[];
+  comparison: WeeklyComparison;
+}
+
+export interface QuickTimeEntryRequest {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  projectId: string;
+  description: string;
+  isBillable?: boolean;
+  fillGap?: boolean;
+}
+
+export interface DailySummaryFilters {
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  userId?: string;
+  includeGaps?: boolean;
+  targetHours?: number;
+}
+
+export interface WeeklyOverviewFilters {
+  weekStartDate: string; // YYYY-MM-DD (Monday)
+  userId?: string;
+  includeComparison?: boolean;
+}
+
+class DailyWeeklyApi {
+  // Get user work schedule
+  async getWorkSchedule(): Promise<UserWorkSchedule> {
+    return apiClient.get<UserWorkSchedule>('users/work-schedule');
+  }
+
+  // Update user work schedule
+  async updateWorkSchedule(schedule: UpdateWorkScheduleRequest): Promise<UserWorkSchedule> {
+    return apiClient.put<UserWorkSchedule>('users/work-schedule', schedule);
+  }
+
+  // Get daily time summary
+  async getDailySummary(filters: DailySummaryFilters): Promise<DailySummaryResponse> {
+    const params = new URLSearchParams();
+    params.append('startDate', filters.startDate);
+    params.append('endDate', filters.endDate);
+    if (filters.userId) params.append('userId', filters.userId);
+    if (filters.includeGaps !== undefined) params.append('includeGaps', filters.includeGaps.toString());
+    if (filters.targetHours) params.append('targetHours', filters.targetHours.toString());
+    
+    return apiClient.get<DailySummaryResponse>(`time-entries/daily-summary?${params.toString()}`);
+  }
+
+  // Get weekly overview
+  async getWeeklyOverview(filters: WeeklyOverviewFilters): Promise<WeeklyOverview> {
+    const params = new URLSearchParams();
+    params.append('weekStartDate', filters.weekStartDate);
+    if (filters.userId) params.append('userId', filters.userId);
+    if (filters.includeComparison !== undefined) params.append('includeComparison', filters.includeComparison.toString());
+    
+    return apiClient.get<WeeklyOverview>(`time-entries/weekly-overview?${params.toString()}`);
+  }
+
+  // Quick add time entry
+  async quickAddTimeEntry(request: QuickTimeEntryRequest): Promise<TimeEntry> {
+    return apiClient.post<TimeEntry>('time-entries/quick-add', request);
+  }
+
+  // Helper: Get Monday of current week
+  getCurrentWeekStart(): string {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust for Sunday
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + daysToMonday);
+    return monday.toISOString().split('T')[0]; // YYYY-MM-DD
+  }
+
+  // Helper: Get date range for current week
+  getCurrentWeekRange(): { start: string; end: string } {
+    const start = this.getCurrentWeekStart();
+    const endDate = new Date(start);
+    endDate.setDate(endDate.getDate() + 6); // Add 6 days to get Sunday
+    return {
+      start,
+      end: endDate.toISOString().split('T')[0]
+    };
+  }
+
+  // Helper: Format time for display
+  formatTime(minutes: number): string {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+  }
+
+  // Helper: Calculate completion percentage
+  calculateCompletionPercentage(actual: number, target: number): number {
+    if (target === 0) return 0;
+    return Math.round((actual / target) * 100 * 100) / 100; // Round to 2 decimal places
+  }
+}
+
+export const dailyWeeklyApi = new DailyWeeklyApi();
+```
+
+### **Daily/Weekly Time Tracking React Hooks**
+
+```typescript
+// src/hooks/useDailyWeeklyTracking.ts
+import { useState, useEffect } from 'react';
+import { 
+  dailyWeeklyApi, 
+  DailySummaryResponse, 
+  WeeklyOverview, 
+  UserWorkSchedule,
+  DailySummaryFilters,
+  WeeklyOverviewFilters 
+} from '../services/daily-weekly-api';
+
+export const useDailySummary = (filters: DailySummaryFilters) => {
+  const [data, setData] = useState<DailySummaryResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDailySummary = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const summary = await dailyWeeklyApi.getDailySummary(filters);
+      setData(summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch daily summary');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDailySummary();
+  }, [filters.startDate, filters.endDate, filters.userId, filters.includeGaps, filters.targetHours]);
+
+  return { data, isLoading, error, refetch: fetchDailySummary };
+};
+
+export const useWeeklyOverview = (filters: WeeklyOverviewFilters) => {
+  const [data, setData] = useState<WeeklyOverview | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchWeeklyOverview = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const overview = await dailyWeeklyApi.getWeeklyOverview(filters);
+      setData(overview);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch weekly overview');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWeeklyOverview();
+  }, [filters.weekStartDate, filters.userId, filters.includeComparison]);
+
+  return { data, isLoading, error, refetch: fetchWeeklyOverview };
+};
+
+export const useWorkSchedule = () => {
+  const [schedule, setSchedule] = useState<UserWorkSchedule | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchWorkSchedule = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const workSchedule = await dailyWeeklyApi.getWorkSchedule();
+      setSchedule(workSchedule);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch work schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateWorkSchedule = async (updates: UpdateWorkScheduleRequest) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const updatedSchedule = await dailyWeeklyApi.updateWorkSchedule(updates);
+      setSchedule(updatedSchedule);
+      return updatedSchedule;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update work schedule');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkSchedule();
+  }, []);
+
+  return { 
+    schedule, 
+    isLoading, 
+    error, 
+    updateWorkSchedule, 
+    refetch: fetchWorkSchedule 
+  };
+};
+```
+
+### **Daily/Weekly Component Examples**
+
+```typescript
+// src/components/DailySummaryCard.tsx
+import React from 'react';
+import { useDailySummary } from '../hooks/useDailyWeeklyTracking';
+
+interface DailySummaryCardProps {
+  date: string; // YYYY-MM-DD
+}
+
+export const DailySummaryCard: React.FC<DailySummaryCardProps> = ({ date }) => {
+  const { data, isLoading, error } = useDailySummary({
+    startDate: date,
+    endDate: date,
+    includeGaps: true
+  });
+
+  if (isLoading) return <div>Loading daily summary...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!data || data.summaries.length === 0) return <div>No data for this date</div>;
+
+  const summary = data.summaries[0];
+
+  return (
+    <div className="daily-summary-card">
+      <h3>{summary.dayOfWeek}, {summary.date}</h3>
+      
+      <div className="time-stats">
+        <div className="stat">
+          <label>Total Hours:</label>
+          <span>{summary.totalHours.toFixed(2)}h</span>
+        </div>
+        <div className="stat">
+          <label>Target Hours:</label>
+          <span>{summary.targetHours}h</span>
+        </div>
+        <div className="stat">
+          <label>Completion:</label>
+          <span className={summary.completionPercentage >= 100 ? 'complete' : 'incomplete'}>
+            {summary.completionPercentage.toFixed(1)}%
+          </span>
+        </div>
+      </div>
+
+      <div className="billable-breakdown">
+        <div>Billable: {summary.billableHours.toFixed(2)}h</div>
+        <div>Non-billable: {summary.nonBillableHours.toFixed(2)}h</div>
+      </div>
+
+      {summary.projectBreakdown.length > 0 && (
+        <div className="project-breakdown">
+          <h4>Project Breakdown</h4>
+          {summary.projectBreakdown.map((project) => (
+            <div key={project.projectId} className="project-item">
+              <span>{project.projectName}</span>
+              <span>{project.hours.toFixed(2)}h ({project.percentage.toFixed(1)}%)</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {summary.timeGaps.length > 0 && (
+        <div className="time-gaps">
+          <h4>Time Gaps</h4>
+          {summary.timeGaps.map((gap, index) => (
+            <div key={index} className="gap-item">
+              <span>{gap.startTime} - {gap.endTime}</span>
+              <span>{gap.durationMinutes}min</span>
+              <span className="suggestion">{gap.suggestedAction}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+```typescript
+// src/components/WeeklyOverviewDashboard.tsx
+import React, { useState } from 'react';
+import { useWeeklyOverview } from '../hooks/useDailyWeeklyTracking';
+import { dailyWeeklyApi } from '../services/daily-weekly-api';
+
+export const WeeklyOverviewDashboard: React.FC = () => {
+  const [currentWeekStart, setCurrentWeekStart] = useState(
+    dailyWeeklyApi.getCurrentWeekStart()
+  );
+
+  const { data, isLoading, error } = useWeeklyOverview({
+    weekStartDate: currentWeekStart,
+    includeComparison: true
+  });
+
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const currentDate = new Date(currentWeekStart);
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+    setCurrentWeekStart(newDate.toISOString().split('T')[0]);
+  };
+
+  if (isLoading) return <div>Loading weekly overview...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!data) return <div>No data available</div>;
+
+  return (
+    <div className="weekly-overview-dashboard">
+      <div className="week-navigation">
+        <button onClick={() => navigateWeek('prev')}>← Previous Week</button>
+        <h2>Week of {data.weekInfo.weekStartDate}</h2>
+        <button onClick={() => navigateWeek('next')}>Next Week →</button>
+      </div>
+
+      <div className="weekly-stats">
+        <div className="stat-card">
+          <h3>Total Hours</h3>
+          <div className="value">{data.weeklyTotals.totalHours.toFixed(2)}h</div>
+          <div className="target">Target: {data.weeklyTotals.targetHours}h</div>
+          <div className="completion">
+            {data.weeklyTotals.completionPercentage.toFixed(1)}% complete
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <h3>Billable vs Non-billable</h3>
+          <div>Billable: {data.weeklyTotals.billableHours.toFixed(2)}h</div>
+          <div>Non-billable: {data.weeklyTotals.nonBillableHours.toFixed(2)}h</div>
+        </div>
+
+        <div className="stat-card">
+          <h3>Productivity Patterns</h3>
+          <div>Most productive: {data.patterns.mostProductiveDay}</div>
+          <div>Least productive: {data.patterns.leastProductiveDay}</div>
+          <div>Avg start: {data.patterns.averageStartTime}</div>
+          <div>Avg end: {data.patterns.averageEndTime}</div>
+        </div>
+      </div>
+
+      <div className="daily-breakdown">
+        <h3>Daily Breakdown</h3>
+        <div className="daily-grid">
+          {data.dailySummaries.map((day) => (
+            <div key={day.date} className="day-card">
+              <h4>{day.dayOfWeek}</h4>
+              <div className="date">{day.date}</div>
+              <div className="hours">{day.totalHours.toFixed(2)}h</div>
+              <div className="completion">
+                {day.completionPercentage.toFixed(1)}%
+              </div>
+              <div className="entries">{day.entriesCount} entries</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="project-distribution">
+        <h3>Project Distribution</h3>
+        {data.projectDistribution.map((project) => (
+          <div key={project.projectId} className="project-row">
+            <div className="project-info">
+              <span className="name">{project.projectName}</span>
+              <span className="client">{project.clientName}</span>
+            </div>
+            <div className="project-stats">
+              <span className="hours">{project.totalHours.toFixed(2)}h</span>
+              <span className="percentage">({project.percentage.toFixed(1)}%)</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {data.comparison && (
+        <div className="week-comparison">
+          <h3>Comparison with Previous Week</h3>
+          <div>
+            Previous week: {data.comparison.previousWeek.totalHours.toFixed(2)}h
+          </div>
+          <div className={data.comparison.previousWeek.change.startsWith('+') ? 'positive' : 'negative'}>
+            Change: {data.comparison.previousWeek.change}h ({data.comparison.previousWeek.changePercentage})
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
 ---
 
 ## 🎨 **React Context Integration**
