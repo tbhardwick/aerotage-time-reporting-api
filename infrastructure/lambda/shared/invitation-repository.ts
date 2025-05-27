@@ -10,9 +10,7 @@ import {
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { 
   UserInvitation, 
-  UserInvitationDynamoItem, 
-  InvitationFilters, 
-  InvitationErrorCodes 
+  InvitationFilters 
 } from './types';
 import { TokenService } from './token-service';
 
@@ -116,7 +114,7 @@ export class InvitationRepository {
     const command = new GetItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        id: id, // Use the actual partition key name from table schema
+        id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
     });
 
@@ -126,7 +124,7 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Item) as any);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Item) as Record<string, unknown>);
     } catch (error) {
       console.error('Error getting invitation by ID:', error);
       throw new Error('Failed to get invitation');
@@ -152,7 +150,7 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Items[0]) as any);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Items[0]) as Record<string, unknown>);
     } catch (error) {
       console.error('Error getting invitation by token hash:', error);
       throw new Error('Failed to get invitation');
@@ -200,7 +198,7 @@ export class InvitationRepository {
     // Use table scan for now since StatusIndexV2 is not deployed yet
     let filterExpression = '';
     const expressionAttributeNames: { [key: string]: string } = {};
-    const expressionAttributeValues: { [key: string]: any } = {};
+    const expressionAttributeValues: { [key: string]: unknown } = {};
 
     if (filters.status) {
       filterExpression = '#status = :status';
@@ -220,8 +218,8 @@ export class InvitationRepository {
       const result = await this.dynamoClient.send(command);
       const items = result.Items || [];
       
-      let invitations = items
-        .map(item => this.mapDynamoItemToInvitation(unmarshall(item) as any));
+      const invitations = items
+        .map(item => this.mapDynamoItemToInvitation(unmarshall(item) as Record<string, unknown>));
 
       // Sort by createdAt (newest first) since we don't have GSI sorting
       invitations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -253,7 +251,7 @@ export class InvitationRepository {
     const expressionAttributeNames: { [key: string]: string } = {
       '#updatedAt': 'updatedAt',
     };
-    const expressionAttributeValues: { [key: string]: any } = {
+    const expressionAttributeValues: { [key: string]: unknown } = {
       ':updatedAt': now,
     };
 
@@ -268,7 +266,7 @@ export class InvitationRepository {
     const command = new UpdateItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        id: id, // Use the actual partition key name from table schema
+        id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
       UpdateExpression: `SET ${updateExpressions.join(', ')}`,
       ExpressionAttributeNames: expressionAttributeNames,
@@ -282,7 +280,7 @@ export class InvitationRepository {
         throw new Error('Invitation not found');
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Attributes) as any);
+      return this.mapDynamoItemToInvitation(unmarshall(result.Attributes) as Record<string, unknown>);
     } catch (error) {
       console.error('Error updating invitation:', error);
       throw new Error('Failed to update invitation');
@@ -296,7 +294,7 @@ export class InvitationRepository {
     const command = new DeleteItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        id: id, // Use the actual partition key name from table schema
+        id, // Use the actual partition key name from table schema
       }, { removeUndefinedValues: true }),
     });
 
@@ -349,29 +347,29 @@ export class InvitationRepository {
   /**
    * Maps DynamoDB item to UserInvitation object
    */
-  private mapDynamoItemToInvitation(item: any): UserInvitation {
+  private mapDynamoItemToInvitation(item: Record<string, unknown>): UserInvitation {
     return {
-      id: item.id,
-      email: item.email,
-      invitedBy: item.invitedBy,
+      id: item.id as string,
+      email: item.email as string,
+      invitedBy: item.invitedBy as string,
       role: item.role as 'admin' | 'manager' | 'employee',
 
-      department: item.department,
-      jobTitle: item.jobTitle,
-      hourlyRate: item.hourlyRate,
-      permissions: JSON.parse(item.permissions || '{"features":[],"projects":[]}'),
+      department: item.department as string | undefined,
+      jobTitle: item.jobTitle as string | undefined,
+      hourlyRate: item.hourlyRate as number | undefined,
+      permissions: JSON.parse((item.permissions as string) || '{"features":[],"projects":[]}'),
       status: item.status as 'pending' | 'accepted' | 'expired' | 'cancelled',
-      invitationToken: item.invitationToken,
-      tokenHash: item.tokenHash,
-      expiresAt: item.expiresAt,
-      acceptedAt: item.acceptedAt,
-      onboardingCompleted: item.onboardingCompleted || false,
-      personalMessage: item.personalMessage,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      emailSentAt: item.emailSentAt,
-      resentCount: item.resentCount || 0,
-      lastResentAt: item.lastResentAt,
+      invitationToken: item.invitationToken as string,
+      tokenHash: item.tokenHash as string,
+      expiresAt: item.expiresAt as string,
+      acceptedAt: item.acceptedAt as string | undefined,
+      onboardingCompleted: (item.onboardingCompleted as boolean) || false,
+      personalMessage: item.personalMessage as string | undefined,
+      createdAt: item.createdAt as string,
+      updatedAt: item.updatedAt as string,
+      emailSentAt: item.emailSentAt as string,
+      resentCount: (item.resentCount as number) || 0,
+      lastResentAt: item.lastResentAt as string | undefined,
     };
   }
 
