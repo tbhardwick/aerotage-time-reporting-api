@@ -163,7 +163,7 @@ async function generateDashboardData(request: DashboardRequest, userId: string, 
 function getDateRange(period: string): { startDate: string; endDate: string } {
   const now = new Date();
   const endDate = now.toISOString().split('T')[0];
-  let startDate: string;
+  let startDate: string = endDate; // Default to same day
 
   switch (period) {
     case 'day':
