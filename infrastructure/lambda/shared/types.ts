@@ -1374,4 +1374,229 @@ export interface PaymentDynamoItem {
   createdAt: string;
   updatedAt: string;
   recordedBy: string;
+}
+
+// ✅ NEW - Daily and Weekly Time Tracking Types
+export interface UserWorkSchedule {
+  userId: string;
+  schedule: {
+    monday: WorkDaySchedule;
+    tuesday: WorkDaySchedule;
+    wednesday: WorkDaySchedule;
+    thursday: WorkDaySchedule;
+    friday: WorkDaySchedule;
+    saturday: WorkDaySchedule;
+    sunday: WorkDaySchedule;
+  };
+  timezone: string;
+  weeklyTargetHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkDaySchedule {
+  start: string | null; // HH:MM format or null for non-working day
+  end: string | null; // HH:MM format or null for non-working day
+  targetHours: number; // Target hours for this day
+}
+
+export interface DailySummary {
+  date: string; // YYYY-MM-DD
+  dayOfWeek: string;
+  totalMinutes: number;
+  totalHours: number;
+  billableMinutes: number;
+  billableHours: number;
+  nonBillableMinutes: number;
+  nonBillableHours: number;
+  targetMinutes: number;
+  targetHours: number;
+  completionPercentage: number;
+  entriesCount: number;
+  projectBreakdown: ProjectTimeBreakdown[];
+  timeGaps: TimeGap[];
+  workingHours: {
+    firstEntry: string | null; // HH:MM
+    lastEntry: string | null; // HH:MM
+    totalSpan: string | null; // "Xh Ym"
+  };
+}
+
+export interface ProjectTimeBreakdown {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  minutes: number;
+  hours: number;
+  percentage: number;
+}
+
+export interface TimeGap {
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  durationMinutes: number;
+  suggestedAction: 'break' | 'untracked' | 'extend_previous' | 'add_entry';
+  suggestions?: GapSuggestion[];
+}
+
+export interface GapSuggestion {
+  action: 'add_break' | 'extend_previous' | 'add_entry';
+  description: string;
+  entryId?: string; // For extend_previous action
+}
+
+export interface WeeklyOverview {
+  weekInfo: {
+    weekStartDate: string; // YYYY-MM-DD (Monday)
+    weekEndDate: string; // YYYY-MM-DD (Friday)
+    weekNumber: number;
+    year: number;
+  };
+  dailySummaries: DailySummary[];
+  weeklyTotals: {
+    totalHours: number;
+    billableHours: number;
+    nonBillableHours: number;
+    targetHours: number;
+    completionPercentage: number;
+    totalEntries: number;
+  };
+  patterns: {
+    mostProductiveDay: string;
+    leastProductiveDay: string;
+    averageStartTime: string; // HH:MM
+    averageEndTime: string; // HH:MM
+    longestWorkDay: string;
+    shortestWorkDay: string;
+  };
+  projectDistribution: WeeklyProjectBreakdown[];
+  comparison?: {
+    previousWeek: {
+      totalHours: number;
+      change: string; // "+3.5" or "-2.0"
+      changePercentage: string; // "+10.0%" or "-5.5%"
+    };
+  };
+}
+
+export interface WeeklyProjectBreakdown {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  totalHours: number;
+  percentage: number;
+  dailyBreakdown: {
+    date: string; // YYYY-MM-DD
+    hours: number;
+  }[];
+}
+
+export interface TimeGapAnalysis {
+  date: string; // YYYY-MM-DD
+  workingHours: {
+    start: string; // HH:MM
+    end: string; // HH:MM
+    totalMinutes: number;
+  };
+  trackedTime: {
+    totalMinutes: number;
+    percentage: number;
+  };
+  gaps: TimeGap[];
+  recommendations: GapRecommendation[];
+}
+
+export interface GapRecommendation {
+  type: 'fill_gap' | 'adjust_schedule' | 'break_reminder';
+  message: string;
+  action: string;
+}
+
+// Request/Response Types
+export interface DailySummaryRequest {
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  userId?: string;
+  includeGaps?: boolean;
+  targetHours?: number;
+}
+
+export interface DailySummaryResponse {
+  summaries: DailySummary[];
+  periodSummary: {
+    totalDays: number;
+    workDays: number;
+    totalHours: number;
+    averageHoursPerDay: number;
+    targetHours: number;
+    completionPercentage: number;
+  };
+}
+
+export interface WeeklyOverviewRequest {
+  weekStartDate: string; // YYYY-MM-DD (Monday)
+  userId?: string;
+  includeComparison?: boolean;
+}
+
+export interface TimeGapAnalysisRequest {
+  date: string; // YYYY-MM-DD
+  userId?: string;
+  workStartTime?: string; // HH:MM
+  workEndTime?: string; // HH:MM
+  minimumGapMinutes?: number;
+}
+
+export interface QuickTimeEntryRequest {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  projectId: string;
+  description: string;
+  isBillable?: boolean;
+  fillGap?: boolean;
+}
+
+export interface UpdateWorkScheduleRequest {
+  schedule?: {
+    [key in keyof UserWorkSchedule['schedule']]?: WorkDaySchedule;
+  };
+  timezone?: string;
+}
+
+// DynamoDB Item Types
+export interface UserWorkScheduleDynamoItem {
+  PK: string; // "USER#{userId}"
+  SK: string; // "WORK_SCHEDULE"
+  userId: string;
+  schedule: string; // JSON serialized
+  timezone: string;
+  weeklyTargetHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Error Codes
+export enum TimeTrackingErrorCodes {
+  // Work schedule errors
+  WORK_SCHEDULE_NOT_FOUND = 'WORK_SCHEDULE_NOT_FOUND',
+  INVALID_WORK_SCHEDULE = 'INVALID_WORK_SCHEDULE',
+  INVALID_TIMEZONE = 'INVALID_TIMEZONE',
+  INVALID_TIME_FORMAT = 'INVALID_TIME_FORMAT',
+  
+  // Gap analysis errors
+  INVALID_DATE_FOR_ANALYSIS = 'INVALID_DATE_FOR_ANALYSIS',
+  NO_TIME_ENTRIES_FOUND = 'NO_TIME_ENTRIES_FOUND',
+  INVALID_WORKING_HOURS = 'INVALID_WORKING_HOURS',
+  
+  // Daily/weekly summary errors
+  INVALID_DATE_RANGE = 'INVALID_DATE_RANGE',
+  DATE_RANGE_TOO_LARGE = 'DATE_RANGE_TOO_LARGE',
+  FUTURE_DATE_NOT_ALLOWED = 'FUTURE_DATE_NOT_ALLOWED',
+  
+  // Quick entry errors
+  TIME_OVERLAP_DETECTED = 'TIME_OVERLAP_DETECTED',
+  INVALID_TIME_RANGE = 'INVALID_TIME_RANGE',
+  GAP_ALREADY_FILLED = 'GAP_ALREADY_FILLED',
+  INVALID_TIME_ENTRY_DATA = 'INVALID_TIME_ENTRY_DATA',
 } 

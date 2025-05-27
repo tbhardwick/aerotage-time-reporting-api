@@ -3052,4 +3052,14 @@ export const TimeReportGenerator: React.FC = () => {
 - **Invoice & Payment Management**: Complete billing and payment system
 - **Advanced Features**: Automated workflows and integrations
 
-This guide provides a complete foundation for integrating the frontend with the Aerotage Time Reporting API backend. All the necessary code examples, patterns, and best practices are included to ensure a smooth integration process. **With all phases (1-7) complete, this provides a comprehensive business management solution with time tracking, project management, client management, reporting, and full invoicing capabilities.** 
+This guide provides a complete foundation for integrating the frontend with the Aerotage Time Reporting API backend. All the necessary code examples, patterns, and best practices are included to ensure a smooth integration process. **With all phases (1-7) complete, this provides a comprehensive business management solution with time tracking, project management, client management, reporting, and full invoicing capabilities.**
+
+---
+
+## 📚 **Additional Documentation**
+
+For enhanced API client implementation and response handling improvements:
+
+- **[Frontend API Client Guide](./FRONTEND_API_CLIENT_GUIDE.md)** - ✨ **Enhanced API client implementation with automatic response unwrapping**
+
+This new guide addresses API response structure inconsistencies and provides a better developer experience with automatic data extraction and improved type safety. 

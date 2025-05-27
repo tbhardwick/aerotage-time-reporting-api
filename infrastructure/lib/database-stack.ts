@@ -27,6 +27,8 @@ export interface DatabaseTables {
   reportCacheTable: dynamodb.Table;
   analyticsEventsTable: dynamodb.Table;
   scheduledReportsTable: dynamodb.Table;
+  // ✅ NEW - Daily/Weekly Time Tracking Tables
+  userWorkSchedulesTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -408,6 +410,17 @@ export class DatabaseStack extends cdk.Stack {
     // Note: GSI for next run lookup will be added in a separate deployment
     // due to DynamoDB's limitation of one GSI change per update
 
+    // ✅ NEW - Daily/Weekly Time Tracking: User Work Schedules Table
+    const userWorkSchedulesTable = new dynamodb.Table(this, 'UserWorkSchedulesTable', {
+      tableName: `aerotage-user-work-schedules-${stage}`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING }, // "USER#{userId}"
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING }, // "WORK_SCHEDULE"
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
     // Store all tables for easy access
     this.tables = {
       usersTable,
@@ -430,6 +443,8 @@ export class DatabaseStack extends cdk.Stack {
       reportCacheTable,
       analyticsEventsTable,
       scheduledReportsTable,
+      // ✅ NEW - Daily/Weekly Time Tracking Tables
+      userWorkSchedulesTable,
     };
 
     // CloudFormation Outputs
@@ -546,6 +561,13 @@ export class DatabaseStack extends cdk.Stack {
       value: scheduledReportsTable.tableName,
       description: 'Scheduled Reports DynamoDB Table Name',
       exportName: `ScheduledReportsTableName-${stage}`,
+    });
+
+    // ✅ NEW - Daily/Weekly Time Tracking CloudFormation Outputs
+    new cdk.CfnOutput(this, 'UserWorkSchedulesTableName', {
+      value: userWorkSchedulesTable.tableName,
+      description: 'User Work Schedules DynamoDB Table Name',
+      exportName: `UserWorkSchedulesTableName-${stage}`,
     });
   }
 } 

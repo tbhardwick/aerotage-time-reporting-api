@@ -136,6 +136,8 @@ export class ApiStack extends cdk.Stack {
                 tables.reportCacheTable.tableArn,
                 tables.analyticsEventsTable.tableArn,
                 tables.scheduledReportsTable.tableArn,
+                // Daily/Weekly Time Tracking Tables
+                tables.userWorkSchedulesTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
                 `${tables.teamsTable.tableArn}/index/*`, // DEPRECATED - kept for backward compatibility
                 `${tables.projectsTable.tableArn}/index/*`,
@@ -156,6 +158,8 @@ export class ApiStack extends cdk.Stack {
                 `${tables.reportCacheTable.tableArn}/index/*`,
                 `${tables.analyticsEventsTable.tableArn}/index/*`,
                 `${tables.scheduledReportsTable.tableArn}/index/*`,
+                // Daily/Weekly Time Tracking Table Indexes
+                `${tables.userWorkSchedulesTable.tableArn}/index/*`,
               ],
             }),
           ],
@@ -252,6 +256,8 @@ export class ApiStack extends cdk.Stack {
       REPORT_CACHE_TABLE_NAME: tables.reportCacheTable.tableName,
       ANALYTICS_EVENTS_TABLE_NAME: tables.analyticsEventsTable.tableName,
       SCHEDULED_REPORTS_TABLE_NAME: tables.scheduledReportsTable.tableName,
+      // Daily/Weekly Time Tracking Tables
+      USER_WORK_SCHEDULES_TABLE: tables.userWorkSchedulesTable.tableName,
       STORAGE_BUCKET: storageBucket.bucketName,
       // SES Configuration
       SES_FROM_EMAIL: sesStack.fromEmail,
@@ -322,6 +328,27 @@ export class ApiStack extends cdk.Stack {
 
     const inviteResource = usersResource.addResource('invite');
     inviteResource.addMethod('POST', new apigateway.LambdaIntegration(inviteUserFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // ✅ NEW - Work Schedule APIs
+    const getWorkScheduleFunction = createLambdaFunction('GetWorkSchedule', 'users/work-schedule-get', 'Get user work schedule');
+    const updateWorkScheduleFunction = createLambdaFunction('UpdateWorkSchedule', 'users/work-schedule-update', 'Update user work schedule');
+
+    const workScheduleResource = usersResource.addResource('work-schedule');
+    workScheduleResource.addMethod('GET', new apigateway.LambdaIntegration(getWorkScheduleFunction), {
+      authorizer: customAuthorizer,
+    });
+    workScheduleResource.addMethod('PUT', new apigateway.LambdaIntegration(updateWorkScheduleFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Work schedule for specific user
+    const userWorkScheduleResource = userResource.addResource('work-schedule');
+    userWorkScheduleResource.addMethod('GET', new apigateway.LambdaIntegration(getWorkScheduleFunction), {
+      authorizer: customAuthorizer,
+    });
+    userWorkScheduleResource.addMethod('PUT', new apigateway.LambdaIntegration(updateWorkScheduleFunction), {
       authorizer: customAuthorizer,
     });
 
@@ -447,6 +474,26 @@ export class ApiStack extends cdk.Stack {
 
     const rejectResource = timeEntriesResource.addResource('reject');
     rejectResource.addMethod('POST', new apigateway.LambdaIntegration(rejectTimeEntriesFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // ✅ NEW - Daily/Weekly Time Tracking APIs
+    const dailySummaryFunction = createLambdaFunction('DailySummary', 'time-entries/daily-summary', 'Get daily time summary');
+    const weeklyOverviewFunction = createLambdaFunction('WeeklyOverview', 'time-entries/weekly-overview', 'Get weekly time overview');
+    const quickAddFunction = createLambdaFunction('QuickAddTimeEntry', 'time-entries/quick-add', 'Quick add time entry');
+
+    const dailySummaryResource = timeEntriesResource.addResource('daily-summary');
+    dailySummaryResource.addMethod('GET', new apigateway.LambdaIntegration(dailySummaryFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    const weeklyOverviewResource = timeEntriesResource.addResource('weekly-overview');
+    weeklyOverviewResource.addMethod('GET', new apigateway.LambdaIntegration(weeklyOverviewFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    const quickAddResource = timeEntriesResource.addResource('quick-add');
+    quickAddResource.addMethod('POST', new apigateway.LambdaIntegration(quickAddFunction), {
       authorizer: customAuthorizer,
     });
 
