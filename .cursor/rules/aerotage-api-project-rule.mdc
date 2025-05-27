@@ -379,6 +379,209 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 }
 ```
 
+## 🔐 API Testing & Authentication (✅ **CRITICAL INSTRUCTIONS**)
+
+### **MANDATORY Authentication Pattern for All Test Scripts**
+
+**⚠️ IMPORTANT**: Always use this exact authentication pattern when creating test scripts. This is the ONLY method that works correctly with our API.
+
+#### **Required Files for Authentication**
+1. **`scripts/get-cognito-token.js`** - ✅ **ALREADY EXISTS** - Authentication helper module
+2. **Test scripts must import and use this module** - ✅ **VERIFIED WORKING**
+
+#### **Working Authentication Pattern** (✅ **USE THIS ALWAYS**)
+```javascript
+#!/usr/bin/env node
+
+const { getCognitoToken } = require('./scripts/get-cognito-token');
+const https = require('https');
+
+// Configuration
+const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+const TEST_USER = {
+  email: 'bhardwick@aerotage.com',
+  password: 'Aerotage*2025'
+};
+
+/**
+ * Make HTTP request with proper authentication
+ */
+function makeRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const requestOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || 443,
+      path: urlObj.pathname + urlObj.search,
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    };
+
+    const req = https.request(requestOptions, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          resolve({ status: res.statusCode, data: jsonData });
+        } catch (e) {
+          resolve({ status: res.statusCode, data: data });
+        }
+      });
+    });
+
+    req.on('error', reject);
+    
+    if (options.body) {
+      req.write(JSON.stringify(options.body));
+    }
+    
+    req.end();
+  });
+}
+
+/**
+ * Main test function
+ */
+async function testEndpoints() {
+  try {
+    console.log('🔐 Getting JWT token...');
+    
+    // Get authentication token using the working method
+    const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
+    const token = authResult.AccessToken; // Use AccessToken, not IdToken
+    
+    console.log('✅ JWT token obtained successfully');
+
+    // Test your endpoints here
+    const response = await makeRequest(`${API_BASE_URL}/your-endpoint`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    console.log('Response:', response);
+    
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  }
+}
+
+// Run tests
+testEndpoints();
+```
+
+#### **Authentication Module Details** (✅ **IMPLEMENTED**)
+
+The `scripts/get-cognito-token.js` module provides:
+- **`getCognitoToken(email, password)`** function
+- **Returns**: `{ AccessToken, IdToken, RefreshToken }` object
+- **Use**: `AccessToken` for API authentication (NOT IdToken)
+- **Handles**: Cognito authentication flow correctly
+
+#### **Critical Authentication Rules** (✅ **FOLLOW ALWAYS**)
+
+1. **ALWAYS import from `'./scripts/get-cognito-token'`** - ✅ **REQUIRED**
+2. **ALWAYS use `AccessToken`** from the result - ✅ **CRITICAL**
+3. **NEVER use AWS SDK directly** for authentication in test scripts - ❌ **CAUSES 403 ERRORS**
+4. **ALWAYS use `Authorization: Bearer ${token}`** header format - ✅ **REQUIRED**
+5. **ALWAYS use HTTPS requests** with proper error handling - ✅ **REQUIRED**
+
+#### **Test Credentials** (✅ **VERIFIED WORKING**)
+```javascript
+const TEST_USER = {
+  email: 'bhardwick@aerotage.com',
+  password: 'Aerotage*2025'
+};
+```
+
+#### **Common Authentication Mistakes to AVOID** (❌ **THESE CAUSE 403 ERRORS**)
+
+1. **Using AWS SDK directly**:
+   ```javascript
+   // ❌ DON'T DO THIS - CAUSES 403 FORBIDDEN
+   const { CognitoIdentityProviderClient, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
+   ```
+
+2. **Using IdToken instead of AccessToken**:
+   ```javascript
+   // ❌ DON'T DO THIS - CAUSES AUTHORIZATION ISSUES
+   const token = authResult.IdToken; // WRONG!
+   ```
+
+3. **Not using the get-cognito-token module**:
+   ```javascript
+   // ❌ DON'T DO THIS - CAUSES AUTHENTICATION FAILURES
+   // Custom authentication implementation
+   ```
+
+#### **Working Examples** (✅ **REFERENCE THESE**)
+
+- **`test-user-management-working.js`** - ✅ **WORKING USER MANAGEMENT TESTS**
+- **`scripts/test-phase5-endpoints.js`** - ✅ **WORKING PROJECT/CLIENT TESTS**
+- **`scripts/test-phase6-core.js`** - ✅ **WORKING REPORTING TESTS**
+
+#### **Authentication Troubleshooting** (✅ **DEBUG GUIDE**)
+
+If you get **403 Forbidden** errors:
+1. **Check**: Are you using `getCognitoToken` from `scripts/get-cognito-token.js`?
+2. **Check**: Are you using `AccessToken` (not `IdToken`)?
+3. **Check**: Is the Authorization header format correct: `Bearer ${token}`?
+4. **Check**: Are you importing the module correctly: `require('./scripts/get-cognito-token')`?
+
+If you get **500 Internal Server Error**:
+1. **Check**: CloudWatch logs for the specific Lambda function
+2. **Check**: Input validation and request format
+3. **Check**: DynamoDB data format issues
+
+#### **Test Script Template** (✅ **COPY THIS FOR NEW SCRIPTS**)
+
+```javascript
+#!/usr/bin/env node
+
+const { getCognitoToken } = require('./scripts/get-cognito-token');
+const https = require('https');
+
+// Configuration
+const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+const TEST_USER = {
+  email: 'bhardwick@aerotage.com',
+  password: 'Aerotage*2025'
+};
+
+// [Include makeRequest function from above]
+
+async function testYourEndpoints() {
+  try {
+    console.log('🔐 Getting JWT token...');
+    const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
+    const token = authResult.AccessToken;
+    console.log('✅ JWT token obtained successfully');
+
+    // Add your specific endpoint tests here
+    // Always use: Authorization: `Bearer ${token}`
+    
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  }
+}
+
+testYourEndpoints();
+```
+
+### **Why This Authentication Pattern Works** (✅ **TECHNICAL EXPLANATION**)
+
+1. **Cognito Groups**: The `AccessToken` contains `cognito:groups: ["admin"]` which our custom authorizer reads
+2. **Custom Authorizer**: Extracts role from `cognito:groups` when `custom:role` is not available
+3. **Session Validation**: The working pattern creates proper session records in DynamoDB
+4. **Token Format**: Uses the correct JWT token format that API Gateway expects
+
+**Remember**: This authentication pattern is the result of extensive debugging and is the ONLY method that works reliably with our current infrastructure. Always use it for new test scripts.
+
 ## Deployment & Environment Management (✅ **OPERATIONAL**)
 
 ### Environment Status

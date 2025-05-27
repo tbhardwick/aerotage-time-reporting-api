@@ -174,10 +174,34 @@ function generatePolicy(
 
   // Add user context if available (for Allow policies)
   if (effect === 'Allow' && context) {
+    console.log('JWT context received:', JSON.stringify(context, null, 2));
+    
+    // Determine role from custom attribute or Cognito groups
+    let userRole = context['custom:role'] || 'employee';
+    
+    // Fallback to Cognito groups if custom:role is not available
+    if (!context['custom:role'] && context['cognito:groups']) {
+      const groups = Array.isArray(context['cognito:groups']) 
+        ? context['cognito:groups'] 
+        : [context['cognito:groups']];
+      
+      console.log('Found Cognito groups:', groups);
+      
+      if (groups.includes('admin')) {
+        userRole = 'admin';
+      } else if (groups.includes('manager')) {
+        userRole = 'manager';
+      } else if (groups.includes('employee')) {
+        userRole = 'employee';
+      }
+    }
+    
+    console.log('Determined user role:', userRole);
+    
     authResponse.context = {
       userId: String(context.sub || ''),
       email: String(context.email || ''),
-      role: String(context['custom:role'] || 'employee'),
+      role: String(userRole),
       teamId: String(context['custom:teamId'] || ''),
       department: String(context['custom:department'] || ''),
       // Convert boolean and number values to strings (API Gateway requirement)
@@ -189,6 +213,8 @@ function generatePolicy(
         Object.entries(additionalContext).map(([key, value]) => [key, String(value)])
       ) : {})
     };
+    
+    console.log('Generated auth context:', JSON.stringify(authResponse.context, null, 2));
     
   }
 

@@ -242,6 +242,20 @@ export class UserRepository {
    * Maps DynamoDB item to User object
    */
   private mapDynamoItemToUser(item: Record<string, any>): User {
+    // Helper function to safely parse JSON or return object if already parsed
+    const safeJsonParse = (value: any, defaultValue: any) => {
+      if (!value) return defaultValue;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch (error) {
+          console.warn('Failed to parse JSON:', value, error);
+          return defaultValue;
+        }
+      }
+      return value; // Already an object
+    };
+
     return {
       id: item.id,
       email: item.email,
@@ -250,13 +264,13 @@ export class UserRepository {
       department: item.department,
       jobTitle: item.jobTitle,
       hourlyRate: item.hourlyRate,
-      permissions: item.permissions ? JSON.parse(item.permissions) : { features: [], projects: [] },
+      permissions: safeJsonParse(item.permissions, { features: [], projects: [] }),
       invitationId: item.invitationId,
       invitedBy: item.invitedBy,
       isActive: item.isActive,
       startDate: item.startDate,
-      preferences: item.preferences ? JSON.parse(item.preferences) : { theme: 'light', notifications: true, timezone: 'UTC' },
-      contactInfo: item.contactInfo ? JSON.parse(item.contactInfo) : undefined,
+      preferences: safeJsonParse(item.preferences, { theme: 'light', notifications: true, timezone: 'UTC' }),
+      contactInfo: safeJsonParse(item.contactInfo, undefined),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       createdBy: item.createdBy,
