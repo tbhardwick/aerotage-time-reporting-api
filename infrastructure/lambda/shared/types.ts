@@ -143,12 +143,12 @@ export interface ErrorResponse {
   error: {
     code: InvitationErrorCodes | ProfileSettingsErrorCodes | string;
     message: string;
-    details?: any;
+    details?: Record<string, unknown>;
   };
   timestamp: string;
 }
 
-export interface SuccessResponse<T = any> {
+export interface SuccessResponse<T = Record<string, unknown>> {
   success: true;
   data: T;
   message?: string;
@@ -927,7 +927,7 @@ export interface Invoice {
   
   // Template and Customization
   templateId?: string; // Reference to invoice template
-  customFields?: Record<string, any>; // Custom fields from template
+  customFields?: Record<string, unknown>; // Custom fields from template
   
   // Payment Information
   paymentTerms: string; // e.g., "Net 30", "Due on receipt"
@@ -998,7 +998,7 @@ export interface RecurringInvoiceConfig {
   
   // Template settings for recurring invoices
   templateId?: string;
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 // Invoice Template
@@ -1061,7 +1061,7 @@ export interface InvoiceTemplateField {
   label: string;
   type: 'text' | 'number' | 'date' | 'boolean' | 'select';
   required: boolean;
-  defaultValue?: any;
+  defaultValue?: string | number | boolean;
   options?: string[]; // For select type
   placeholder?: string;
   helpText?: string;
@@ -1129,7 +1129,7 @@ export interface UpdateInvoiceRequest {
   lineItems?: InvoiceLineItem[];
   notes?: string;
   clientNotes?: string;
-  customFields?: Record<string, any>;
+  customFields?: Record<string, unknown>;
 }
 
 export interface InvoiceFilters {

@@ -26,7 +26,7 @@ export class ValidationService {
   /**
    * Validates permissions structure
    */
-  static validatePermissions(permissions: any): boolean {
+  static validatePermissions(permissions: Record<string, unknown>): boolean {
     if (!permissions || typeof permissions !== 'object') {
       return false;
     }
@@ -36,12 +36,12 @@ export class ValidationService {
     }
 
     // Validate features array contains only strings
-    if (!permissions.features.every((feature: any) => typeof feature === 'string')) {
+    if (!permissions.features.every((feature: unknown) => typeof feature === 'string')) {
       return false;
     }
 
     // Validate projects array contains only strings
-    if (!permissions.projects.every((project: any) => typeof project === 'string')) {
+    if (!permissions.projects.every((project: unknown) => typeof project === 'string')) {
       return false;
     }
 
@@ -111,7 +111,7 @@ export class ValidationService {
   /**
    * Validates create invitation request
    */
-  static validateCreateInvitationRequest(request: any): ValidationResult {
+  static validateCreateInvitationRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // Required fields
@@ -164,7 +164,7 @@ export class ValidationService {
   /**
    * Validates accept invitation request
    */
-  static validateAcceptInvitationRequest(request: any): ValidationResult {
+  static validateAcceptInvitationRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // Required fields

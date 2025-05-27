@@ -1,12 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { Client } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ClientRepository } from '../shared/client-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Create client request:', JSON.stringify(event, null, 2));
 
   try {
     // Get current user from authorization context
@@ -19,7 +17,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestBody;
     try {
       requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -46,7 +44,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(newClient, 201, 'Client created successfully');
 
   } catch (error) {
-    console.error('Error creating client:', error);
     
     // Handle specific DynamoDB errors
     if (error instanceof Error) {
