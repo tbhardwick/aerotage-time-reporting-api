@@ -1,4 +1,4 @@
-import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { User } from './types';
 
@@ -147,6 +147,87 @@ export class UserRepository {
     } catch (error) {
       console.error('Error getting user by email:', error);
       throw new Error('Failed to get user');
+    }
+  }
+
+  /**
+   * Gets all users
+   */
+  async getAllUsers(): Promise<User[]> {
+    try {
+      const command = new ScanCommand({
+        TableName: this.usersTableName,
+      });
+
+      const result = await this.docClient.send(command);
+      
+      if (!result.Items || result.Items.length === 0) {
+        return [];
+      }
+
+      return result.Items.map(item => this.mapDynamoItemToUser(item));
+    } catch (error) {
+      console.error('Error getting all users:', error);
+      throw new Error('Failed to get users');
+    }
+  }
+
+  /**
+   * Updates a user
+   */
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const now = new Date().toISOString();
+    
+    // Build update expression
+    const updateExpressions: string[] = [];
+    const expressionAttributeNames: Record<string, string> = {};
+    const expressionAttributeValues: Record<string, any> = {};
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (key !== 'id' && key !== 'createdAt' && value !== undefined) {
+        const attrName = `#${key}`;
+        const attrValue = `:${key}`;
+        
+        updateExpressions.push(`${attrName} = ${attrValue}`);
+        expressionAttributeNames[attrName] = key;
+        
+        if (key === 'permissions') {
+          expressionAttributeValues[attrValue] = JSON.stringify(value);
+        } else if (key === 'preferences') {
+          expressionAttributeValues[attrValue] = JSON.stringify(value);
+        } else if (key === 'contactInfo') {
+          expressionAttributeValues[attrValue] = JSON.stringify(value);
+        } else {
+          expressionAttributeValues[attrValue] = value;
+        }
+      }
+    });
+
+    // Always update the updatedAt timestamp
+    updateExpressions.push('#updatedAt = :updatedAt');
+    expressionAttributeNames['#updatedAt'] = 'updatedAt';
+    expressionAttributeValues[':updatedAt'] = now;
+
+    try {
+      const command = new UpdateCommand({
+        TableName: this.usersTableName,
+        Key: { id },
+        UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ReturnValues: 'ALL_NEW',
+      });
+
+      const result = await this.docClient.send(command);
+      
+      if (!result.Attributes) {
+        throw new Error('User not found');
+      }
+
+      return this.mapDynamoItemToUser(result.Attributes);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw new Error('Failed to update user');
     }
   }
 
