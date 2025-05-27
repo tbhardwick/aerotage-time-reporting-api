@@ -20,7 +20,7 @@ export class DomainStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DomainStackProps) {
     super(scope, id, props);
 
-    const { stage, hostedZoneName, restApi, apiGatewayStage } = props;
+    const { stage, hostedZoneName, restApi } = props;
 
     // Define the API subdomain based on stage
     const apiSubdomain = stage === 'prod' ? 'api' : `api-${stage}`;
@@ -50,8 +50,9 @@ export class DomainStack extends cdk.Stack {
     });
 
     // Map the custom domain to the API Gateway
+    const basePath = '';
     customDomain.addBasePathMapping(restApi, {
-      basePath: '',
+      basePath,
     });
 
     // Create Route 53 record to point to the custom domain

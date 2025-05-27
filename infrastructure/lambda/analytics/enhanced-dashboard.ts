@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -32,7 +32,7 @@ interface WidgetSpecificConfig {
   metric?: string;
   chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter';
   groupBy?: string;
-  filters?: any;
+  filters?: Record<string, unknown>;
   threshold?: number;
   target?: number;
   comparison?: 'previous_period' | 'target' | 'benchmark';
@@ -54,7 +54,7 @@ interface WidgetData {
   id: string;
   type: string;
   title: string;
-  data: any;
+  data: Record<string, unknown>;
   metadata: {
     lastUpdated: string;
     dataPoints: number;
@@ -89,7 +89,7 @@ interface ActivityItem {
   userName: string;
   action: string;
   timestamp: string;
-  details: any;
+  details: Record<string, unknown>;
 }
 
 interface ForecastingData {
@@ -138,6 +138,42 @@ interface AlertData {
   acknowledged: boolean;
 }
 
+interface DateRange {
+  startDate: string;
+  endDate: string;
+}
+
+interface TimeEntry {
+  userId: string;
+  projectId: string;
+  startDate: string;
+  hours: number;
+  billable: boolean;
+  hourlyRate: number;
+  productivityScore?: number;
+}
+
+interface Project {
+  projectId: string;
+  name: string;
+  status: string;
+  budget: number;
+  budgetHours: number;
+  teamMembers?: string[];
+  managerId?: string;
+}
+
+interface Client {
+  clientId: string;
+  name: string;
+}
+
+interface User {
+  userId: string;
+  name?: string;
+  email?: string;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     console.log('Enhanced dashboard request:', JSON.stringify(event, null, 2));
@@ -156,7 +192,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (event.httpMethod === 'POST' && event.body) {
       try {
         dashboardRequest = JSON.parse(event.body);
-      } catch (error) {
+      } catch {
         return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
       }
     } else {
@@ -167,7 +203,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Apply query parameters
     const queryParams = event.queryStringParameters || {};
     if (queryParams.timeframe) {
-      dashboardRequest.timeframe = queryParams.timeframe as any;
+      dashboardRequest.timeframe = queryParams.timeframe as EnhancedDashboardRequest['timeframe'];
     }
     if (queryParams.realTime === 'true') {
       dashboardRequest.realTime = true;
@@ -333,7 +369,7 @@ async function generateEnhancedDashboard(
   };
 }
 
-function calculateDateRange(timeframe: string, customRange?: { startDate: string; endDate: string }) {
+function calculateDateRange(timeframe: string, customRange?: { startDate: string; endDate: string }): DateRange {
   const now = new Date();
   let startDate: Date;
   let endDate = new Date(now);
@@ -373,7 +409,7 @@ function calculateDateRange(timeframe: string, customRange?: { startDate: string
   };
 }
 
-async function fetchTimeEntries(dateRange: any, userId: string, userRole: string): Promise<any[]> {
+async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
   if (!timeEntriesTable) return [];
 
@@ -407,7 +443,7 @@ async function fetchTimeEntries(dateRange: any, userId: string, userRole: string
   }
 }
 
-async function fetchProjects(userId: string, userRole: string): Promise<any[]> {
+async function fetchProjects(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const projectsTable = process.env.PROJECTS_TABLE_NAME;
   if (!projectsTable) return [];
 
@@ -433,7 +469,7 @@ async function fetchProjects(userId: string, userRole: string): Promise<any[]> {
   }
 }
 
-async function fetchClients(userId: string, userRole: string): Promise<any[]> {
+async function fetchClients(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const clientsTable = process.env.CLIENTS_TABLE_NAME;
   if (!clientsTable) return [];
 
@@ -450,7 +486,7 @@ async function fetchClients(userId: string, userRole: string): Promise<any[]> {
   }
 }
 
-async function fetchUsers(userId: string, userRole: string): Promise<any[]> {
+async function fetchUsers(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const usersTable = process.env.USERS_TABLE_NAME;
   if (!usersTable) return [];
 
@@ -476,14 +512,14 @@ async function fetchUsers(userId: string, userRole: string): Promise<any[]> {
 
 async function generateWidget(
   widget: WidgetConfig,
-  timeEntries: any[],
-  projects: any[],
-  clients: any[],
-  users: any[],
-  dateRange: any
+  timeEntries: Record<string, unknown>[],
+  projects: Record<string, unknown>[],
+  clients: Record<string, unknown>[],
+  users: Record<string, unknown>[],
+  dateRange: DateRange
 ): Promise<WidgetData> {
-  let data: any;
-  let metadata: any = {
+  let data: Record<string, unknown>;
+  let metadata: WidgetData['metadata'] = {
     lastUpdated: new Date().toISOString(),
     dataPoints: 0,
   };
