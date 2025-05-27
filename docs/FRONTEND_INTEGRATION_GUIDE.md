@@ -174,21 +174,22 @@ class AuthService {
   // Logout with session cleanup
   async logout(): Promise<void> {
     try {
-      const userId = localStorage.getItem('userId');
-      const sessionId = localStorage.getItem('sessionId');
       const accessToken = localStorage.getItem('accessToken');
 
-      // Terminate backend session if available
-      if (userId && sessionId && accessToken && sessionId !== 'temp-session') {
+      // Call backend logout endpoint for complete session cleanup
+      if (accessToken) {
         try {
-          await fetch(`${awsConfig.apiBaseUrl}users/${userId}/sessions/${sessionId}`, {
-            method: 'DELETE',
+          await fetch(`${awsConfig.apiBaseUrl}logout`, {
+            method: 'POST',
             headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
           });
         } catch (error) {
-          console.warn('Backend session termination failed:', error);
+          console.warn('Backend logout failed:', error);
+          // Continue with Cognito logout even if backend fails
         }
       }
 
@@ -589,9 +590,14 @@ class SessionApi {
     return apiClient.post<UserSession>(`users/${userId}/sessions`, sessionData);
   }
 
-  // Terminate session
+  // Terminate specific session (deletes from database)
   async terminateSession(userId: string, sessionId: string): Promise<void> {
     return apiClient.delete(`users/${userId}/sessions/${sessionId}`);
+  }
+
+  // Complete logout with session cleanup
+  async logout(): Promise<{ message: string; sessionId?: string }> {
+    return apiClient.post('logout', {});
   }
 }
 

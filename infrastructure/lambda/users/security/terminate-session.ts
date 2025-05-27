@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import { 
   SuccessResponse, 
@@ -143,20 +143,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Mark the session as inactive
-    const updateCommand = new UpdateCommand({
+    // Actually delete the session from the database
+    const deleteCommand = new DeleteCommand({
       TableName: process.env.USER_SESSIONS_TABLE!,
       Key: { sessionId },
-      UpdateExpression: 'SET isActive = :isActive, updatedAt = :updatedAt',
-      ExpressionAttributeValues: {
-        ':isActive': false,
-        ':updatedAt': new Date().toISOString(),
-      },
     });
 
-    await docClient.send(updateCommand);
+    await docClient.send(deleteCommand);
 
-    console.log('Session terminated successfully:', {
+    console.log('Session deleted successfully:', {
       sessionId,
       userId,
       terminatedBy: authenticatedUserId

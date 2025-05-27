@@ -5,6 +5,8 @@ import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 import { DatabaseTables } from './database-stack';
 import { SesStack } from './ses-stack';
@@ -708,6 +710,26 @@ export class ApiStack extends cdk.Stack {
     sessionResource.addMethod('DELETE', new apigateway.LambdaIntegration(terminateSessionFunction), {
       authorizer: customAuthorizer,
     });
+
+    // Logout endpoint for explicit logout cleanup
+    const logoutResource = this.api.root.addResource('logout');
+    const logoutFunction = createLambdaFunction('Logout', 'users/security/logout', 'User logout with session cleanup');
+    
+    logoutResource.addMethod('POST', new apigateway.LambdaIntegration(logoutFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Session cleanup background job
+    const sessionCleanupFunction = createLambdaFunction('SessionCleanup', 'users/security/cleanup-sessions', 'Background session cleanup job');
+    
+    // Schedule the cleanup function to run every 6 hours
+    const cleanupRule = new events.Rule(this, 'SessionCleanupRule', {
+      ruleName: `aerotage-session-cleanup-${stage}`,
+      description: 'Trigger session cleanup every 6 hours',
+      schedule: events.Schedule.rate(cdk.Duration.hours(6)),
+    });
+    
+    cleanupRule.addTarget(new targets.LambdaFunction(sessionCleanupFunction));
 
     // Configure Gateway Responses for CORS support on error responses
     // This fixes the issue where 403 responses from the Lambda authorizer don't include CORS headers

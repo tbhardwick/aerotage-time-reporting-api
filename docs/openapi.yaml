@@ -23,7 +23,8 @@ info:
     While authentication is handled by AWS Cognito, this API provides session management endpoints:
     - `POST /users/{id}/sessions` - Create session record after Cognito login
     - `GET /users/{id}/sessions` - List active sessions
-    - `DELETE /users/{id}/sessions/{sessionId}` - Terminate session
+    - `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)
+    - `POST /logout` - Complete logout with session cleanup
     - `PUT /users/{id}/password` - Change password (requires current password)
     
     ## Base URL
@@ -1748,10 +1749,18 @@ paths:
       tags:
         - Session Management
       summary: Terminate session
-      description: Terminate a specific user session
+      description: |
+        Terminate a specific user session by deleting it from the database.
+        
+        **Important**: This endpoint now actually deletes the session record from the database,
+        rather than just marking it as inactive. The session will be permanently removed.
+        
+        **Restrictions**: 
+        - Users can only terminate their own sessions
+        - Cannot terminate the current session (use logout endpoint instead)
       responses:
         '200':
-          description: Session terminated
+          description: Session terminated and deleted from database
           content:
             application/json:
               schema:
@@ -1766,6 +1775,70 @@ paths:
                       message:
                         type: string
                         example: Session terminated successfully
+        '400':
+          description: Cannot terminate current session or session already inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Logout Endpoint
+  /logout:
+    post:
+      tags:
+        - Session Management
+      summary: User logout
+      description: |
+        Perform a complete logout operation with session cleanup.
+        
+        **Features**:
+        - Finds and deletes the current session based on user agent and IP
+        - Cleans up any expired sessions for the user
+        - Returns the ID of the session that was deleted
+        
+        **Usage**: This should be called before signing out from Cognito to ensure
+        proper backend session cleanup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+              example: {}
+      responses:
+        '200':
+          description: Logout successful with session cleanup
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Logout successful
+                      sessionId:
+                        type: string
+                        description: ID of the session that was deleted (if any)
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+        '401':
+          description: User authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
                         
   # User Invitations
   /user-invitations:
