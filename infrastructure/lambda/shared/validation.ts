@@ -6,6 +6,140 @@ export interface ValidationResult {
   errorCode?: InvitationErrorCodes;
 }
 
+// Validation parameter interfaces
+interface InvitationFilters {
+  status?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface ProjectRequest {
+  name?: string;
+  clientId?: string;
+  clientName?: string;
+  status?: string;
+  defaultBillable?: boolean;
+  teamMembers?: unknown[];
+  tags?: unknown[];
+  createdBy?: string;
+  description?: string;
+  defaultHourlyRate?: number;
+  budget?: {
+    type?: string;
+    value?: number;
+    spent?: number;
+  };
+  deadline?: string;
+}
+
+interface ClientRequest {
+  name?: string;
+  isActive?: boolean;
+  createdBy?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contactPerson?: string;
+  defaultHourlyRate?: number;
+  notes?: string;
+}
+
+interface ProjectFilters {
+  clientId?: string;
+  status?: string;
+  teamMember?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface ClientFilters {
+  isActive?: boolean;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface InvoiceFilters {
+  clientId?: string;
+  projectId?: string;
+  status?: string;
+  isRecurring?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  amountMin?: number;
+  amountMax?: number;
+  currency?: string;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface InvoiceRequest {
+  clientId?: string;
+  projectIds?: unknown[];
+  timeEntryIds?: unknown[];
+  templateId?: string;
+  issueDate?: string;
+  dueDate?: string;
+  paymentTerms?: string;
+  currency?: string;
+  taxRate?: number;
+  discountRate?: number;
+  additionalLineItems?: unknown[];
+  notes?: string;
+  clientNotes?: string;
+  isRecurring?: boolean;
+  recurringConfig?: {
+    frequency?: string;
+    interval?: number;
+    startDate?: string;
+    endDate?: string;
+    maxInvoices?: number;
+    isActive?: boolean;
+    autoSend?: boolean;
+    generateDaysBefore?: number;
+  };
+}
+
+interface UpdateInvoiceRequest {
+  status?: string;
+  dueDate?: string;
+  paymentTerms?: string;
+  taxRate?: number;
+  discountRate?: number;
+  lineItems?: unknown[];
+  notes?: string;
+  clientNotes?: string;
+  customFields?: Record<string, unknown>;
+}
+
+interface SendInvoiceRequest {
+  recipientEmails?: unknown[];
+  subject?: string;
+  message?: string;
+  attachPdf?: boolean;
+  sendCopy?: boolean;
+  scheduleDate?: string;
+}
+
+interface PaymentRequest {
+  amount?: number;
+  paymentDate?: string;
+  paymentMethod?: string;
+  reference?: string;
+  notes?: string;
+  externalPaymentId?: string;
+  processorFee?: number;
+}
+
 export class ValidationService {
   /**
    * Validates email format using RFC 5322 compliant regex
@@ -251,7 +385,7 @@ export class ValidationService {
   /**
    * Validates invitation filters for listing
    */
-  static validateInvitationFilters(filters: any): ValidationResult {
+  static validateInvitationFilters(filters: InvitationFilters): ValidationResult {
     const errors: string[] = [];
 
     if (filters.status && !['pending', 'accepted', 'expired', 'cancelled'].includes(filters.status)) {
@@ -283,7 +417,7 @@ export class ValidationService {
   /**
    * Validates create project request
    */
-  static validateCreateProjectRequest(request: any): ValidationResult {
+  static validateCreateProjectRequest(request: ProjectRequest): ValidationResult {
     const errors: string[] = [];
 
     // Required fields
@@ -359,7 +493,7 @@ export class ValidationService {
   /**
    * Validates update project request
    */
-  static validateUpdateProjectRequest(request: any): ValidationResult {
+  static validateUpdateProjectRequest(request: ProjectRequest): ValidationResult {
     const errors: string[] = [];
 
     // All fields are optional for updates, but if provided must be valid
@@ -430,6 +564,7 @@ export class ValidationService {
   /**
    * Validates create client request
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static validateCreateClientRequest(request: any): ValidationResult {
     const errors: string[] = [];
 
