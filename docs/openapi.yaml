@@ -1770,28 +1770,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/User'
                     
-    delete:
-      tags:
-        - User Management
-      summary: Delete user
-      description: Delete user account (admin only)
-      responses:
-        '200':
-          description: User deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: User deleted successfully
+# Note: User deletion is handled through soft delete via PUT /users/{id} with status: inactive
                         
   # User Profile
   /users/{id}/profile:
