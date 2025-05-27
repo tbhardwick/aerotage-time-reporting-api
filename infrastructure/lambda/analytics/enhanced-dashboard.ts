@@ -710,7 +710,7 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: any[], u
         
         heatmapData.push({
           x: d.toISOString().split('T')[0],
-          y: user.name || user.email,
+          y: user.name || user.email || 'Unknown User',
           value: dayHours,
         });
       }
@@ -764,9 +764,11 @@ function groupByMonth(timeEntries: any[], dateRange: any): any[] {
     }
     
     const data = months.get(month);
-    data.hours += entry.hours;
-    if (entry.billable) {
-      data.revenue += entry.hours * entry.hourlyRate;
+    if (data) {
+      data.hours += entry.hours;
+      if (entry.billable) {
+        data.revenue += entry.hours * entry.hourlyRate;
+      }
     }
   });
 
@@ -786,7 +788,10 @@ function groupByWeek(timeEntries: any[], dateRange: any): any[] {
       weeks.set(weekKey, { week: weekKey, value: 0 });
     }
     
-    weeks.get(weekKey).value += entry.hours;
+    const weekData = weeks.get(weekKey);
+    if (weekData) {
+      weekData.value += entry.hours;
+    }
   });
 
   return Array.from(weeks.values()).sort((a, b) => a.week.localeCompare(b.week));
@@ -977,8 +982,12 @@ function getGaugeStatus(value: number, target?: number, threshold?: number): 'go
 function generateSimpleForecast(values: number[]): number[] {
   if (values.length < 2) return [];
   
-  const trend = (values[values.length - 1] - values[0]) / (values.length - 1);
+  const firstValue = values[0];
   const lastValue = values[values.length - 1];
+  
+  if (firstValue === undefined || lastValue === undefined) return [];
+  
+  const trend = (lastValue - firstValue) / (values.length - 1);
   
   return [
     lastValue + trend,
