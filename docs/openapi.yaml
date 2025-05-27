@@ -5,8 +5,26 @@ info:
     Comprehensive time tracking and project management API for Aerotage.
     
     ## Authentication
-    All endpoints (except public invitation endpoints) require JWT authentication via AWS Cognito.
-    Include the JWT token in the Authorization header: `Bearer {token}`
+    This API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.
+    
+    ### Authentication Flow
+    1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users
+    2. **Get JWT Token**: Extract the JWT token from Cognito session
+    3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`
+    4. **Session Management**: Create backend session records for tracking
+    
+    ### Cognito Configuration
+    - **User Pool ID**: `us-east-1_EsdlgX9Qg`
+    - **App Client ID**: `148r35u6uultp1rmfdu22i8amb`
+    - **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
+    - **Region**: `us-east-1`
+    
+    ### Authentication Endpoints
+    While authentication is handled by AWS Cognito, this API provides session management endpoints:
+    - `POST /users/{id}/sessions` - Create session record after Cognito login
+    - `GET /users/{id}/sessions` - List active sessions
+    - `DELETE /users/{id}/sessions/{sessionId}` - Terminate session
+    - `PUT /users/{id}/password` - Change password (requires current password)
     
     ## Base URL
     - Development: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
