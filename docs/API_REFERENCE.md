@@ -297,7 +297,55 @@ Authorization: Bearer {token}
 }
 ```
 
-**Note**: Users cannot terminate their current session for security reasons.
+**Important Changes:**
+- **Session Deletion**: This endpoint now **actually deletes** the session from the database, rather than just marking it as inactive
+- **Permanent Removal**: The session record is completely removed and cannot be recovered
+- **Current Session Protection**: Users cannot terminate their current session (use logout endpoint instead)
+
+### **Logout (Complete Session Cleanup)**
+```http
+POST /logout
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Logout successful",
+    "sessionId": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+**Features:**
+- **Current Session Cleanup**: Finds and deletes the current session based on user agent and IP
+- **Expired Session Cleanup**: Automatically cleans up any expired sessions for the user
+- **Session ID Return**: Returns the ID of the session that was deleted
+- **Complete Logout**: Should be called before signing out from Cognito for proper backend cleanup
+
+**Recommended Logout Flow:**
+```javascript
+// 1. Call backend logout endpoint
+await fetch(`${apiBaseUrl}/logout`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({})
+});
+
+// 2. Sign out from Cognito
+await Auth.signOut();
+
+// 3. Clear local storage
+localStorage.clear();
+```
 
 ---
 

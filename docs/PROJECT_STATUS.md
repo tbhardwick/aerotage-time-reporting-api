@@ -184,7 +184,8 @@
 | **Security** | `/users/{id}/password` | PUT | ✅ | Change password |
 | | `/users/{id}/security-settings` | GET/PUT | ✅ | Security configuration |
 | **Sessions** | `/users/{id}/sessions` | GET/POST | ✅ | Session management |
-| | `/users/{id}/sessions/{sessionId}` | DELETE | ✅ | Terminate session |
+| | `/users/{id}/sessions/{sessionId}` | DELETE | ✅ | Terminate session (deletes from DB) |
+| | `/logout` | POST | ✅ | Complete logout with cleanup |
 | **Invitations** | `/user-invitations` | GET/POST | ✅ | Invitation management |
 | | `/user-invitations/{id}/resend` | POST | ✅ | Resend invitation |
 | | `/user-invitations/{id}` | DELETE | ✅ | Cancel invitation |

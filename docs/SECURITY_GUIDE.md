@@ -176,17 +176,45 @@ interface SessionRecord {
 }
 ```
 
-### **Session Termination**
+### **Session Termination & Cleanup**
+
+#### **Individual Session Termination**
 ```http
 DELETE /users/{userId}/sessions/{sessionId}
 Authorization: Bearer {token}
 ```
 
 **Security Rules**:
-- Users cannot terminate their current session
-- Admin can terminate any session
-- Session termination is logged
-- JWT tokens remain valid until expiry
+- **Database Deletion**: Sessions are permanently deleted from database (not just marked inactive)
+- **Current Session Protection**: Users cannot terminate their current session
+- **Admin Override**: Admin can terminate any session
+- **Audit Logging**: All termination events logged
+- **JWT Validity**: JWT tokens remain valid until expiry
+
+#### **Complete Logout with Cleanup**
+```http
+POST /logout
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{}
+```
+
+**Security Features**:
+- **Current Session Cleanup**: Automatically finds and deletes current session
+- **Expired Session Cleanup**: Removes all expired sessions for the user
+- **Session Identification**: Uses user agent and IP to identify current session
+- **Comprehensive Cleanup**: Ensures no orphaned session records
+- **Audit Trail**: Complete logout process logged
+
+#### **Automated Session Cleanup**
+- **Background Job**: Runs every 6 hours automatically
+- **Cleanup Criteria**:
+  - Sessions past expiration date
+  - Inactive sessions (isActive = false)
+  - Orphaned sessions (older than 30 days)
+- **Batch Processing**: Efficient cleanup of large session volumes
+- **Error Handling**: Graceful handling of cleanup failures
 
 ---
 
