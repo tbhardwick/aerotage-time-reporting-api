@@ -1109,4 +1109,97 @@ export class ValidationService {
       errors,
     };
   }
+
+  /**
+   * Validate create user request
+   */
+  static validateCreateUserRequest(request: Record<string, unknown>): ValidationResult {
+    const errors: string[] = [];
+
+    // Required fields
+    if (!request.email || typeof request.email !== 'string') {
+      errors.push('email is required and must be a string');
+    } else if (!this.validateEmail(request.email)) {
+      errors.push('email must be a valid email address');
+    }
+
+    if (!request.name || typeof request.name !== 'string') {
+      errors.push('name is required and must be a string');
+    } else if (request.name.trim().length < 2) {
+      errors.push('name must be at least 2 characters long');
+    }
+
+    // Optional fields validation
+    if (request.role && typeof request.role === 'string') {
+      const validRoles = ['admin', 'manager', 'employee'];
+      if (!validRoles.includes(request.role)) {
+        errors.push('role must be one of: admin, manager, employee');
+      }
+    }
+
+    if (request.department && typeof request.department !== 'string') {
+      errors.push('department must be a string');
+    }
+
+    if (request.jobTitle && typeof request.jobTitle !== 'string') {
+      errors.push('jobTitle must be a string');
+    }
+
+    if (request.hourlyRate !== undefined) {
+      if (typeof request.hourlyRate !== 'number' || request.hourlyRate < 0) {
+        errors.push('hourlyRate must be a positive number');
+      }
+    }
+
+    if (request.startDate && typeof request.startDate === 'string') {
+      // Simple date validation for YYYY-MM-DD format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(request.startDate)) {
+        errors.push('startDate must be a valid ISO date (YYYY-MM-DD)');
+      }
+    }
+
+    // Validate permissions if provided
+    if (request.permissions) {
+      if (typeof request.permissions !== 'object' || request.permissions === null) {
+        errors.push('permissions must be an object');
+      } else {
+        const permissions = request.permissions as Record<string, unknown>;
+        
+        if (permissions.features && !Array.isArray(permissions.features)) {
+          errors.push('permissions.features must be an array');
+        }
+        
+        if (permissions.projects && !Array.isArray(permissions.projects)) {
+          errors.push('permissions.projects must be an array');
+        }
+      }
+    }
+
+    // Validate contact info if provided
+    if (request.contactInfo) {
+      if (typeof request.contactInfo !== 'object' || request.contactInfo === null) {
+        errors.push('contactInfo must be an object');
+      } else {
+        const contactInfo = request.contactInfo as Record<string, unknown>;
+        
+        if (contactInfo.phone && typeof contactInfo.phone !== 'string') {
+          errors.push('contactInfo.phone must be a string');
+        }
+        
+        if (contactInfo.address && typeof contactInfo.address !== 'string') {
+          errors.push('contactInfo.address must be a string');
+        }
+        
+        if (contactInfo.emergencyContact && typeof contactInfo.emergencyContact !== 'string') {
+          errors.push('contactInfo.emergencyContact must be a string');
+        }
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
 } 

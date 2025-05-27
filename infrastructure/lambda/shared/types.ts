@@ -124,6 +124,39 @@ export interface User {
   createdBy: string;
 }
 
+// Create User Request Type
+export interface CreateUserRequest {
+  email: string;
+  name: string;
+  role?: 'admin' | 'manager' | 'employee';
+  department?: string;
+  jobTitle?: string;
+  hourlyRate?: number;
+  permissions?: {
+    features: string[];
+    projects: string[];
+  };
+  startDate?: string; // ISO date
+  contactInfo?: {
+    phone?: string;
+    address?: string;
+    emergencyContact?: string;
+  };
+}
+
+// User Error Codes
+export enum UserErrorCodes {
+  USER_NOT_FOUND = 'USER_NOT_FOUND',
+  USER_ALREADY_EXISTS = 'USER_ALREADY_EXISTS',
+  INVALID_USER_DATA = 'INVALID_USER_DATA',
+  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
+  EMAIL_ALREADY_EXISTS = 'EMAIL_ALREADY_EXISTS',
+  INVALID_EMAIL_FORMAT = 'INVALID_EMAIL_FORMAT',
+  INVALID_ROLE = 'INVALID_ROLE',
+  INVALID_HOURLY_RATE = 'INVALID_HOURLY_RATE',
+  USER_CREATION_FAILED = 'USER_CREATION_FAILED',
+}
+
 // Error Types
 export enum InvitationErrorCodes {
   INVALID_EMAIL = 'INVALID_EMAIL',

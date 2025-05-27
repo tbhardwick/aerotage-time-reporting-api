@@ -305,8 +305,9 @@ export class ApiStack extends cdk.Stack {
     const getUsersFunction = createLambdaFunction('GetUsers', 'users/list', 'List all users');
     const getUserFunction = createLambdaFunction('GetUser', 'users/get', 'Get user by ID');
     const updateUserFunction = createLambdaFunction('UpdateUser', 'users/update', 'Update user');
-    const deleteUserFunction = createLambdaFunction('DeleteUser', 'users/delete', 'Delete user');
-    const inviteUserFunction = createLambdaFunction('InviteUser', 'users/invite', 'Invite new user');
+    // Note: User deletion and invitation are handled through separate endpoints
+    // - User invitations: /user-invitations/* endpoints
+    // - User deletion: Soft delete through user update endpoint
 
     usersResource.addMethod('GET', new apigateway.LambdaIntegration(getUsersFunction), {
       authorizer: customAuthorizer,
@@ -322,14 +323,8 @@ export class ApiStack extends cdk.Stack {
     userResource.addMethod('PUT', new apigateway.LambdaIntegration(updateUserFunction), {
       authorizer: customAuthorizer,
     });
-    userResource.addMethod('DELETE', new apigateway.LambdaIntegration(deleteUserFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const inviteResource = usersResource.addResource('invite');
-    inviteResource.addMethod('POST', new apigateway.LambdaIntegration(inviteUserFunction), {
-      authorizer: customAuthorizer,
-    });
+    // Note: User deletion is handled through soft delete via PUT /users/{id}
+    // User invitations are handled through /user-invitations endpoints
 
     // ✅ NEW - Work Schedule APIs
     const getWorkScheduleFunction = createLambdaFunction('GetWorkSchedule', 'users/work-schedule-get', 'Get user work schedule');
@@ -497,38 +492,8 @@ export class ApiStack extends cdk.Stack {
       authorizer: customAuthorizer,
     });
 
-    // Reporting APIs
+    // Reporting APIs - Using working implementations
     const reportsResource = this.api.root.addResource('reports');
-    const getTimeReportsFunction = createLambdaFunction('GetTimeReports', 'reports/time', 'Get time reports');
-    const getProjectReportsFunction = createLambdaFunction('GetProjectReports', 'reports/projects', 'Get project reports');
-    const getUserReportsFunction = createLambdaFunction('GetUserReports', 'reports/users', 'Get user reports');
-    const exportReportsFunction = createLambdaFunction('ExportReports', 'reports/export', 'Export reports');
-    const getAnalyticsFunction = createLambdaFunction('GetAnalytics', 'reports/analytics', 'Get analytics data');
-
-    const timeReportsResource = reportsResource.addResource('time');
-    timeReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getTimeReportsFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const projectReportsResource = reportsResource.addResource('projects');
-    projectReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getProjectReportsFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const userReportsResource = reportsResource.addResource('users');
-    userReportsResource.addMethod('GET', new apigateway.LambdaIntegration(getUserReportsFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const exportResource = reportsResource.addResource('export');
-    exportResource.addMethod('POST', new apigateway.LambdaIntegration(exportReportsFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    const analyticsResource = reportsResource.addResource('analytics');
-    analyticsResource.addMethod('GET', new apigateway.LambdaIntegration(getAnalyticsFunction), {
-      authorizer: customAuthorizer,
-    });
 
     // Phase 6: Analytics & Dashboard APIs
     const analyticsMainResource = this.api.root.addResource('analytics');
@@ -591,25 +556,42 @@ export class ApiStack extends cdk.Stack {
       authorizer: customAuthorizer,
     });
 
-    // Report generation endpoints (enhanced)
+    // Report generation endpoints (working implementations)
     const generateTimeReportFunction = createLambdaFunction('GenerateTimeReport', 'reports/generate-time-report', 'Generate time reports');
     const generateProjectReportFunction = createLambdaFunction('GenerateProjectReport', 'reports/generate-project-report', 'Generate project reports');
     const generateClientReportFunction = createLambdaFunction('GenerateClientReport', 'reports/generate-client-report', 'Generate client reports');
+    const exportReportFunction = createLambdaFunction('ExportReport', 'reports/export-report', 'Export reports');
     
-    // Add POST methods for report generation
+    // Time reports endpoints
+    const timeReportsResource = reportsResource.addResource('time');
+    timeReportsResource.addMethod('GET', new apigateway.LambdaIntegration(generateTimeReportFunction), {
+      authorizer: customAuthorizer,
+    });
     timeReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateTimeReportFunction), {
       authorizer: customAuthorizer,
     });
     
+    // Project reports endpoints
+    const projectReportsResource = reportsResource.addResource('projects');
+    projectReportsResource.addMethod('GET', new apigateway.LambdaIntegration(generateProjectReportFunction), {
+      authorizer: customAuthorizer,
+    });
     projectReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateProjectReportFunction), {
       authorizer: customAuthorizer,
     });
     
+    // Client reports endpoints
     const clientReportsResource = reportsResource.addResource('clients');
     clientReportsResource.addMethod('GET', new apigateway.LambdaIntegration(generateClientReportFunction), {
       authorizer: customAuthorizer,
     });
     clientReportsResource.addMethod('POST', new apigateway.LambdaIntegration(generateClientReportFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // Export reports endpoint
+    const exportResource = reportsResource.addResource('export');
+    exportResource.addMethod('POST', new apigateway.LambdaIntegration(exportReportFunction), {
       authorizer: customAuthorizer,
     });
 
