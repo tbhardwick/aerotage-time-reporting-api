@@ -11,6 +11,7 @@ import { ValidationService } from '../shared/validation';
 import { InvitationRepository } from '../shared/invitation-repository';
 import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
+import { UserRepository } from '../shared/user-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Accept invitation request:', JSON.stringify(event, null, 2));
@@ -23,14 +24,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const requestBody: AcceptInvitationRequest = JSON.parse(event.body);
 
-    // Validate request
-    const validation = ValidationService.validateAcceptInvitationRequest(requestBody);
-    if (!validation.isValid) {
-      return createErrorResponse(
-        400, 
-        validation.errorCode || InvitationErrorCodes.INVALID_TOKEN, 
-        validation.errors.join(', ')
-      );
+    // Basic validation
+    if (!requestBody.token || !requestBody.userData?.name || !requestBody.userData?.password) {
+      return createErrorResponse(400, InvitationErrorCodes.INVALID_TOKEN, 'Missing required fields');
     }
 
     const repository = new InvitationRepository();
@@ -63,38 +59,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(410, InvitationErrorCodes.INVITATION_EXPIRED, 'Invitation has expired');
     }
 
-    // TODO: Create Cognito user account
-    // This would involve using AWS Cognito Identity Provider SDK
-    // For now, we'll simulate user creation
-
-    const now = new Date().toISOString();
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Create user object
-    const user: User = {
-      id: userId,
+    // Create user account
+    const userRepository = new UserRepository();
+    
+    const user = await userRepository.createUser({
       email: invitation.email,
       name: requestBody.userData.name,
       role: invitation.role,
-      teamId: invitation.teamId,
       department: invitation.department,
       jobTitle: invitation.jobTitle,
       hourlyRate: invitation.hourlyRate,
-      invitationId: invitation.id,
-      onboardedAt: now,
-      invitedBy: invitation.invitedBy,
-      isActive: true,
-      startDate: now,
       permissions: invitation.permissions,
       preferences: requestBody.userData.preferences,
       contactInfo: requestBody.userData.contactInfo,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: invitation.invitedBy,
-    };
-
-    // TODO: Save user to Users table
-    // This would involve using the DynamoDB client to save the user
+      invitationId: invitation.id,
+      invitedBy: invitation.invitedBy,
+    });
 
     // Mark invitation as accepted
     const updatedInvitation = await repository.acceptInvitation(invitation.id);
