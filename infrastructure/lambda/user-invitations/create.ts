@@ -10,6 +10,8 @@ import { ValidationService } from '../shared/validation';
 import { InvitationRepository, CreateInvitationData } from '../shared/invitation-repository';
 import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
+import { getCurrentUserId } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Create user invitation request:', JSON.stringify(event, null, 2));
@@ -59,7 +61,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       email: requestBody.email.toLowerCase(),
       invitedBy: currentUserId,
       role: requestBody.role,
-      teamId: requestBody.teamId,
       department: requestBody.department,
       jobTitle: requestBody.jobTitle,
       hourlyRate: requestBody.hourlyRate,
@@ -101,84 +102,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       invitationToken: '', // Don't return the actual token in response
     };
 
-    const response: SuccessResponse<UserInvitation> = {
-      success: true,
-      data: responseInvitation,
-      message: 'User invitation created successfully',
-    };
-
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseInvitation, 201, 'User invitation created successfully');
 
   } catch (error) {
     console.error('Error creating user invitation:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
-};
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims (for backward compatibility)
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: InvitationErrorCodes, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 
+}; 

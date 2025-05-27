@@ -1,5 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   TimeEntryFilters, 
   PaginationResponse, 
@@ -13,27 +15,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     console.log('List time entries request:', JSON.stringify(event, null, 2));
 
-    // Extract user information from authorizer context
-    const authContext = event.requestContext.authorizer;
-    const userId = authContext?.userId || authContext?.claims?.sub;
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
+    // Extract user information from authorization context using shared helper
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    
     if (!userId) {
-      console.error('No user ID found in authorization context');
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User not authenticated',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
     }
 
     // Parse query parameters
@@ -44,7 +31,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // User filtering - employees can only see their own entries
     // Managers and admins can see entries for their team/all users
-    if (userRole === 'employee') {
+    if (user?.role === 'employee') {
       filters.userId = userId;
     } else if (queryParams.userId) {
       filters.userId = queryParams.userId;
@@ -154,19 +141,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error listing time entries:', error);
 
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      } as ErrorResponse),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };

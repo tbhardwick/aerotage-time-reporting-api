@@ -8,6 +8,8 @@ import {
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { InvoiceRepository } from '../shared/invoice-repository';
+import { getCurrentUserId } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Generate invoice request:', JSON.stringify(event, null, 2));
@@ -33,20 +35,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Create the invoice
     const invoice = await invoiceRepository.createInvoice(requestBody as CreateInvoiceRequest, currentUserId);
 
-    const response: SuccessResponse<Invoice> = {
-      success: true,
-      data: invoice,
-      message: 'Invoice generated successfully',
-    };
-
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(invoice, 201, 'Invoice generated successfully');
 
   } catch (error) {
     console.error('Error generating invoice:', error);
@@ -64,66 +53,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-}

@@ -1,5 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { 
   UpdateTimeEntryRequest, 
   TimeEntryErrorCodes, 
@@ -13,140 +15,47 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     console.log('Update time entry request:', JSON.stringify(event, null, 2));
 
-    // Extract user information from authorizer context
-    const authContext = event.requestContext.authorizer;
-    const userId = authContext?.userId || authContext?.claims?.sub;
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
+    // Extract user information from authorization context using shared helper
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    
     if (!userId) {
-      console.error('No user ID found in authorization context');
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User not authenticated',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
     }
 
     // Get time entry ID from path parameters
     const timeEntryId = event.pathParameters?.id;
     if (!timeEntryId) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Time entry ID is required',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Time entry ID is required');
     }
 
     // Parse request body
     if (!event.body) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Request body is required',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Request body is required');
     }
 
     let requestData: UpdateTimeEntryRequest;
     try {
       requestData = JSON.parse(event.body);
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Get existing time entry to check ownership and status
     const existingTimeEntry = await timeEntryRepo.getTimeEntry(timeEntryId);
     if (!existingTimeEntry) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.TIME_ENTRY_NOT_FOUND,
-            message: 'Time entry not found',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(404, TimeEntryErrorCodes.TIME_ENTRY_NOT_FOUND, 'Time entry not found');
     }
 
     // Check authorization - users can only update their own entries
     // Managers and admins can update entries for their team members
-    if (existingTimeEntry.userId !== userId && userRole === 'employee') {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.UNAUTHORIZED_TIME_ENTRY_ACCESS,
-            message: 'You can only update your own time entries',
-          },
-        } as ErrorResponse),
-      };
+    if (existingTimeEntry.userId !== userId && user?.role === 'employee') {
+      return createErrorResponse(403, TimeEntryErrorCodes.UNAUTHORIZED_TIME_ENTRY_ACCESS, 'You can only update your own time entries');
     }
 
     // Validate that the time entry can be updated (only draft and rejected entries)
     if (existingTimeEntry.status !== 'draft' && existingTimeEntry.status !== 'rejected') {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.TIME_ENTRY_ALREADY_SUBMITTED,
-            message: 'Cannot update time entry that has been submitted or approved',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, TimeEntryErrorCodes.TIME_ENTRY_ALREADY_SUBMITTED, 'Cannot update time entry that has been submitted or approved');
     }
 
     // Validate update data
@@ -227,6 +136,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             message: 'Validation failed',
             details: validationErrors,
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }
@@ -236,18 +146,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log('Time entry updated successfully:', timeEntryId);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: updatedTimeEntry,
-        message: 'Time entry updated successfully',
-      } as SuccessResponse),
-    };
+    return createSuccessResponse(updatedTimeEntry, 200, 'Time entry updated successfully');
 
   } catch (error) {
     console.error('Error updating time entry:', error);
@@ -255,53 +154,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Handle specific error types
     if (error instanceof Error) {
       if (error.message === TimeEntryErrorCodes.TIME_ENTRY_NOT_FOUND) {
-        return {
-          statusCode: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: TimeEntryErrorCodes.TIME_ENTRY_NOT_FOUND,
-              message: 'Time entry not found',
-            },
-          } as ErrorResponse),
-        };
+        return createErrorResponse(404, TimeEntryErrorCodes.TIME_ENTRY_NOT_FOUND, 'Time entry not found');
       }
 
       if (error.message === TimeEntryErrorCodes.TIME_ENTRY_ALREADY_SUBMITTED) {
-        return {
-          statusCode: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: TimeEntryErrorCodes.TIME_ENTRY_ALREADY_SUBMITTED,
-              message: 'Cannot update submitted or approved time entry',
-            },
-          } as ErrorResponse),
-        };
+        return createErrorResponse(400, TimeEntryErrorCodes.TIME_ENTRY_ALREADY_SUBMITTED, 'Cannot update submitted or approved time entry');
       }
     }
 
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      } as ErrorResponse),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };

@@ -1,5 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { 
   CreateTimeEntryRequest, 
   TimeEntryErrorCodes, 
@@ -13,65 +15,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     console.log('Create time entry request:', JSON.stringify(event, null, 2));
 
-    // Extract user information from authorizer context
-    const authContext = event.requestContext.authorizer;
-    const userId = authContext?.userId || authContext?.claims?.sub;
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
+    // Extract user information from authorization context using shared helper
+    const userId = getCurrentUserId(event);
+    const user = getAuthenticatedUser(event);
+    
     if (!userId) {
-      console.error('No user ID found in authorization context');
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User not authenticated',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
     }
 
     // Parse request body
     if (!event.body) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Request body is required',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Request body is required');
     }
 
     let requestData: CreateTimeEntryRequest;
     try {
       requestData = JSON.parse(event.body);
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate required fields
@@ -157,6 +118,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             message: 'Validation failed',
             details: validationErrors,
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }
@@ -170,18 +132,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log('Time entry created successfully:', timeEntry.id);
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: timeEntry,
-        message: 'Time entry created successfully',
-      } as SuccessResponse),
-    };
+    return createSuccessResponse(timeEntry, 201, 'Time entry created successfully');
 
   } catch (error) {
     console.error('Error creating time entry:', error);
@@ -189,53 +140,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Handle specific error types
     if (error instanceof Error) {
       if (error.message === TimeEntryErrorCodes.PROJECT_NOT_FOUND) {
-        return {
-          statusCode: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: TimeEntryErrorCodes.PROJECT_NOT_FOUND,
-              message: 'Project not found',
-            },
-          } as ErrorResponse),
-        };
+        return createErrorResponse(404, TimeEntryErrorCodes.PROJECT_NOT_FOUND, 'Project not found');
       }
 
       if (error.message === TimeEntryErrorCodes.PROJECT_ACCESS_DENIED) {
-        return {
-          statusCode: 403,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: TimeEntryErrorCodes.PROJECT_ACCESS_DENIED,
-              message: 'Access denied to project',
-            },
-          } as ErrorResponse),
-        };
+        return createErrorResponse(403, TimeEntryErrorCodes.PROJECT_ACCESS_DENIED, 'Access denied to project');
       }
     }
 
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      } as ErrorResponse),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };

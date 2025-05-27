@@ -6,6 +6,8 @@ import {
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository, ProjectFilters } from '../shared/project-repository';
+import { getCurrentUserId } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('List projects request:', JSON.stringify(event, null, 2));
@@ -71,66 +73,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error listing projects:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-}
