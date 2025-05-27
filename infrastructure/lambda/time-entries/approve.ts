@@ -116,8 +116,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           error: {
             code: TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA,
             message: 'Validation failed',
-            details: validationErrors,
+            details: { errors: validationErrors },
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }
@@ -140,10 +141,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           continue;
         }
 
-        // Prevent self-approval
+        // Check self-approval rules
+        // Managers and admins can approve their own entries (no higher authority)
+        // Employees cannot approve their own entries
         if (timeEntry.userId === userId) {
-          approvalErrors.push(`Cannot approve your own time entry (${timeEntryId})`);
-          continue;
+          if (userRole === 'employee') {
+            approvalErrors.push(`Employees cannot approve their own time entry (${timeEntryId})`);
+            continue;
+          }
+          // Managers and admins can approve their own entries
+          console.log(`Self-approval allowed for ${userRole}: ${timeEntryId}`);
         }
 
         // TODO: Add team-based authorization check
@@ -166,14 +173,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           error: {
             code: TimeEntryErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS,
             message: 'Cannot approve time entries',
-            details: approvalErrors,
+            details: { errors: approvalErrors },
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }
 
     // Approve the time entries
-    const result = await timeEntryRepo.approveTimeEntries(requestData.timeEntryIds, userId);
+    // Allow self-approval for managers and admins (no higher authority)
+    const allowSelfApproval = userRole === 'manager' || userRole === 'admin';
+    const result = await timeEntryRepo.approveTimeEntries(requestData.timeEntryIds, userId, allowSelfApproval);
 
     console.log(`Approved ${result.successful.length} time entries, ${result.failed.length} failed`);
 

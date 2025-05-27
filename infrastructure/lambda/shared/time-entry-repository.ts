@@ -364,7 +364,7 @@ export class TimeEntryRepository {
     return { successful, failed };
   }
 
-  async approveTimeEntries(timeEntryIds: string[], approvedBy: string): Promise<BulkTimeEntryResponse> {
+  async approveTimeEntries(timeEntryIds: string[], approvedBy: string, allowSelfApproval: boolean = false): Promise<BulkTimeEntryResponse> {
     const successful: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
@@ -381,7 +381,8 @@ export class TimeEntryRepository {
           continue;
         }
 
-        if (timeEntry.userId === approvedBy) {
+        // Check self-approval rules
+        if (timeEntry.userId === approvedBy && !allowSelfApproval) {
           failed.push({ id: timeEntryId, error: TimeEntryErrorCodes.CANNOT_APPROVE_OWN_ENTRIES });
           continue;
         }
