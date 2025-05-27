@@ -541,34 +541,413 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "clientId": {
-            "type": "string"
-          },
-          "projectId": {
-            "type": "string"
+            "type": "string",
+            "description": "Unique invoice identifier"
           },
           "invoiceNumber": {
-            "type": "string"
+            "type": "string",
+            "description": "Human-readable invoice number (e.g., INV-2025-001)"
+          },
+          "clientId": {
+            "type": "string",
+            "description": "Associated client ID"
+          },
+          "clientName": {
+            "type": "string",
+            "description": "Client name for display"
+          },
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Associated project IDs"
+          },
+          "timeEntryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Time entries included in this invoice"
           },
           "status": {
             "type": "string",
             "enum": [
               "draft",
               "sent",
+              "viewed",
               "paid",
               "overdue",
-              "cancelled"
-            ]
+              "cancelled",
+              "refunded"
+            ],
+            "description": "Current invoice status"
           },
-          "amount": {
-            "type": "number",
-            "format": "float"
+          "issueDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date the invoice was issued"
           },
           "dueDate": {
             "type": "string",
-            "format": "date"
+            "format": "date",
+            "description": "Payment due date"
+          },
+          "paidDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date the invoice was paid (if applicable)"
+          },
+          "subtotal": {
+            "type": "number",
+            "format": "float",
+            "description": "Subtotal before tax and discounts"
+          },
+          "taxRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Tax rate applied (e.g., 0.08 for 8%)"
+          },
+          "taxAmount": {
+            "type": "number",
+            "format": "float",
+            "description": "Calculated tax amount"
+          },
+          "discountRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Discount rate applied (e.g., 0.05 for 5%)"
+          },
+          "discountAmount": {
+            "type": "number",
+            "format": "float",
+            "description": "Calculated discount amount"
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "float",
+            "description": "Final total amount"
+          },
+          "currency": {
+            "type": "string",
+            "default": "USD",
+            "description": "Currency code (ISO 4217)"
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineItem"
+            },
+            "description": "Invoice line items"
+          },
+          "paymentTerms": {
+            "type": "string",
+            "description": "Payment terms (e.g., \"Net 30\")"
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this is a recurring invoice"
+          },
+          "recurringConfig": {
+            "$ref": "#/components/schemas/RecurringInvoiceConfig",
+            "description": "Recurring invoice configuration (if applicable)"
+          },
+          "remindersSent": {
+            "type": "integer",
+            "default": 0,
+            "description": "Number of payment reminders sent"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Internal notes"
+          },
+          "clientNotes": {
+            "type": "string",
+            "description": "Notes visible to the client"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the invoice was created"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the invoice was last updated"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "User ID who created the invoice"
+          }
+        }
+      },
+      "InvoiceLineItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique line item identifier"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "time",
+              "fixed",
+              "expense"
+            ],
+            "description": "Type of line item"
+          },
+          "description": {
+            "type": "string",
+            "description": "Line item description"
+          },
+          "quantity": {
+            "type": "number",
+            "format": "float",
+            "description": "Quantity (hours for time entries)"
+          },
+          "rate": {
+            "type": "number",
+            "format": "float",
+            "description": "Rate per unit"
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "description": "Total amount for this line item"
+          },
+          "taxable": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this item is taxable"
+          },
+          "timeEntryId": {
+            "type": "string",
+            "description": "Associated time entry ID (for time-based items)"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Associated project ID"
+          }
+        }
+      },
+      "RecurringInvoiceConfig": {
+        "type": "object",
+        "properties": {
+          "frequency": {
+            "type": "string",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly",
+              "yearly"
+            ],
+            "description": "Recurrence frequency"
+          },
+          "interval": {
+            "type": "integer",
+            "default": 1,
+            "description": "Interval between recurrences"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Start date for recurring invoices"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "description": "End date for recurring invoices (optional)"
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether recurring is active"
+          },
+          "autoSend": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically send generated invoices"
+          },
+          "generateDaysBefore": {
+            "type": "integer",
+            "default": 0,
+            "description": "Days before due date to generate invoice"
+          },
+          "invoicesGenerated": {
+            "type": "integer",
+            "default": 0,
+            "description": "Number of invoices generated so far"
+          },
+          "nextInvoiceDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Next scheduled invoice date"
+          }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique payment identifier"
+          },
+          "invoiceId": {
+            "type": "string",
+            "description": "Associated invoice ID"
+          },
+          "amount": {
+            "type": "number",
+            "format": "float",
+            "description": "Payment amount"
+          },
+          "currency": {
+            "type": "string",
+            "default": "USD",
+            "description": "Payment currency"
+          },
+          "paymentDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date payment was made"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "description": "Payment method (e.g., \"Credit Card\", \"Bank Transfer\")"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Payment reference number"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Payment notes"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "failed",
+              "refunded"
+            ],
+            "description": "Payment status"
+          },
+          "externalPaymentId": {
+            "type": "string",
+            "description": "External payment processor ID"
+          },
+          "processorFee": {
+            "type": "number",
+            "format": "float",
+            "description": "Payment processor fee"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the payment was recorded"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the payment was last updated"
+          },
+          "recordedBy": {
+            "type": "string",
+            "description": "User ID who recorded the payment"
+          }
+        }
+      },
+      "InvoiceTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique template identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Template name"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this is the default template"
+          },
+          "layout": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "modern",
+              "minimal",
+              "detailed"
+            ],
+            "description": "Template layout style"
+          },
+          "colors": {
+            "type": "object",
+            "properties": {
+              "primary": {
+                "type": "string",
+                "description": "Primary color (hex)"
+              },
+              "secondary": {
+                "type": "string",
+                "description": "Secondary color (hex)"
+              },
+              "accent": {
+                "type": "string",
+                "description": "Accent color (hex)"
+              }
+            }
+          },
+          "logo": {
+            "type": "string",
+            "description": "Company logo URL"
+          },
+          "companyInfo": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "website": {
+                "type": "string"
+              }
+            }
+          },
+          "customFields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "string",
+                  "enum": [
+                    "header",
+                    "footer",
+                    "lineItems"
+                  ]
+                }
+              }
+            }
           },
           "createdAt": {
             "type": "string",
@@ -5131,6 +5510,1419 @@
                     },
                     "data": {
                       "$ref": "#/components/schemas/FilterResult"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices": {
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "List invoices",
+        "description": "Retrieve a list of invoices with filtering and pagination",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "sent",
+                "viewed",
+                "paid",
+                "overdue",
+                "cancelled",
+                "refunded"
+              ]
+            },
+            "description": "Filter by invoice status"
+          },
+          {
+            "name": "clientId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by client ID"
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project ID"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Filter invoices from this date"
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Filter invoices to this date"
+          },
+          {
+            "name": "amountMin",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Minimum invoice amount"
+          },
+          {
+            "name": "amountMax",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Maximum invoice amount"
+          },
+          {
+            "name": "isRecurring",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Filter by recurring status"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "invoiceNumber",
+                "issueDate",
+                "dueDate",
+                "totalAmount",
+                "status",
+                "clientName"
+              ],
+              "default": "issueDate"
+            },
+            "description": "Sort field"
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "description": "Sort order"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100
+            },
+            "description": "Number of results to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of results to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Invoice"
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "total": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "offset": {
+                              "type": "integer"
+                            },
+                            "hasMore": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Generate invoice",
+        "description": "Generate a new invoice from time entries or create a custom invoice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "clientId"
+                ],
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "description": "Client ID for the invoice"
+                  },
+                  "projectIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Project IDs to include"
+                  },
+                  "timeEntryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Specific time entries to include"
+                  },
+                  "issueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Invoice issue date (defaults to today)"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Payment due date (calculated from payment terms if not provided)"
+                  },
+                  "paymentTerms": {
+                    "type": "string",
+                    "default": "Net 30",
+                    "description": "Payment terms"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "default": "USD",
+                    "description": "Invoice currency"
+                  },
+                  "taxRate": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Tax rate to apply"
+                  },
+                  "discountRate": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Discount rate to apply"
+                  },
+                  "additionalLineItems": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "fixed",
+                            "expense"
+                          ]
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "format": "float"
+                        },
+                        "rate": {
+                          "type": "number",
+                          "format": "float"
+                        },
+                        "amount": {
+                          "type": "number",
+                          "format": "float"
+                        },
+                        "taxable": {
+                          "type": "boolean",
+                          "default": true
+                        }
+                      }
+                    },
+                    "description": "Additional line items to include"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Internal notes"
+                  },
+                  "clientNotes": {
+                    "type": "string",
+                    "description": "Notes visible to client"
+                  },
+                  "isRecurring": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether this is a recurring invoice"
+                  },
+                  "recurringConfig": {
+                    "$ref": "#/components/schemas/RecurringInvoiceConfig",
+                    "description": "Recurring configuration (if isRecurring is true)"
+                  },
+                  "templateId": {
+                    "type": "string",
+                    "description": "Invoice template ID to use"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invoice generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invoice generated successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Client or project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Get invoice details",
+        "description": "Retrieve detailed information about a specific invoice",
+        "responses": {
+          "200": {
+            "description": "Invoice details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Update invoice",
+        "description": "Update invoice details (only allowed for draft invoices)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Payment due date"
+                  },
+                  "paymentTerms": {
+                    "type": "string",
+                    "description": "Payment terms"
+                  },
+                  "taxRate": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Tax rate"
+                  },
+                  "discountRate": {
+                    "type": "number",
+                    "format": "float",
+                    "description": "Discount rate"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Internal notes"
+                  },
+                  "clientNotes": {
+                    "type": "string",
+                    "description": "Client-visible notes"
+                  },
+                  "lineItems": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/InvoiceLineItem"
+                    },
+                    "description": "Updated line items"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invoice updated successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid update data or invoice cannot be updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Delete invoice",
+        "description": "Delete an invoice (only allowed for draft invoices)",
+        "responses": {
+          "200": {
+            "description": "Invoice deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invoice deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invoice cannot be deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}/send": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Send invoice",
+        "description": "Send invoice to client via email",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "recipientEmails"
+                ],
+                "properties": {
+                  "recipientEmails": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "description": "Email addresses to send invoice to"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "description": "Email subject (optional, will use default)"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Custom message to include in email"
+                  },
+                  "attachPdf": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether to attach PDF version"
+                  },
+                  "sendCopy": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Send copy to sender"
+                  },
+                  "scheduleDate": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Schedule sending for later (optional)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Invoice sent successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid send request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}/status": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "put": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Update invoice status or record payment",
+        "description": "Update invoice status or record a payment against the invoice",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "title": "Status Update",
+                    "required": [
+                      "status"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "sent",
+                          "viewed",
+                          "overdue",
+                          "cancelled",
+                          "refunded"
+                        ],
+                        "description": "New invoice status"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "title": "Payment Recording",
+                    "required": [
+                      "operation",
+                      "amount",
+                      "paymentDate",
+                      "paymentMethod"
+                    ],
+                    "properties": {
+                      "operation": {
+                        "type": "string",
+                        "enum": [
+                          "recordPayment"
+                        ],
+                        "description": "Operation type"
+                      },
+                      "amount": {
+                        "type": "number",
+                        "format": "float",
+                        "description": "Payment amount"
+                      },
+                      "paymentDate": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Date payment was made"
+                      },
+                      "paymentMethod": {
+                        "type": "string",
+                        "description": "Payment method"
+                      },
+                      "reference": {
+                        "type": "string",
+                        "description": "Payment reference number"
+                      },
+                      "notes": {
+                        "type": "string",
+                        "description": "Payment notes"
+                      },
+                      "externalPaymentId": {
+                        "type": "string",
+                        "description": "External payment processor ID"
+                      },
+                      "processorFee": {
+                        "type": "number",
+                        "format": "float",
+                        "description": "Payment processor fee"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated or payment recorded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "invoice": {
+                          "$ref": "#/components/schemas/Invoice"
+                        },
+                        "payment": {
+                          "$ref": "#/components/schemas/Payment",
+                          "description": "Payment details (if payment was recorded)"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Payment recorded successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status update or payment data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}/pdf": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Download invoice PDF",
+        "description": "Generate and download invoice as PDF",
+        "parameters": [
+          {
+            "name": "templateId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Template ID to use for PDF generation"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}/payments": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "List invoice payments",
+        "description": "Get all payments recorded for an invoice",
+        "responses": {
+          "200": {
+            "description": "List of payments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "payments": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Payment"
+                          }
+                        },
+                        "totalPaid": {
+                          "type": "number",
+                          "format": "float",
+                          "description": "Total amount paid"
+                        },
+                        "remainingBalance": {
+                          "type": "number",
+                          "format": "float",
+                          "description": "Remaining balance"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoice-templates": {
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "List invoice templates",
+        "description": "Get all available invoice templates",
+        "responses": {
+          "200": {
+            "description": "List of templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/InvoiceTemplate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Create invoice template",
+        "description": "Create a new invoice template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "layout"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Template name"
+                  },
+                  "layout": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "modern",
+                      "minimal",
+                      "detailed"
+                    ],
+                    "description": "Template layout"
+                  },
+                  "colors": {
+                    "type": "object",
+                    "description": "Color scheme"
+                  },
+                  "logo": {
+                    "type": "string",
+                    "description": "Company logo URL"
+                  },
+                  "companyInfo": {
+                    "type": "object",
+                    "description": "Company information"
+                  },
+                  "customFields": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Custom fields"
+                  },
+                  "isDefault": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Set as default template"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceTemplate"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoice-templates/{templateId}": {
+      "parameters": [
+        {
+          "name": "templateId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Template ID"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Get invoice template",
+        "description": "Get details of a specific invoice template",
+        "responses": {
+          "200": {
+            "description": "Template details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceTemplate"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Update invoice template",
+        "description": "Update an existing invoice template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "layout": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "modern",
+                      "minimal",
+                      "detailed"
+                    ]
+                  },
+                  "colors": {
+                    "type": "object"
+                  },
+                  "logo": {
+                    "type": "string"
+                  },
+                  "companyInfo": {
+                    "type": "object"
+                  },
+                  "customFields": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceTemplate"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Delete invoice template",
+        "description": "Delete an invoice template (cannot delete default template)",
+        "responses": {
+          "200": {
+            "description": "Template deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Template deleted successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot delete default template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/recurring": {
+      "get": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "List recurring invoices",
+        "description": "Get all recurring invoice configurations",
+        "parameters": [
+          {
+            "name": "isActive",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Filter by active status"
+          },
+          {
+            "name": "frequency",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "weekly",
+                "monthly",
+                "quarterly",
+                "yearly"
+              ]
+            },
+            "description": "Filter by frequency"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recurring invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Process recurring invoices",
+        "description": "Manually trigger processing of due recurring invoices",
+        "responses": {
+          "200": {
+            "description": "Recurring invoices processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "processed": {
+                          "type": "integer",
+                          "description": "Number of invoices generated"
+                        },
+                        "invoices": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Invoice"
+                          },
+                          "description": "Generated invoices"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invoices/{invoiceId}/recurring": {
+      "parameters": [
+        {
+          "name": "invoiceId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Invoice ID"
+        }
+      ],
+      "put": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Update recurring configuration",
+        "description": "Update recurring invoice configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecurringInvoiceConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recurring configuration updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Invoice Management"
+        ],
+        "summary": "Stop recurring invoice",
+        "description": "Stop recurring invoice generation",
+        "responses": {
+          "200": {
+            "description": "Recurring invoice stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Recurring invoice stopped"
                     }
                   }
                 }
