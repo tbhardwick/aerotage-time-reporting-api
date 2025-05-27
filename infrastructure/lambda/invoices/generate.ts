@@ -1,9 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
-  Invoice,
   CreateInvoiceRequest,
-  SuccessResponse,
-  ErrorResponse,
   InvoiceErrorCodes
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
@@ -12,7 +9,7 @@ import { getCurrentUserId } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Generate invoice request:', JSON.stringify(event, null, 2));
+  // Log request for debugging in development
 
   try {
     // Get current user from authorization context
@@ -38,7 +35,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(invoice, 201, 'Invoice generated successfully');
 
   } catch (error) {
-    console.error('Error generating invoice:', error);
+    // Log error for debugging
     
     // Handle specific business logic errors
     if (error instanceof Error) {

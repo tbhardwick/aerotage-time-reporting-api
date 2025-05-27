@@ -1,4 +1,4 @@
-import { CreateInvitationRequest, AcceptInvitationRequest, InvitationErrorCodes, Project, Client } from './types';
+import { InvitationErrorCodes } from './types';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -564,8 +564,7 @@ export class ValidationService {
   /**
    * Validates create client request
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static validateCreateClientRequest(request: any): ValidationResult {
+  static validateCreateClientRequest(request: ClientRequest): ValidationResult {
     const errors: string[] = [];
 
     // Required fields
@@ -617,7 +616,7 @@ export class ValidationService {
   /**
    * Validates update client request
    */
-  static validateUpdateClientRequest(request: any): ValidationResult {
+  static validateUpdateClientRequest(request: Partial<ClientRequest>): ValidationResult {
     const errors: string[] = [];
 
     // All fields are optional for updates, but if provided must be valid
@@ -664,7 +663,7 @@ export class ValidationService {
   /**
    * Validates project filters for listing
    */
-  static validateProjectFilters(filters: any): ValidationResult {
+  static validateProjectFilters(filters: ProjectFilters): ValidationResult {
     const errors: string[] = [];
 
     if (filters.clientId && typeof filters.clientId !== 'string') {
@@ -704,7 +703,7 @@ export class ValidationService {
   /**
    * Validates client filters for listing
    */
-  static validateClientFilters(filters: any): ValidationResult {
+  static validateClientFilters(filters: ClientFilters): ValidationResult {
     const errors: string[] = [];
 
     if (filters.isActive !== undefined && typeof filters.isActive !== 'boolean') {

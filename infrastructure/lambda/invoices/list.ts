@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
   Invoice,
   PaginationResponse,
-  ErrorResponse,
   InvoiceFilters
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
@@ -11,7 +10,7 @@ import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('List invoices request:', JSON.stringify(event, null, 2));
+  // Log request for debugging in development
 
   try {
     // Get current user from authorization context
@@ -25,7 +24,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const filters: InvoiceFilters = {
       clientId: queryParams.clientId,
       projectId: queryParams.projectId,
-      status: queryParams.status as any,
+      status: queryParams.status as 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded' | undefined,
       isRecurring: queryParams.isRecurring ? queryParams.isRecurring === 'true' : undefined,
       dateFrom: queryParams.dateFrom,
       dateTo: queryParams.dateTo,
@@ -36,8 +35,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       currency: queryParams.currency,
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
-      sortBy: queryParams.sortBy as any,
-      sortOrder: queryParams.sortOrder as any,
+      sortBy: queryParams.sortBy as 'invoiceNumber' | 'issueDate' | 'dueDate' | 'totalAmount' | 'status' | undefined,
+      sortOrder: queryParams.sortOrder as 'asc' | 'desc' | undefined,
     };
 
     // Validate filters
@@ -80,7 +79,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error listing invoices:', error);
+    // Log error for debugging
     
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }

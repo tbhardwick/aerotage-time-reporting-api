@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { Project } from '../shared/types';
+// Removed unused import
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository } from '../shared/project-repository';
 import { ClientRepository } from '../shared/client-repository';
@@ -7,7 +7,7 @@ import { getCurrentUserId } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Create project request:', JSON.stringify(event, null, 2));
+  // Log request for debugging in development
 
   try {
     // Get current user from authorization context
@@ -20,7 +20,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestBody;
     try {
       requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -54,7 +54,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(newProject, 201, 'Project created successfully');
 
   } catch (error) {
-    console.error('Error creating project:', error);
+    // Log error for debugging
     
     // Handle specific DynamoDB errors
     if (error instanceof Error) {

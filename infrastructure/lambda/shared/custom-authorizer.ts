@@ -79,7 +79,7 @@ export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<AP
     
     return policy;
 
-  } catch (error) {
+  } catch {
     // Return deny policy
     const denyPolicy = generatePolicy('unauthorized', 'Deny', event.methodArn);
     return denyPolicy;
@@ -100,11 +100,11 @@ function parseMethodArn(methodArn: string): { httpMethod: string; resourcePath: 
     }
 
     const httpMethod = parts[2] || 'UNKNOWN'; // e.g., "POST", "GET" 
-    const resourcePath = '/' + parts.slice(3).join('/'); // e.g., "/users/123/sessions"
+    const resourcePath = `/${parts.slice(3).join('/')}`; // e.g., "/users/123/sessions"
     
     
     return { httpMethod, resourcePath };
-  } catch (error) {
+  } catch {
     return { httpMethod: 'UNKNOWN', resourcePath: 'UNKNOWN' };
   }
 }
@@ -149,10 +149,8 @@ function generatePolicy(
   principalId: string, 
   effect: 'Allow' | 'Deny', 
   resource: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  context?: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  additionalContext?: any
+  context?: Record<string, unknown>,
+  additionalContext?: Record<string, unknown>
 ): APIGatewayAuthorizerResult {
   
   
@@ -177,17 +175,19 @@ function generatePolicy(
   // Add user context if available (for Allow policies)
   if (effect === 'Allow' && context) {
     authResponse.context = {
-      userId: context.sub,
-      email: context.email,
-      role: context['custom:role'] || 'employee',
-      teamId: context['custom:teamId'] || '',
-      department: context['custom:department'] || '',
+      userId: String(context.sub || ''),
+      email: String(context.email || ''),
+      role: String(context['custom:role'] || 'employee'),
+      teamId: String(context['custom:teamId'] || ''),
+      department: String(context['custom:department'] || ''),
       // Convert boolean and number values to strings (API Gateway requirement)
       authTime: String(context.auth_time || ''),
       iat: String(context.iat || ''),
       exp: String(context.exp || ''),
-      // Add any additional context
-      ...additionalContext
+      // Add any additional context (convert to strings)
+      ...(additionalContext ? Object.fromEntries(
+        Object.entries(additionalContext).map(([key, value]) => [key, String(value)])
+      ) : {})
     };
     
   }
