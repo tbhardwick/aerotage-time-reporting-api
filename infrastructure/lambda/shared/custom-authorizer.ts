@@ -53,18 +53,13 @@ export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<AP
 
       const userId = jwtResult.userId!;
 
-      // Step 3c: Check for existing active sessions
-      const hasActiveSessions = await AuthService.checkUserHasActiveSessions(userId);
-
-      if (!hasActiveSessions) {
-        const policy = generatePolicy(userId, 'Allow', getResourceForPolicy(event.methodArn), jwtResult.userClaims, {
-          bootstrap: 'true',
-          reason: 'session_creation_for_user_without_sessions'
-        });
-        return policy;
-      } else {
-        throw new Error('User already has active sessions');
-      }
+      // Step 3c: Allow session creation regardless of existing sessions
+      // Users should be able to create multiple sessions (e.g., different devices/browsers)
+      const policy = generatePolicy(userId, 'Allow', getResourceForPolicy(event.methodArn), jwtResult.userClaims, {
+        bootstrap: 'true',
+        reason: 'session_creation_allowed'
+      });
+      return policy;
     } else {
     }
 
