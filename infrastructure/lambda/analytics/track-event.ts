@@ -14,7 +14,7 @@ interface AnalyticsEvent {
   eventType: string;
   timestamp: string;
   sessionId?: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
   location?: {
@@ -27,7 +27,7 @@ interface AnalyticsEvent {
 
 interface TrackEventRequest {
   eventType: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   timestamp?: string;
 }
 
@@ -146,11 +146,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update rate limiting counter
     await updateRateLimit(userId);
 
-    return createSuccessResponse({
-      eventId: analyticsEvent.eventId,
-      timestamp: analyticsEvent.timestamp,
-      message: 'Event tracked successfully',
-    }, 201);
+    return {
+      statusCode: 201,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({
+        success: true,
+        data: {
+          eventId: analyticsEvent.eventId,
+          timestamp: analyticsEvent.timestamp,
+          message: 'Event tracked successfully',
+        },
+      }),
+    };
 
   } catch (error) {
     console.error('Error tracking analytics event:', error);
