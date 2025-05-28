@@ -168,12 +168,17 @@ aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aerotage"
 - **Purpose**: Active development and testing
 - **Stack Suffix**: `-dev`
 - **Profile**: `aerotage-dev`
-- **API URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//`
+- **API URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **Custom Domain**: `https://time-api-dev.aerotage.com/` (optional)
 
 ```bash
 # Deploy to development
 cd infrastructure
 npm run deploy:dev
+
+# Deploy with custom domain (recommended)
+npm run deploy:dev
+npm run deploy:domain:dev
 
 # Destroy development (if needed)
 npm run destroy:dev
@@ -183,11 +188,16 @@ npm run destroy:dev
 - **Purpose**: Pre-production testing and QA
 - **Stack Suffix**: `-staging`
 - **Profile**: `aerotage-staging`
+- **Custom Domain**: `https://time-api-staging.aerotage.com/` (recommended)
 
 ```bash
 # Deploy to staging
 cd infrastructure
 STAGE=staging npm run deploy
+
+# Deploy with custom domain
+STAGE=staging npm run deploy
+npm run deploy:domain:staging
 
 # Or manually
 cdk deploy --all --profile aerotage-staging --context stage=staging
@@ -197,15 +207,64 @@ cdk deploy --all --profile aerotage-staging --context stage=staging
 - **Purpose**: Live customer usage
 - **Stack Suffix**: `-prod`
 - **Profile**: `aerotage-prod`
+- **Custom Domain**: `https://time-api.aerotage.com/` (required)
 
 ```bash
 # Deploy to production (requires extra caution)
 cd infrastructure
 STAGE=prod npm run deploy
 
+# Deploy with custom domain (required for production)
+STAGE=prod npm run deploy
+npm run deploy:domain:prod
+
 # Or manually with confirmation
 cdk deploy --all --profile aerotage-prod --context stage=prod --require-approval broadening
 ```
+
+## 🌐 **Custom Domain Setup**
+
+### **Why Use Custom Domains?**
+- ✅ **Professional URLs**: `https://time-api-dev.aerotage.com` instead of random AWS URLs
+- ✅ **Stable URLs**: Never change when API Gateway is redeployed
+- ✅ **Automatic Updates**: AWS handles IP changes automatically
+- ✅ **SSL Management**: Automatic certificate provisioning and renewal
+- ✅ **Frontend Stability**: No configuration changes needed when infrastructure updates
+
+### **Quick Custom Domain Deployment**
+```bash
+# Test prerequisites
+npm run test:domain:setup
+
+# Deploy custom domain for dev environment
+npm run deploy:domain:dev
+
+# Verify custom domain is working
+curl -I https://time-api-dev.aerotage.com/health
+```
+
+### **Custom Domain Commands**
+```bash
+# Test domain setup prerequisites
+npm run test:domain:setup
+
+# Deploy custom domains
+npm run deploy:domain:dev
+npm run deploy:domain:staging
+npm run deploy:domain:prod
+
+# Rollback custom domains (if needed)
+npm run rollback:domain:dev
+npm run rollback:domain:staging
+npm run rollback:domain:prod
+```
+
+### **Custom Domain Documentation**
+- **Setup Guide**: `docs/CUSTOM_DOMAIN_SETUP.md` - Comprehensive setup instructions
+- **Pipeline Integration**: `docs/CUSTOM_DOMAIN_PIPELINE_INTEGRATION.md` - How custom domains work in deployment pipeline
+- **Quick Start**: `CUSTOM_DOMAIN_README.md` - Quick reference guide
+
+**Note**: Custom domains automatically handle API Gateway IP/URL changes. Once deployed, your frontend can use stable URLs that never need to be updated, even when the underlying infrastructure changes.
 
 ## 📊 **Post-Deployment Configuration**
 
@@ -318,162 +377,4 @@ npm run deploy:dev
 ```
 
 ### **Rollback Strategy**
-```bash
-# View deployment history
-aws cloudformation describe-stack-events --stack-name AerotageAPI-dev
-
-# Rollback to previous version (if supported)
-cdk deploy AerotageAPI-dev --rollback
-
-# Or redeploy from a specific git commit
-git checkout <previous-commit-hash>
-cd infrastructure
-npm run deploy:dev
 ```
-
-## 🚨 **Troubleshooting**
-
-### **Common Deployment Issues**
-
-#### **1. CDK Bootstrap Issues**
-```bash
-# Error: "Need to perform AWS CDK bootstrap"
-# Solution: Bootstrap the environment
-cdk bootstrap --profile aerotage-dev
-```
-
-#### **2. Permission Errors**
-```bash
-# Error: "User is not authorized to perform..."
-# Solution: Check IAM permissions
-aws iam get-user
-aws iam list-attached-user-policies --user-name YOUR_USERNAME
-```
-
-#### **3. Resource Conflicts**
-```bash
-# Error: "Resource already exists"
-# Solution: Check existing resources
-aws cloudformation describe-stacks
-aws s3 ls
-aws dynamodb list-tables
-```
-
-#### **4. Lambda Deployment Failures**
-```bash
-# Error: "Code size exceeds maximum"
-# Solution: Check bundle size and dependencies
-cd infrastructure
-npm run build
-ls -la dist/
-```
-
-### **Debugging Commands**
-```bash
-# View CDK synthesized templates
-cd infrastructure
-cdk synth
-
-# Check CDK context
-cat cdk.context.json
-
-# View CloudFormation events
-aws cloudformation describe-stack-events --stack-name AerotageAPI-dev
-
-# Check Lambda function configuration
-aws lambda get-function --function-name aerotage-users-list-dev
-```
-
-## 📈 **Performance Optimization**
-
-### **Lambda Optimization**
-- **Memory Allocation**: Right-size based on usage patterns
-- **Timeout Settings**: Set appropriate timeouts for each function
-- **Cold Start Reduction**: Use provisioned concurrency for critical functions
-
-### **DynamoDB Optimization**
-- **Capacity Planning**: Monitor and adjust read/write capacity
-- **Index Usage**: Optimize GSI usage for query patterns
-- **Item Size**: Keep items under 400KB limit
-
-### **API Gateway Optimization**
-- **Caching**: Enable caching for frequently accessed endpoints
-- **Throttling**: Configure appropriate throttling limits
-- **Compression**: Enable response compression
-
-## 🔐 **Security Considerations**
-
-### **IAM Roles**
-- All Lambda functions use least privilege IAM roles
-- Separate roles for different function types
-- Regular review and audit of permissions
-
-### **Network Security**
-- API Gateway with Cognito authorization
-- VPC endpoints for DynamoDB access (if required)
-- Encryption in transit and at rest
-
-### **Data Protection**
-- All DynamoDB tables encrypted at rest
-- S3 buckets with encryption enabled
-- Secure handling of JWT tokens
-
-## 📚 **Additional Resources**
-
-### **AWS Documentation**
-- [AWS CDK Developer Guide](https://docs.aws.amazon.com/cdk/)
-- [API Gateway Developer Guide](https://docs.aws.amazon.com/apigateway/)
-- [Lambda Developer Guide](https://docs.aws.amazon.com/lambda/)
-- [DynamoDB Developer Guide](https://docs.aws.amazon.com/dynamodb/)
-
-### **Monitoring and Alerting**
-- CloudWatch dashboards for key metrics
-- Alarms for error rates and latency
-- Cost monitoring and budgets
-- Log aggregation and analysis
-
-### **Backup and Disaster Recovery**
-- DynamoDB point-in-time recovery enabled
-- S3 versioning and lifecycle policies
-- Cross-region backup strategy (for production)
-- Infrastructure as code for rapid recovery
-
----
-
-## 🎯 **Deployment Checklist**
-
-### **Pre-Deployment**
-- [ ] AWS CLI configured and tested
-- [ ] CDK CLI installed and updated
-- [ ] Dependencies installed (`npm install`)
-- [ ] Code built successfully (`npm run build`)
-- [ ] Tests passing (`npm run test`)
-- [ ] Linting clean (`npm run lint`)
-
-### **Deployment**
-- [ ] CDK bootstrapped for target environment
-- [ ] Infrastructure deployed (`npm run deploy:dev`)
-- [ ] API Gateway endpoint accessible
-- [ ] Lambda functions deployed and working
-- [ ] DynamoDB tables created with proper indexes
-- [ ] Cognito User Pool configured
-
-### **Post-Deployment**
-- [ ] SES domain/email verified
-- [ ] Admin user created and tested
-- [ ] Frontend configuration updated
-- [ ] Health checks passing
-- [ ] Monitoring and alarms configured
-- [ ] Documentation updated
-
-### **Production Readiness**
-- [ ] Staging environment tested
-- [ ] Performance testing completed
-- [ ] Security review conducted
-- [ ] Backup strategy implemented
-- [ ] Monitoring dashboards created
-- [ ] Incident response plan documented
-
----
-
-This deployment guide provides comprehensive instructions for deploying and managing the Aerotage Time Reporting API infrastructure. Follow the steps carefully and refer to the troubleshooting section if you encounter any issues. 
