@@ -14,10 +14,11 @@
     "destroy": "cdk destroy",
     "bootstrap": "cdk bootstrap",
     "build:docs": "node ../scripts/build-openapi.js",
-    "build:docs:dev": "node ../scripts/build-openapi.js dev https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/",
-    "build:docs:prod": "node ../scripts/build-openapi.js prod https://api.aerotage.com",
+    "build:docs:dev": "node ../scripts/build-openapi.js dev https://time-api-dev.aerotage.com/",
+    "build:docs:staging": "node ../scripts/build-openapi.js staging https://time-api-staging.aerotage.com/",
+    "build:docs:prod": "node ../scripts/build-openapi.js prod https://time-api.aerotage.com/",
     "deploy:dev": "npm run build:docs:dev && STAGE=dev cdk deploy --all",
-    "deploy:staging": "npm run build:docs:dev && STAGE=staging cdk deploy --all",
+    "deploy:staging": "npm run build:docs:staging && STAGE=staging cdk deploy --all",
     "deploy:prod": "npm run build:docs:prod && STAGE=prod cdk deploy --all"
   },
   "devDependencies": {

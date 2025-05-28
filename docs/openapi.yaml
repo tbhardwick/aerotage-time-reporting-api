@@ -28,8 +28,9 @@ info:
     - `PUT /users/{id}/password` - Change password (requires current password)
     
     ## Base URL
-    - Development: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
-    - Production: `https://api.aerotage.com/`
+    - Development: `https://time-api-dev.aerotage.com/`
+    - Staging: `https://time-api-staging.aerotage.com/`
+    - Production: `https://time-api.aerotage.com/`
   version: 1.0.0
   contact:
     name: Aerotage Support
@@ -38,9 +39,11 @@ info:
     name: Proprietary
     
 servers:
-  - url: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
+  - url: https://time-api-dev.aerotage.com/
     description: Development server
-  - url: https://api.aerotage.com
+  - url: https://time-api-staging.aerotage.com/
+    description: Staging server
+  - url: https://time-api.aerotage.com/
     description: Production server
 
 security:

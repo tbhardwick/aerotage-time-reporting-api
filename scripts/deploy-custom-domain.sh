@@ -135,6 +135,25 @@ test_domain() {
     fi
 }
 
+# Function to update OpenAPI documentation
+update_openapi_docs() {
+    echo -e "${YELLOW}📚 Updating OpenAPI documentation with custom domain...${NC}"
+    
+    # Update OpenAPI documentation to use custom domain
+    if [ -f "scripts/update-openapi-domains.sh" ]; then
+        ./scripts/update-openapi-domains.sh "${STAGE}" || {
+            echo -e "${YELLOW}⚠️  OpenAPI update script failed, trying manual update...${NC}"
+            npm run "build:docs:${STAGE}" 2>/dev/null || npm run build:docs
+        }
+    else
+        echo -e "${YELLOW}⚠️  OpenAPI update script not found, updating manually...${NC}"
+        # Fallback to manual update
+        npm run "build:docs:${STAGE}" 2>/dev/null || npm run build:docs
+    fi
+    
+    echo -e "${GREEN}✅ OpenAPI documentation updated${NC}"
+}
+
 # Function to show rollback instructions
 show_rollback_instructions() {
     echo ""
@@ -179,7 +198,11 @@ main() {
     test_domain
     echo ""
     
-    # Step 6: Show rollback instructions
+    # Step 6: Update OpenAPI documentation
+    update_openapi_docs
+    echo ""
+    
+    # Step 7: Show rollback instructions
     show_rollback_instructions
     
     echo -e "${GREEN}🎉 Custom domain deployment completed successfully!${NC}"
