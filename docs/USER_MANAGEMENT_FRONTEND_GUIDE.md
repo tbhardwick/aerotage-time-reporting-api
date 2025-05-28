@@ -6,7 +6,7 @@ This guide provides complete instructions for integrating with the Aerotage Time
 
 ## 🌐 Environment Details
 
-- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev`
+- **API Base URL**: `https://time-api-dev.aerotage.com`
 - **Authentication**: AWS Cognito JWT tokens
 - **Environment**: Development (production-ready)
 
@@ -387,7 +387,7 @@ const useUserManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+  const API_BASE_URL = 'https://time-api-dev.aerotage.com';
 
   const getAuthHeaders = async () => {
     const session = await Auth.currentSession();

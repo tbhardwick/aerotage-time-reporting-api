@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Aerotage Time Reporting API",
-    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 28, 2025 at 09:00:48 AM",
-    "version": "1.0.0-dev-2025-05-28T13-00-48",
+    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 28, 2025 at 09:59:12 AM",
+    "version": "1.0.0-dev-2025-05-28T13-59-12",
     "contact": {
       "name": "Aerotage Support",
       "email": "support@aerotage.com"
@@ -743,47 +743,94 @@
               "quarterly",
               "yearly"
             ],
-            "description": "Recurrence frequency"
+            "description": "How often the invoice recurs"
           },
           "interval": {
             "type": "integer",
             "default": 1,
-            "description": "Interval between recurrences"
-          },
-          "startDate": {
-            "type": "string",
-            "format": "date",
-            "description": "Start date for recurring invoices"
+            "description": "Interval between recurrences (e.g., every 2 months)"
           },
           "endDate": {
             "type": "string",
             "format": "date",
-            "description": "End date for recurring invoices (optional)"
+            "description": "When to stop recurring (optional)"
           },
-          "isActive": {
-            "type": "boolean",
-            "default": true,
-            "description": "Whether recurring is active"
-          },
-          "autoSend": {
-            "type": "boolean",
-            "default": false,
-            "description": "Automatically send generated invoices"
-          },
-          "generateDaysBefore": {
+          "maxOccurrences": {
             "type": "integer",
-            "default": 0,
-            "description": "Days before due date to generate invoice"
-          },
-          "invoicesGenerated": {
-            "type": "integer",
-            "default": 0,
-            "description": "Number of invoices generated so far"
+            "description": "Maximum number of occurrences (optional)"
           },
           "nextInvoiceDate": {
             "type": "string",
             "format": "date",
-            "description": "Next scheduled invoice date"
+            "description": "Date for the next invoice generation"
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether recurring is currently active"
+          }
+        }
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy"
+            ],
+            "description": "Overall system health status"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the health check was performed"
+          },
+          "version": {
+            "type": "string",
+            "description": "API version"
+          },
+          "environment": {
+            "type": "string",
+            "description": "Current environment (dev, staging, prod)"
+          },
+          "services": {
+            "type": "object",
+            "properties": {
+              "api": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "degraded",
+                  "unhealthy"
+                ],
+                "description": "API service status"
+              },
+              "database": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "degraded",
+                  "unhealthy"
+                ],
+                "description": "Database service status"
+              },
+              "auth": {
+                "type": "string",
+                "enum": [
+                  "healthy",
+                  "degraded",
+                  "unhealthy"
+                ],
+                "description": "Authentication service status"
+              }
+            }
+          },
+          "uptime": {
+            "type": "integer",
+            "description": "System uptime in seconds"
           }
         }
       },
@@ -2269,6 +2316,84 @@
     }
   },
   "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System Health"
+        ],
+        "summary": "Health check endpoint",
+        "description": "Public endpoint for system health monitoring. Returns the current status of the API and its dependencies.\n\n**Note**: This endpoint is public and does not require authentication.\n",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "System is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/HealthCheckResponse"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "data": {
+                    "status": "healthy",
+                    "timestamp": "2025-05-28T13:57:16.566Z",
+                    "version": "1.0.0",
+                    "environment": "dev",
+                    "services": {
+                      "api": "healthy",
+                      "database": "healthy",
+                      "auth": "healthy"
+                    },
+                    "uptime": 3600
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "System is unhealthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/HealthCheckResponse"
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "HEALTH_CHECK_FAILED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Health check failed"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users": {
       "get": {
         "tags": [

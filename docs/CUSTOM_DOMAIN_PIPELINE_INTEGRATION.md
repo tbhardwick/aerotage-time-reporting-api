@@ -8,7 +8,7 @@ This document explains how custom domains integrate with the deployment pipeline
 
 ### **Before Custom Domain (Current State)**
 ```
-Frontend → https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
+Frontend → https://time-api-dev.aerotage.com/
            ↑
            This URL can change if API Gateway is recreated
 ```
@@ -59,7 +59,7 @@ The custom domain creates a **three-layer abstraction** that automatically handl
 ┌─────────────────────────────────────────────────────────────┐
 │                Layer 3: API Gateway                        │
 │  Current API Gateway Deployment                           │
-│  ├── https://k60bobrd9h.execute-api.us-east-1.amazonaws.com │
+│  ├── https://time-api-dev.aerotage.com │
 │  ├── Can change IPs/URLs during redeployment              │
 │  └── Custom domain automatically follows changes          │
 └─────────────────────────────────────────────────────────────┘
@@ -216,7 +216,7 @@ npm run rollback:domain:dev
 curl -I https://time-api-dev.aerotage.com/health
 
 # Compare with direct API Gateway URL
-curl -I https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/health
+curl -I https://time-api-dev.aerotage.com/health
 
 # Both should return the same response
 ```

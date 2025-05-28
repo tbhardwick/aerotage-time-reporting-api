@@ -339,7 +339,7 @@ aws cloudformation describe-stacks \
   --output text
 
 # Update frontend configuration
-# Current URL: https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//
+# Current URL: https://time-api-dev.aerotage.com//
 ```
 
 ### **Authentication Integration Issues**
@@ -629,7 +629,7 @@ npm run deploy:dev
 aws cloudformation describe-stacks --stack-name AerotageAPI-dev
 
 # 2. Test API endpoint
-curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//health"
+curl -X GET "https://time-api-dev.aerotage.com//health"
 
 # 3. Check user creation
 aws cognito-idp list-users --user-pool-id us-east-1_EsdlgX9Qg
@@ -682,7 +682,7 @@ aws lambda list-functions --region us-east-1
 aws dynamodb list-tables --region us-east-1
 
 # API testing
-curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//health"
+curl -X GET "https://time-api-dev.aerotage.com//health"
 ```
 
 ### **Escalation Path**

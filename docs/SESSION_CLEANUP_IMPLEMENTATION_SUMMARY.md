@@ -100,7 +100,7 @@ await fetch(`${apiBaseUrl}/logout`, {
 
 ### **📋 Deployment Details**
 - **Environment**: Development
-- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Base URL**: `https://time-api-dev.aerotage.com/`
 - **New Endpoints**: `POST /logout`
 - **Scheduled Function**: `aerotage-sessioncleanup-dev` (runs every 6 hours)
 

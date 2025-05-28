@@ -63,7 +63,7 @@ After analyzing the backend validation code, the issue was identified:
 First, retrieve your existing clients to get valid `clientId` and `clientName`:
 
 ```bash
-GET https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/clients
+GET https://time-api-dev.aerotage.com/clients
 Authorization: Bearer YOUR_JWT_TOKEN
 ```
 
@@ -71,7 +71,7 @@ Authorization: Bearer YOUR_JWT_TOKEN
 Replace `YOUR_ACTUAL_CLIENT_ID` and `YOUR_ACTUAL_CLIENT_NAME` with real values from Step 1:
 
 ```json
-POST https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/projects
+POST https://time-api-dev.aerotage.com/projects
 Content-Type: application/json
 Authorization: Bearer YOUR_JWT_TOKEN
 
@@ -279,12 +279,12 @@ These fields are automatically set by the backend:
 ```bash
 # Get clients first
 curl -X GET \
-  "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/clients" \
+  "https://time-api-dev.aerotage.com/clients" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
 # Create project with real client data
 curl -X POST \
-  "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/projects" \
+  "https://time-api-dev.aerotage.com/projects" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{

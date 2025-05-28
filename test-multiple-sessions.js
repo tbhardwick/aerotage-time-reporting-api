@@ -10,7 +10,7 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 
 // Configuration
-const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE_URL = 'https://time-api-dev.aerotage.com';
 const TEST_USER_ID = 'test-user-123'; // Replace with actual test user ID
 const JWT_TOKEN = 'YOUR_JWT_TOKEN_HERE'; // Replace with actual JWT token
 

@@ -64,7 +64,7 @@ This project uses a **two-repository architecture** to separate concerns:
 ## 🌐 Current Infrastructure
 
 ### **Live Environment Details**
-- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Base URL**: `https://time-api-dev.aerotage.com/`
 - **API Documentation**: Interactive Swagger UI (deployed via CloudFront)
 - **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
 - **App Client**: `148r35u6uultp1rmfdu22i8amb`
@@ -539,7 +539,7 @@ When implementing new API phases:
 5. **Phase 8 Planning**: Prepare for advanced features and payment gateway integration
 
 ### **Key Resources**
-- **API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **API Base URL**: `https://time-api-dev.aerotage.com/`
 - **Interactive API Docs**: Live Swagger UI (deployed via CloudFront)
 - **OpenAPI Specification**: `/docs/openapi.yaml` for complete API specification
 - **Documentation**: `/docs` directory with organized, comprehensive guides

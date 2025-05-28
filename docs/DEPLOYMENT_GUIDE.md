@@ -156,7 +156,7 @@ cdk deploy AerotageAPI-dev --profile aerotage-dev
 aws cloudformation describe-stacks --stack-name AerotageAPI-dev
 
 # Test API endpoint
-curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//health"
+curl -X GET "https://time-api-dev.aerotage.com//health"
 
 # Check CloudWatch logs
 aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aerotage"
@@ -168,7 +168,7 @@ aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/aerotage"
 - **Purpose**: Active development and testing
 - **Stack Suffix**: `-dev`
 - **Profile**: `aerotage-dev`
-- **API URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **API URL**: `https://time-api-dev.aerotage.com/`
 - **Custom Domain**: `https://time-api-dev.aerotage.com/` (optional)
 
 ```bash
@@ -307,7 +307,7 @@ Update the frontend application with the deployed backend URLs:
 ```typescript
 // Frontend configuration
 const config = {
-  apiBaseUrl: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//',
+  apiBaseUrl: 'https://time-api-dev.aerotage.com//',
   cognito: {
     userPoolId: 'us-east-1_EsdlgX9Qg',
     userPoolWebClientId: '148r35u6uultp1rmfdu22i8amb',
@@ -322,10 +322,10 @@ const config = {
 ### **Health Checks**
 ```bash
 # API Gateway health check
-curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//health"
+curl -X GET "https://time-api-dev.aerotage.com//health"
 
 # Test authentication endpoint
-curl -X GET "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev//users" \
+curl -X GET "https://time-api-dev.aerotage.com//users" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
 # Check DynamoDB tables

@@ -5,7 +5,7 @@
 This guide provides comprehensive instructions for frontend developers to implement the time entry submission process correctly according to the Aerotage Time Reporting API requirements. The submission process involves creating time entries, validating them, and submitting them for manager approval.
 
 **Target Audience**: Frontend developers working on the Electron application  
-**API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`  
+**API Base URL**: `https://time-api-dev.aerotage.com/`  
 **Authentication**: JWT tokens from AWS Cognito required for all endpoints
 
 ---
@@ -727,7 +727,7 @@ describe('TimeEntryService', () => {
 - **[Daily/Weekly Time Tracking](./DAILY_WEEKLY_TIME_TRACKING_IMPLEMENTATION.md)** - Enhanced time tracking features
 
 ### **API Endpoints Reference**
-- **Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **Base URL**: `https://time-api-dev.aerotage.com/`
 - **Authentication**: Include `Authorization: Bearer {jwt-token}` header
 - **Content-Type**: `application/json` for all requests
 

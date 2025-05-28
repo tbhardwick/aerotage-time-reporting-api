@@ -14,7 +14,7 @@ const https = require('https');
 const readline = require('readline');
 
 // Configuration
-const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE_URL = 'https://time-api-dev.aerotage.com';
 const TEST_USER_EMAIL = 'test@aerotage.com'; // You'll need to provide a valid test user
 const TEST_PROJECT_ID = 'test-project-123'; // You'll need to provide a valid project ID
 

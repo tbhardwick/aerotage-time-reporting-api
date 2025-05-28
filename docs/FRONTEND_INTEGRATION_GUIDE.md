@@ -30,7 +30,7 @@ Update your frontend configuration with these current values:
 // src/config/aws-config.ts
 export const awsConfig = {
   // API Configuration
-  apiBaseUrl: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/',
+  apiBaseUrl: 'https://time-api-dev.aerotage.com/',
   
   // AWS Cognito Configuration
   Auth: {
@@ -58,7 +58,7 @@ export const awsConfig = {
 
 ```bash
 # .env.development
-REACT_APP_API_BASE_URL=https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
+REACT_APP_API_BASE_URL=https://time-api-dev.aerotage.com/
 REACT_APP_AWS_REGION=us-east-1
 REACT_APP_USER_POOL_ID=us-east-1_EsdlgX9Qg
 REACT_APP_USER_POOL_WEB_CLIENT_ID=148r35u6uultp1rmfdu22i8amb

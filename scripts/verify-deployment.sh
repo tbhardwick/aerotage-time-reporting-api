@@ -6,7 +6,7 @@
 
 set -e
 
-API_BASE_URL="https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev"
+API_BASE_URL="https://time-api-dev.aerotage.com"
 
 # Colors for output
 RED='\033[0;31m'

@@ -265,11 +265,11 @@ POST /time-entries/quick-add
    ```bash
    # Test daily summary endpoint
    curl -H "Authorization: Bearer <token>" \
-     "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/time-entries/daily-summary?startDate=2024-01-15&endDate=2024-01-15"
+     "https://time-api-dev.aerotage.com/time-entries/daily-summary?startDate=2024-01-15&endDate=2024-01-15"
    
    # Test work schedule endpoint
    curl -H "Authorization: Bearer <token>" \
-     "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/users/work-schedule"
+     "https://time-api-dev.aerotage.com/users/work-schedule"
    ```
 
 ## 📝 Usage Examples

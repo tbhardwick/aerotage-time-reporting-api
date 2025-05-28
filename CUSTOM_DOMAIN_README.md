@@ -8,7 +8,7 @@ This branch implements a **safe and professional custom domain solution** for th
 
 | Environment | Current URL | New Custom Domain |
 |-------------|-------------|-------------------|
-| Development | `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/` | `https://time-api-dev.aerotage.com/` |
+| Development | `https://time-api-dev.aerotage.com/` | `https://time-api-dev.aerotage.com/` |
 | Staging | *Not deployed* | `https://time-api-staging.aerotage.com/` |
 | Production | *Not deployed* | `https://time-api.aerotage.com/` |
 

@@ -148,7 +148,7 @@ import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 
 #### **API Base URL**
 ```
-https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/
+https://time-api-dev.aerotage.com/
 ```
 
 #### **Authentication Configuration**
@@ -157,7 +157,7 @@ const CONFIG = {
   COGNITO_USER_POOL_ID: 'us-east-1_EsdlgX9Qg',
   COGNITO_CLIENT_ID: '148r35u6uultp1rmfdu22i8amb',
   COGNITO_IDENTITY_POOL_ID: 'us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787',
-  API_BASE_URL: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev'
+  API_BASE_URL: 'https://time-api-dev.aerotage.com'
 };
 ```
 

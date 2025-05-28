@@ -4,7 +4,7 @@
 
 **Last Updated**: May 27, 2025  
 **Environment**: Development  
-**API Base URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`  
+**API Base URL**: `https://time-api-dev.aerotage.com/`  
 **Project Phase**: Phase 7 Complete + Daily/Weekly Time Tracking ✅ **COMPLETE**
 
 ---
@@ -273,7 +273,7 @@
 
 ### **✅ Development Environment**
 - **Status**: Fully operational with Phase 7 complete ✅ **UPDATED**
-- **API URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/`
+- **API URL**: `https://time-api-dev.aerotage.com/`
 - **Database**: All tables created and indexed (including invoices, templates, payments) ✅ **UPDATED**
 - **Monitoring**: Active CloudWatch logging
 - **Email**: SES configured and tested

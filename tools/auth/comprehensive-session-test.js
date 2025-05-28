@@ -17,7 +17,7 @@ const https = require('https');
 const AWS_CONFIG = {
   region: 'us-east-1',
   USER_SESSIONS_TABLE: 'aerotage-user-sessions-dev',
-  API_BASE_URL: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev'
+  API_BASE_URL: 'https://time-api-dev.aerotage.com'
 };
 
 // Cognito Configuration

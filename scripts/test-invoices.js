@@ -5,7 +5,7 @@ const { URL } = require('url');
 
 // Configuration
 const CONFIG = {
-  API_BASE_URL: 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev',
+  API_BASE_URL: 'https://time-api-dev.aerotage.com',
   COGNITO_CLIENT_ID: '148r35u6uultp1rmfdu22i8amb',
   COGNITO_USER_POOL_ID: 'us-east-1_EsdlgX9Qg',
   TEST_USER: {

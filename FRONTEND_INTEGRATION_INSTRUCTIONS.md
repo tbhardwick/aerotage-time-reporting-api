@@ -12,7 +12,7 @@ The Aerotage Time Reporting API is now deployed with a custom domain and ready f
 - **Status**: ✅ **LIVE and OPERATIONAL**
 
 ### **Backup URL** (if needed)
-- **Fallback URL**: `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev`
+- **Fallback URL**: `https://time-api-dev.aerotage.com`
 
 ## 🔐 Authentication Setup
 

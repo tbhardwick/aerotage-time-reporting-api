@@ -8,7 +8,7 @@
 set -e
 
 # Configuration
-API_BASE_URL="https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev"
+API_BASE_URL="https://time-api-dev.aerotage.com"
 TODAY=$(date +%Y-%m-%d)
 LAST_WEEK=$(date -v-7d +%Y-%m-%d)
 

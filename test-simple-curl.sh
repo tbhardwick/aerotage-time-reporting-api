@@ -6,7 +6,7 @@ echo "Testing bootstrap endpoint..."
 echo "============================="
 
 curl -v -X POST \
-  "https://time-api-dev.aerotage.com//users/0408a498-40c1-7071-acc9-90665ef117c3/sessions" \
+  "https://time-api-dev.aerotage.com/users/0408a498-40c1-7071-acc9-90665ef117c3/sessions" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"userAgent":"test-bootstrap","loginTime":"2025-05-25T19:50:00Z"}' 
+  -d '{"userAgent":"test-bootstrap","loginTime":"2025-05-25T19:50:00Z"}'

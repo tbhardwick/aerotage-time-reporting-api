@@ -34,7 +34,9 @@ export class ApiStack extends cdk.Stack {
       restApiName: `aerotage-time-api-${stage}`,
       description: 'Aerotage Time Reporting API',
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS, // Configure for production
+        allowOrigins: stage === 'dev' 
+          ? ['http://localhost:3000', 'http://localhost:3001'] // Allow localhost for development
+          : apigateway.Cors.ALL_ORIGINS, // Configure for production
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Content-Type',
@@ -42,6 +44,7 @@ export class ApiStack extends cdk.Stack {
           'Authorization',
           'X-Api-Key',
           'X-Amz-Security-Token',
+          'X-Requested-With',
         ],
       },
       deployOptions: {
@@ -265,7 +268,7 @@ export class ApiStack extends cdk.Stack {
       INVITATION_TEMPLATE_NAME: cdk.Fn.importValue(`SesInvitationTemplate-${stage}`),
       REMINDER_TEMPLATE_NAME: cdk.Fn.importValue(`SesReminderTemplate-${stage}`),
       WELCOME_TEMPLATE_NAME: cdk.Fn.importValue(`SesWelcomeTemplate-${stage}`),
-      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : `https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/${stage}`,
+      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : `https://time-api-${stage}.aerotage.com`,
     };
 
     // Store Lambda functions for monitoring
@@ -298,6 +301,13 @@ export class ApiStack extends cdk.Stack {
       this.lambdaFunctions[name] = func;
       return func;
     };
+
+    // Health Check API - Public endpoint for system health monitoring
+    const healthResource = this.api.root.addResource('health');
+    const healthCheckFunction = createLambdaFunction('HealthCheck', 'health/health-check', 'System health check endpoint');
+    
+    // Health endpoint is public (no authorizer) for monitoring purposes
+    healthResource.addMethod('GET', new apigateway.LambdaIntegration(healthCheckFunction));
 
     // User Management APIs
     const usersResource = this.api.root.addResource('users');
@@ -765,7 +775,7 @@ export class ApiStack extends cdk.Stack {
     // Without this, browsers show CORS errors instead of the actual 403 authorization error
     const corsHeaders = {
       'Access-Control-Allow-Origin': "'*'",
-      'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+      'Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'",
       'Access-Control-Allow-Methods': "'DELETE,GET,HEAD,OPTIONS,PUT,POST,PATCH'",
     };
 

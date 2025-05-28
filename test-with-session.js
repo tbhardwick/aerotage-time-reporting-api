@@ -4,7 +4,7 @@ const https = require('https');
 const { CognitoIdentityProviderClient, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 // Configuration
-const API_BASE_URL = 'https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE_URL = 'https://time-api-dev.aerotage.com';
 const COGNITO_CLIENT_ID = '148r35u6uultp1rmfdu22i8amb';
 const COGNITO_REGION = 'us-east-1';
 
