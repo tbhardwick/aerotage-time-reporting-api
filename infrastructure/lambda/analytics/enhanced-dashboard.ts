@@ -143,37 +143,6 @@ interface DateRange {
   endDate: string;
 }
 
-interface TimeEntry {
-  userId: string;
-  projectId: string;
-  startDate: string;
-  hours: number;
-  billable: boolean;
-  hourlyRate: number;
-  productivityScore?: number;
-}
-
-interface Project {
-  projectId: string;
-  name: string;
-  status: string;
-  budget: number;
-  budgetHours: number;
-  teamMembers?: string[];
-  managerId?: string;
-}
-
-interface Client {
-  clientId: string;
-  name: string;
-}
-
-interface User {
-  userId: string;
-  name?: string;
-  email?: string;
-}
-
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     console.log('Enhanced dashboard request:', JSON.stringify(event, null, 2));
@@ -708,7 +677,7 @@ function generateTableData(config: WidgetSpecificConfig, timeEntries: any[], pro
         
         return {
           name: project.name,
-          hours: hours,
+          hours,
           budget: project.budget,
           utilization: project.budget > 0 ? (hours / project.budgetHours) * 100 : 0,
         };

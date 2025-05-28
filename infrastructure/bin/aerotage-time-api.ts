@@ -67,7 +67,7 @@ const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
   userPoolClient: cognitoStack.userPoolClient,
   tables: databaseStack.tables,
   storageBucket: storageStack.storageBucket,
-  sesStack: sesStack,
+  sesStack,
   env,
   tags: commonTags,
 });
