@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, QueryCommandInput, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -44,7 +44,7 @@ interface ActivityFeed {
   userName: string;
   action: string;
   timestamp: string;
-  details: any;
+  details: Record<string, unknown>;
   type: 'timer' | 'entry' | 'project' | 'client' | 'system';
   priority: 'low' | 'medium' | 'high';
 }
@@ -72,7 +72,7 @@ interface RealTimeAlert {
   timestamp: string;
   acknowledged: boolean;
   autoResolve: boolean;
-  metadata: any;
+  metadata: Record<string, unknown>;
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -255,7 +255,7 @@ async function generateActivityFeed(userId: string, userRole: string): Promise<A
 
     const oneHourAgo = new Date(Date.now() - (60 * 60 * 1000)).toISOString();
     
-    let queryParams: any = {
+    let queryParams: QueryCommandInput = {
       TableName: analyticsTable,
       IndexName: 'EventTypeTimestampIndex',
       KeyConditionExpression: '#eventType = :eventType AND #timestamp > :timestamp',
@@ -274,8 +274,8 @@ async function generateActivityFeed(userId: string, userRole: string): Promise<A
     // Apply role-based filtering
     if (userRole === 'employee') {
       queryParams.FilterExpression = '#userId = :userId';
-      queryParams.ExpressionAttributeNames['#userId'] = 'userId';
-      queryParams.ExpressionAttributeValues[':userId'] = userId;
+      queryParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      queryParams.ExpressionAttributeValues![':userId'] = userId;
     }
 
     const command = new QueryCommand(queryParams);
@@ -305,7 +305,7 @@ async function generateActiveSessions(userId: string, userRole: string): Promise
 
     const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000)).toISOString();
     
-    let scanParams: any = {
+    let scanParams: ScanCommandInput = {
       TableName: sessionsTable,
       FilterExpression: '#lastActivity > :lastActivity AND #status = :status',
       ExpressionAttributeNames: {
@@ -321,8 +321,8 @@ async function generateActiveSessions(userId: string, userRole: string): Promise
     // Apply role-based filtering
     if (userRole === 'employee') {
       scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues[':userId'] = userId;
+      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      scanParams.ExpressionAttributeValues![':userId'] = userId;
     }
 
     const command = new ScanCommand(scanParams);
@@ -426,12 +426,12 @@ async function generateRealTimeAlerts(userId: string, userRole: string): Promise
 }
 
 // Helper functions
-async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<any[]> {
+async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
   if (!timeEntriesTable) return [];
 
   try {
-    let scanParams: any = {
+    let scanParams: ScanCommandInput = {
       TableName: timeEntriesTable,
       FilterExpression: '#startDate >= :todayStart',
       ExpressionAttributeNames: {
@@ -445,8 +445,8 @@ async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole:
     // Apply role-based filtering
     if (userRole === 'employee') {
       scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues[':userId'] = userId;
+      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      scanParams.ExpressionAttributeValues![':userId'] = userId;
     }
 
     const command = new ScanCommand(scanParams);
@@ -459,29 +459,31 @@ async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole:
   }
 }
 
-async function fetchActiveSessions(userId: string, userRole: string): Promise<any[]> {
+async function fetchActiveSessions(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const sessionsTable = process.env.USER_SESSIONS_TABLE_NAME;
   if (!sessionsTable) return [];
 
   try {
     const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000)).toISOString();
     
-    let scanParams: any = {
+    let scanParams: ScanCommandInput = {
       TableName: sessionsTable,
-      FilterExpression: '#lastActivity > :lastActivity',
+      FilterExpression: '#lastActivity > :lastActivity AND #status = :status',
       ExpressionAttributeNames: {
         '#lastActivity': 'lastActivity',
+        '#status': 'status',
       },
       ExpressionAttributeValues: {
         ':lastActivity': fifteenMinutesAgo,
+        ':status': 'active',
       },
     };
 
     // Apply role-based filtering
     if (userRole === 'employee') {
       scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues[':userId'] = userId;
+      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      scanParams.ExpressionAttributeValues![':userId'] = userId;
     }
 
     const command = new ScanCommand(scanParams);
@@ -494,14 +496,14 @@ async function fetchActiveSessions(userId: string, userRole: string): Promise<an
   }
 }
 
-async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Promise<any[]> {
+async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
   const analyticsTable = process.env.ANALYTICS_EVENTS_TABLE_NAME;
   if (!analyticsTable) return [];
 
   try {
     const oneHourAgo = new Date(Date.now() - (60 * 60 * 1000)).toISOString();
     
-    let scanParams: any = {
+    let scanParams: ScanCommandInput = {
       TableName: analyticsTable,
       FilterExpression: '#timestamp > :timestamp',
       ExpressionAttributeNames: {
@@ -515,8 +517,8 @@ async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Pro
     // Apply role-based filtering
     if (userRole === 'employee') {
       scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues[':userId'] = userId;
+      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      scanParams.ExpressionAttributeValues![':userId'] = userId;
     }
 
     const command = new ScanCommand(scanParams);
@@ -529,7 +531,7 @@ async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Pro
   }
 }
 
-async function calculateActiveUsers(sessions: any[]): Promise<number> {
+async function calculateActiveUsers(sessions: Record<string, unknown>[]): Promise<number> {
   const uniqueUsers = new Set(sessions.map(session => session.userId));
   return uniqueUsers.size;
 }
@@ -574,7 +576,7 @@ function determineSessionStatus(lastActivity: string): 'active' | 'idle' | 'away
 export async function trackRealTimeActivity(
   userId: string,
   action: string,
-  details: any,
+  details: Record<string, unknown>,
   type: string = 'system',
   priority: string = 'low'
 ): Promise<void> {
