@@ -554,7 +554,7 @@ function generateKPIData(metric: string, timeEntries: Record<string, unknown>[],
       };
 
     case 'hours':
-      const totalHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
+      const totalHours = timeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
       return {
         current: totalHours,
         previous: totalHours * 0.92,
@@ -573,7 +573,7 @@ function generateKPIData(metric: string, timeEntries: Record<string, unknown>[],
 
     case 'utilization':
       const workingHours = timeEntries.length * 8; // Assume 8 hours per day
-      const actualHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
+      const actualHours = timeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
       const utilization = workingHours > 0 ? (actualHours / workingHours) * 100 : 0;
       return {
         current: utilization,
@@ -591,7 +591,7 @@ function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[
   switch (metric) {
     case 'utilization':
       const totalPossibleHours = users.length * 40 * 4; // 40 hours/week * 4 weeks
-      const totalActualHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
+      const totalActualHours = timeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
       const utilization = totalPossibleHours > 0 ? (totalActualHours / totalPossibleHours) * 100 : 0;
       
       return {
@@ -607,7 +607,7 @@ function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[
       };
 
     case 'productivity':
-      const avgProductivity = timeEntries.reduce((sum, entry) => sum + (entry.productivityScore || 75), 0) / timeEntries.length;
+      const avgProductivity = timeEntries.reduce((sum, entry) => sum + Number(entry.productivityScore || 75), 0) / timeEntries.length;
       
       return {
         value: Math.round(avgProductivity),
@@ -626,7 +626,7 @@ function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[
   }
 }
 
-function generateChartData(config: WidgetSpecificConfig, timeEntries: any[], projects: any[], clients: any[], dateRange: any): any {
+function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
   switch (config.metric) {
     case 'revenue':
       if (config.groupBy === 'month') {
@@ -646,8 +646,9 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: any[], pro
 
     case 'projects':
       if (config.groupBy === 'status') {
-        const statusCounts = projects.reduce((acc, project) => {
-          acc[project.status] = (acc[project.status] || 0) + 1;
+        const statusCounts = projects.reduce((acc: Record<string, number>, project) => {
+          const status = String(project.status || 'unknown');
+          acc[status] = (acc[status] || 0) + 1;
           return acc;
         }, {});
         
@@ -667,19 +668,19 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: any[], pro
   }
 }
 
-function generateTableData(config: WidgetSpecificConfig, timeEntries: any[], projects: any[], clients: any[]): any {
+function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): Record<string, unknown> {
   switch (config.metric) {
     case 'top_projects':
       const projectHours = projects.map(project => {
         const hours = timeEntries
           .filter(entry => entry.projectId === project.projectId)
-          .reduce((sum, entry) => sum + entry.hours, 0);
+          .reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
         
         return {
           name: project.name,
           hours,
           budget: project.budget,
-          utilization: project.budget > 0 ? (hours / project.budgetHours) * 100 : 0,
+          utilization: Number(project.budget || 0) > 0 ? (hours / Number(project.budgetHours || 1)) * 100 : 0,
         };
       }).sort((a, b) => b.hours - a.hours).slice(0, 10);
 
@@ -688,7 +689,7 @@ function generateTableData(config: WidgetSpecificConfig, timeEntries: any[], pro
         rows: projectHours.map(p => [
           p.name,
           p.hours.toFixed(1),
-          `$${p.budget.toLocaleString()}`,
+          `$${Number(p.budget || 0).toLocaleString()}`,
           `${p.utilization.toFixed(1)}%`,
         ]),
       };
@@ -698,7 +699,7 @@ function generateTableData(config: WidgetSpecificConfig, timeEntries: any[], pro
   }
 }
 
-function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: any[], users: any[], dateRange: any): any {
+function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], users: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
   if (config.groupBy === 'user_day') {
     const heatmapData: Array<{ x: string; y: string; value: number }> = [];
     const startDate = new Date(dateRange.startDate);
@@ -708,14 +709,14 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: any[], u
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
         const dayEntries = timeEntries.filter(entry => 
           entry.userId === user.userId && 
-          entry.startDate.startsWith(d.toISOString().split('T')[0])
+          String(entry.startDate || '').startsWith(d.toISOString().split('T')[0])
         );
         
-        const dayHours = dayEntries.reduce((sum, entry) => sum + entry.hours, 0);
+        const dayHours = dayEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
         
         heatmapData.push({
           x: d.toISOString().split('T')[0],
-          y: user.name || user.email || 'Unknown User',
+          y: String(user.name || user.email || 'Unknown User'),
           value: dayHours,
         });
       }
@@ -734,7 +735,7 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: any[], u
   return { data: [] };
 }
 
-function generateTrendData(config: WidgetSpecificConfig, timeEntries: any[], projects: any[], dateRange: any): any {
+function generateTrendData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
   const weeklyData = groupByWeek(timeEntries, dateRange);
   const values = weeklyData.map(d => d.value);
   
@@ -759,20 +760,21 @@ function generateTrendData(config: WidgetSpecificConfig, timeEntries: any[], pro
   };
 }
 
-function groupByMonth(timeEntries: any[], dateRange: any): any[] {
-  const months = new Map();
+function groupByMonth(timeEntries: Record<string, unknown>[], dateRange: DateRange): Array<{ month: string; hours: number; revenue: number }> {
+  const months = new Map<string, { month: string; hours: number; revenue: number }>();
   
   timeEntries.forEach(entry => {
-    const month = entry.startDate.substring(0, 7); // YYYY-MM
+    const startDate = String(entry.startDate || '');
+    const month = startDate.substring(0, 7); // YYYY-MM
     if (!months.has(month)) {
       months.set(month, { month, hours: 0, revenue: 0 });
     }
     
     const data = months.get(month);
     if (data) {
-      data.hours += entry.hours;
+      data.hours += Number(entry.hours || 0);
       if (entry.billable) {
-        data.revenue += entry.hours * entry.hourlyRate;
+        data.revenue += Number(entry.hours || 0) * Number(entry.hourlyRate || 0);
       }
     }
   });
@@ -780,11 +782,12 @@ function groupByMonth(timeEntries: any[], dateRange: any): any[] {
   return Array.from(months.values()).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-function groupByWeek(timeEntries: any[], dateRange: any): any[] {
-  const weeks = new Map();
+function groupByWeek(timeEntries: Record<string, unknown>[], dateRange: DateRange): Array<{ week: string; value: number }> {
+  const weeks = new Map<string, { week: string; value: number }>();
   
   timeEntries.forEach(entry => {
-    const date = new Date(entry.startDate);
+    const startDate = String(entry.startDate || '');
+    const date = new Date(startDate);
     const weekStart = new Date(date);
     weekStart.setDate(date.getDate() - date.getDay());
     const weekKey = weekStart.toISOString().split('T')[0];
@@ -795,19 +798,19 @@ function groupByWeek(timeEntries: any[], dateRange: any): any[] {
     
     const weekData = weeks.get(weekKey);
     if (weekData) {
-      weekData.value += entry.hours;
+      weekData.value += Number(entry.hours || 0);
     }
   });
 
   return Array.from(weeks.values()).sort((a, b) => a.week.localeCompare(b.week));
 }
 
-function generateDashboardSummary(timeEntries: any[], projects: any[], clients: any[], users: any[]): DashboardSummary {
-  const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
-  const billableHours = timeEntries.filter(entry => entry.billable).reduce((sum, entry) => sum + entry.hours, 0);
+function generateDashboardSummary(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], users: Record<string, unknown>[]): DashboardSummary {
+  const totalHours = timeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+  const billableHours = timeEntries.filter(entry => entry.billable).reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
   const totalRevenue = timeEntries
     .filter(entry => entry.billable)
-    .reduce((sum, entry) => sum + (entry.hours * entry.hourlyRate), 0);
+    .reduce((sum, entry) => sum + (Number(entry.hours || 0) * Number(entry.hourlyRate || 0)), 0);
   
   const activeProjects = projects.filter(p => p.status === 'active').length;
   const totalPossibleHours = users.length * 40 * 4; // 40 hours/week * 4 weeks
@@ -856,7 +859,7 @@ async function generateRealTimeMetrics(userId: string, userRole: string): Promis
   };
 }
 
-async function generateForecastingData(timeEntries: any[], projects: any[], dateRange: any): Promise<ForecastingData> {
+async function generateForecastingData(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], dateRange: DateRange): Promise<ForecastingData> {
   const monthlyRevenue = groupByMonth(timeEntries, dateRange);
   const recentRevenue = monthlyRevenue.slice(-3).map(m => m.revenue);
   

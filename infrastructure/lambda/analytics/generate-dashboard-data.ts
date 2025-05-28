@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -37,7 +37,7 @@ interface ChartData {
   label: string;
   value: number;
   date?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 interface Alert {
@@ -72,9 +72,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
     const dashboardRequest: DashboardRequest = {
-      period: (queryParams.period as any) || 'month',
+      period: (queryParams.period as 'day' | 'week' | 'month' | 'quarter' | 'year') || 'month',
       metrics: queryParams.metrics ? queryParams.metrics.split(',') : undefined,
-      compareWith: queryParams.compareWith as any,
+      compareWith: queryParams.compareWith as 'previous' | 'year' | undefined,
     };
 
     // Validate period
@@ -195,7 +195,7 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
   return { startDate, endDate };
 }
 
-async function getTimeEntriesData(dateRange: { startDate: string; endDate: string }, filter: any): Promise<any[]> {
+async function getTimeEntriesData(dateRange: { startDate: string; endDate: string }, filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
   
   if (!timeEntriesTable) {
@@ -204,7 +204,7 @@ async function getTimeEntriesData(dateRange: { startDate: string; endDate: strin
   }
 
   try {
-    const queryParams: any = {
+    const queryParams: ScanCommandInput = {
       TableName: timeEntriesTable,
       FilterExpression: '#date BETWEEN :startDate AND :endDate',
       ExpressionAttributeNames: {
@@ -219,8 +219,8 @@ async function getTimeEntriesData(dateRange: { startDate: string; endDate: strin
     // Add user filter for employees
     if (filter.userId) {
       queryParams.FilterExpression += ' AND #userId = :userId';
-      queryParams.ExpressionAttributeNames['#userId'] = 'userId';
-      queryParams.ExpressionAttributeValues[':userId'] = filter.userId;
+      queryParams.ExpressionAttributeNames!['#userId'] = 'userId';
+      queryParams.ExpressionAttributeValues![':userId'] = filter.userId;
     }
 
     const command = new ScanCommand(queryParams);
@@ -233,7 +233,7 @@ async function getTimeEntriesData(dateRange: { startDate: string; endDate: strin
   }
 }
 
-async function getProjectsData(filter: any): Promise<any[]> {
+async function getProjectsData(filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
   const projectsTable = process.env.PROJECTS_TABLE_NAME;
   
   if (!projectsTable) {
