@@ -7,8 +7,6 @@ import {
   DeleteCommand, 
   QueryCommand, 
   ScanCommand,
-  BatchWriteCommand,
-  BatchGetCommand,
   QueryCommandInput,
   ScanCommandInput
 } from '@aws-sdk/lib-dynamodb';
@@ -239,7 +237,7 @@ export class TimeEntryRepository {
     const limit = Math.min(filters.limit || 50, 100);
     const offset = filters.offset || 0;
 
-    let queryParams: Record<string, unknown> = {
+    const queryParams: Record<string, unknown> = {
       TableName: this.timeEntriesTable,
       Limit: limit + 1, // Get one extra to check if there are more
     };

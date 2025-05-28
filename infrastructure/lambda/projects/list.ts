@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
   Project,
-  PaginationResponse,
-  ErrorResponse
+  PaginationResponse
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository, ProjectFilters } from '../shared/project-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('List projects request:', JSON.stringify(event, null, 2));
@@ -70,8 +69,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       body: JSON.stringify(response),
     };
 
-  } catch (error) {
-    console.error('Error listing projects:', error);
+  } catch {
+    console.error('Error listing projects');
     
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }

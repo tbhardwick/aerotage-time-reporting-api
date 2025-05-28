@@ -8,10 +8,7 @@ import {
   QueryCommand, 
   ScanCommand 
 } from '@aws-sdk/lib-dynamodb';
-import { 
-  Client, 
-  ClientDynamoItem 
-} from './types';
+import { Client } from './types';
 
 export interface ClientFilters {
   isActive?: boolean;

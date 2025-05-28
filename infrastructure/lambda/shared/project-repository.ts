@@ -8,11 +8,7 @@ import {
   QueryCommand, 
   ScanCommand 
 } from '@aws-sdk/lib-dynamodb';
-import { 
-  Project, 
-  ProjectDynamoItem, 
-  TimeEntryErrorCodes 
-} from './types';
+import { Project } from './types';
 
 export interface ProjectFilters {
   clientId?: string;

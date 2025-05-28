@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 import { getCurrentUserId } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -91,7 +91,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestBody: TrackEventRequest;
     try {
       requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -199,7 +199,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   return event.requestContext.identity?.sourceIp || 'unknown';
 }
 
-async function getLocationFromIP(ipAddress: string): Promise<{ country: string; region: string; city: string } | undefined> {
+async function getLocationFromIP(_ipAddress: string): Promise<{ country: string; region: string; city: string } | undefined> {
   // In production, integrate with a geolocation service like MaxMind or ipapi.co
   // For now, return undefined to avoid external dependencies
   try {
@@ -212,8 +212,8 @@ async function getLocationFromIP(ipAddress: string): Promise<{ country: string; 
     //   city: data.city,
     // };
     return undefined;
-  } catch (error) {
-    console.error('Error getting location from IP:', error);
+  } catch {
+    console.error('Error getting location from IP');
     return undefined;
   }
 }
@@ -247,13 +247,13 @@ async function updateRateLimit(userId: string): Promise<void> {
   // Implementation depends on the rate limiting strategy chosen
   try {
     const currentHour = Math.floor(Date.now() / (60 * 60 * 1000));
-    const rateLimitKey = `${userId}-${currentHour}`;
+    const _rateLimitKey = `${userId}-${currentHour}`;
     
     // Placeholder for rate limit update logic
-    console.log('Rate limit updated for:', rateLimitKey);
+    console.log('Rate limit updated for:', _rateLimitKey);
     
-  } catch (error) {
-    console.error('Error updating rate limit:', error);
+  } catch {
+    console.error('Error updating rate limit');
     // Don't throw - rate limit update failure shouldn't break event tracking
   }
 } 
