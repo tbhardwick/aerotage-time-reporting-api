@@ -8,6 +8,7 @@ import { ApiStack } from '../lib/api-stack';
 import { StorageStack } from '../lib/storage-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
 import { DocumentationStack } from '../lib/documentation-stack';
+import { DomainStack } from '../lib/domain-stack';
 
 const app = new cdk.App();
 
@@ -71,6 +72,16 @@ const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
   tags: commonTags,
 });
 
+// Custom Domain Stack (Route 53 + Certificate Manager + API Gateway Custom Domain)
+const domainStack = new DomainStack(app, `AerotageDomain-${stage}`, {
+  stage,
+  hostedZoneName: 'aerotage.com',
+  restApi: apiStack.api,
+  apiGatewayStage: stage,
+  env,
+  tags: commonTags,
+});
+
 // Documentation Stack (S3 + CloudFront for Swagger UI)
 const documentationStack = new DocumentationStack(app, `AerotageDocumentation-${stage}`, {
   stage,
@@ -95,6 +106,7 @@ apiStack.addDependency(cognitoStack);
 apiStack.addDependency(databaseStack);
 apiStack.addDependency(storageStack);
 apiStack.addDependency(sesStack);
+domainStack.addDependency(apiStack);
 documentationStack.addDependency(apiStack);
 monitoringStack.addDependency(apiStack);
 monitoringStack.addDependency(databaseStack);

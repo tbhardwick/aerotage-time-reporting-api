@@ -1,0 +1,447 @@
+{
+    "ResourceRecordSets": [
+        {
+            "Name": "aerotage.com.",
+            "Type": "A",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "141.193.213.21"
+                }
+            ]
+        },
+        {
+            "Name": "aerotage.com.",
+            "Type": "MX",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "1 aspmx.l.google.com."
+                },
+                {
+                    "Value": "5 alt2.aspmx.l.google.com."
+                },
+                {
+                    "Value": "5 alt1.aspmx.l.google.com."
+                },
+                {
+                    "Value": "10 aspmx3.googlemail.com."
+                },
+                {
+                    "Value": "10 aspmx2.googlemail.com."
+                }
+            ]
+        },
+        {
+            "Name": "aerotage.com.",
+            "Type": "NS",
+            "TTL": 172800,
+            "ResourceRecords": [
+                {
+                    "Value": "ns-1377.awsdns-44.org."
+                },
+                {
+                    "Value": "ns-1739.awsdns-25.co.uk."
+                },
+                {
+                    "Value": "ns-395.awsdns-49.com."
+                },
+                {
+                    "Value": "ns-554.awsdns-05.net."
+                }
+            ]
+        },
+        {
+            "Name": "aerotage.com.",
+            "Type": "SOA",
+            "TTL": 900,
+            "ResourceRecords": [
+                {
+                    "Value": "ns-1377.awsdns-44.org. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"
+                }
+            ]
+        },
+        {
+            "Name": "aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=spf1 mx include:mailgun.org include:_spf.google.com include:servers.mcsv.net include:amazonses.com -all\""
+                }
+            ]
+        },
+        {
+            "Name": "_1da565655ddb2028b6f77bb4de4e981d.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "_7b28fcb766776c5c425956d3947499a6.hkvuiqjoua.acm-validations.aws."
+                }
+            ]
+        },
+        {
+            "Name": "_dmarc.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s; rua=mailto:admin@aerotage.com!20m; ruf=mailto:postmaster@aerotage.com!20m; rf=afrf; pct=100; ri=86400\""
+                }
+            ]
+        },
+        {
+            "Name": "3vssqm2w3ntobkivr5hu4njacsvmehtd._domainkey.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 1800,
+            "ResourceRecords": [
+                {
+                    "Value": "3vssqm2w3ntobkivr5hu4njacsvmehtd.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "ezxj6y7d7waocoptvhq2czssux6yl52e._domainkey.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 1800,
+            "ResourceRecords": [
+                {
+                    "Value": "ezxj6y7d7waocoptvhq2czssux6yl52e.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "google._domainkey.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCAIeYhs7DnjjjrD7JiMmC7btbKcZJ2svVm75ach/K4teDiRYSU6OITe1KdbRV7RC7ywP/EZZJIje5m3xWdae/I/oLL+wGiRlAO70zq78jcdxeoKh4sopRxu53Z1x7aSuN9FcvS4bHH5XOfx5ZlEdzzBSXNVpHgjiquOSqergH9vwIDAQAB\""
+                }
+            ]
+        },
+        {
+            "Name": "k1._domainkey.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "dkim.mcsv.net"
+                }
+            ]
+        },
+        {
+            "Name": "ontirmjozbgv24mtrmmpqfacgrvsqiab._domainkey.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 1800,
+            "ResourceRecords": [
+                {
+                    "Value": "ontirmjozbgv24mtrmmpqfacgrvsqiab.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "_46bb2c5ece581ac3ff15954b4cfd0ffb.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "_589b48086930870bf80fe606eb0e7b57.djqtsrsxkq.acm-validations.aws."
+                }
+            ]
+        },
+        {
+            "Name": "7f7gp5mqmt652ezj3kmhn6zvatmfcdwq._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "7f7gp5mqmt652ezj3kmhn6zvatmfcdwq.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "cdybbnvky44ma4bmev7dzdsy733c37qg._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "cdybbnvky44ma4bmev7dzdsy733c37qg.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "ksh3bbklbdijhve6ukgl7jatr765tfry._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "ksh3bbklbdijhve6ukgl7jatr765tfry.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "qehaprqsacg4cwfd5xffdxms3dozfbst._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "qehaprqsacg4cwfd5xffdxms3dozfbst.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "yyqvskbtbpas3gzz4iea6ocxpynaim4o._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "yyqvskbtbpas3gzz4iea6ocxpynaim4o.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "z53lbumuopuwde67v2betbnssj3ewmgd._domainkey.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "z53lbumuopuwde67v2betbnssj3ewmgd.dkim.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "_ed938f7002e00987290a2858fbf01621.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "_370fb1739a1644df61582dbef5639f5d.mhbtsbpdnt.acm-validations.aws."
+                }
+            ]
+        },
+        {
+            "Name": "dev.andromeda.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "d-eqiqhzqy53.execute-api.us-gov-west-1.amazonaws.com"
+                }
+            ]
+        },
+        {
+            "Name": "mail.andromeda.aerotage.com.",
+            "Type": "MX",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "10 feedback-smtp.us-gov-west-1.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "mail.andromeda.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=spf1 include:amazonses.com ~all\""
+                }
+            ]
+        },
+        {
+            "Name": "app.aerotage.com.",
+            "Type": "A",
+            "AliasTarget": {
+                "HostedZoneId": "Z2FDTNDATAQYW2",
+                "DNSName": "d1tsxkv5baev5m.cloudfront.net.",
+                "EvaluateTargetHealth": false
+            }
+        },
+        {
+            "Name": "app.aerotage.com.",
+            "Type": "MX",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "10 feedback-smtp.us-east-1.amazonses.com"
+                }
+            ]
+        },
+        {
+            "Name": "app.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=spf1 include:amazonses.com ~all\""
+                }
+            ]
+        },
+        {
+            "Name": "dev.aerotage.com.",
+            "Type": "A",
+            "AliasTarget": {
+                "HostedZoneId": "Z2FDTNDATAQYW2",
+                "DNSName": "d1s19vfuqtab4t.cloudfront.net.",
+                "EvaluateTargetHealth": false
+            }
+        },
+        {
+            "Name": "devmammoth777.aerotage.com.",
+            "Type": "A",
+            "AliasTarget": {
+                "HostedZoneId": "Z2FDTNDATAQYW2",
+                "DNSName": "d2ann691u32igl.cloudfront.net.",
+                "EvaluateTargetHealth": false
+            }
+        },
+        {
+            "Name": "email.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "mailgun.org"
+                }
+            ]
+        },
+        {
+            "Name": "mammoth777.aerotage.com.",
+            "Type": "A",
+            "AliasTarget": {
+                "HostedZoneId": "Z2FDTNDATAQYW2",
+                "DNSName": "d2pgfyapiopu19.cloudfront.net.",
+                "EvaluateTargetHealth": false
+            }
+        },
+        {
+            "Name": "notifications.aerotage.com.",
+            "Type": "MX",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "10 mxa.mailgun.org"
+                },
+                {
+                    "Value": "10 mxb.mailgun.org"
+                }
+            ]
+        },
+        {
+            "Name": "notifications.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=spf1 include:mailgun.org ~all\""
+                }
+            ]
+        },
+        {
+            "Name": "mailo._domainkey.notifications.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDE1R6t+/axbni6vi5+xtV2DptHmMZ1JyuNcnDKak/qtS8+2w3yJMGRmoZtCL8ntr/eEsKWqQDjxogdVc5BGut1td2WfkeZVD6KLJockLNcvmoe0kKUyhACU8D8whpyAL9unjsnACAgEbZsEGp51SHukw/XrcsK9doNRsKei3QbiwIDAQAB\""
+                }
+            ]
+        },
+        {
+            "Name": "email.notifications.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "mailgun.org"
+                }
+            ]
+        },
+        {
+            "Name": "op.aerotage.com.",
+            "Type": "A",
+            "TTL": 60,
+            "ResourceRecords": [
+                {
+                    "Value": "52.207.108.90"
+                }
+            ]
+        },
+        {
+            "Name": "op.aerotage.com.",
+            "Type": "MX",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "10 mxa.mailgun.org"
+                },
+                {
+                    "Value": "20 mxb.mailgun.org"
+                }
+            ]
+        },
+        {
+            "Name": "op.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"v=spf1 include:mailgun.org ~all\""
+                }
+            ]
+        },
+        {
+            "Name": "krs._domainkey.op.aerotage.com.",
+            "Type": "TXT",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "\"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDLgnZYQPdXtqTM+bhuboFnhkmtrc6Rdhaeb9fIGJNH1qcYGUS8y8nQXDWzXnjrWpMLabEXo8KZ2TxWDvdMQro80z2T7K3JvJoDKV09F2Km+Tw1BQWWsJO+lzE0EA1stXj3yAuO9KGDQUvhcanDRwUcjCVsM+caykM4TBZFKNrYOwIDAQAB\""
+                }
+            ]
+        },
+        {
+            "Name": "email.op.aerotage.com.",
+            "Type": "CNAME",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "mailgun.org"
+                }
+            ]
+        },
+        {
+            "Name": "origin.aerotage.com.",
+            "Type": "A",
+            "TTL": 60,
+            "ResourceRecords": [
+                {
+                    "Value": "34.232.92.125"
+                }
+            ]
+        },
+        {
+            "Name": "vpn.aerotage.com.",
+            "Type": "A",
+            "TTL": 60,
+            "ResourceRecords": [
+                {
+                    "Value": "18.252.24.185"
+                }
+            ]
+        },
+        {
+            "Name": "www.aerotage.com.",
+            "Type": "A",
+            "TTL": 300,
+            "ResourceRecords": [
+                {
+                    "Value": "141.193.213.21"
+                }
+            ]
+        }
+    ]
+}

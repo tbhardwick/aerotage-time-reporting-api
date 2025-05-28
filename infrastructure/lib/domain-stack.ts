@@ -23,7 +23,7 @@ export class DomainStack extends cdk.Stack {
     const { stage, hostedZoneName, restApi } = props;
 
     // Define the API subdomain based on stage
-    const apiSubdomain = stage === 'prod' ? 'api' : `api-${stage}`;
+    const apiSubdomain = stage === 'prod' ? 'time-api' : `time-api-${stage}`;
     this.domainName = `${apiSubdomain}.${hostedZoneName}`;
     this.apiUrl = `https://${this.domainName}`;
 
@@ -36,7 +36,7 @@ export class DomainStack extends cdk.Stack {
     const certificate = new acm.Certificate(this, 'ApiCertificate', {
       domainName: this.domainName,
       validation: acm.CertificateValidation.fromDns(hostedZone),
-      certificateName: `aerotage-api-cert-${stage}`,
+      certificateName: `aerotage-time-api-cert-${stage}`,
     });
 
     this.certificateArn = certificate.certificateArn;
