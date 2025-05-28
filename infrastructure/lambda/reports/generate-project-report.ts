@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 
 const dynamoClient = new DynamoDBClient({});
@@ -120,15 +120,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       dateRange: {
         startDate: queryParams.startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as any,
+        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
       },
       projectIds: queryParams.projectId ? [queryParams.projectId] : undefined,
       clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
       status: queryParams.status ? queryParams.status.split(',') : undefined,
       includeMetrics: queryParams.includeMetrics === 'true',
-      groupBy: (queryParams.groupBy as any) || 'project',
+      groupBy: (queryParams.groupBy as 'project' | 'client' | 'status' | 'date') || 'project',
       sortBy: queryParams.sortBy || 'actualHours',
-      sortOrder: (queryParams.sortOrder as any) || 'desc',
+      sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
     };
@@ -219,21 +219,21 @@ async function generateProjectReport(filters: ProjectReportFilters, userId: stri
   };
 }
 
-async function getProjectsData(filters: ProjectReportFilters): Promise<any[]> {
+async function getProjectsData(filters: ProjectReportFilters): Promise<Record<string, unknown>[]> {
   const projectsTable = process.env.PROJECTS_TABLE;
   
   if (!projectsTable) {
     throw new Error('PROJECTS_TABLE environment variable not set');
   }
 
-  let queryParams: any = {
+  let queryParams: ScanCommandInput = {
     TableName: projectsTable,
   };
 
   // Add filters
   let filterExpressions: string[] = [];
-  let expressionAttributeNames: any = {};
-  let expressionAttributeValues: any = {};
+  let expressionAttributeNames: Record<string, string> = {};
+  let expressionAttributeValues: Record<string, unknown> = {};
 
   if (filters.projectIds && filters.projectIds.length > 0) {
     filterExpressions.push('#id IN (:projectIds)');
@@ -262,17 +262,17 @@ async function getProjectsData(filters: ProjectReportFilters): Promise<any[]> {
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getTimeEntriesForProjects(filters: ProjectReportFilters): Promise<any[]> {
+async function getTimeEntriesForProjects(filters: ProjectReportFilters): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE;
   
   if (!timeEntriesTable) {
     throw new Error('TIME_ENTRIES_TABLE environment variable not set');
   }
 
-  const queryParams: any = {
+  const queryParams: ScanCommandInput = {
     TableName: timeEntriesTable,
     FilterExpression: 'begins_with(PK, :pkPrefix) AND #date BETWEEN :startDate AND :endDate',
     ExpressionAttributeNames: {
@@ -288,19 +288,19 @@ async function getTimeEntriesForProjects(filters: ProjectReportFilters): Promise
   // Add project filter if specified
   if (filters.projectIds && filters.projectIds.length > 0) {
     queryParams.FilterExpression += ' AND #projectId IN (:projectIds)';
-    queryParams.ExpressionAttributeNames['#projectId'] = 'projectId';
-    queryParams.ExpressionAttributeValues[':projectIds'] = filters.projectIds;
+    queryParams.ExpressionAttributeNames!['#projectId'] = 'projectId';
+    queryParams.ExpressionAttributeValues![':projectIds'] = filters.projectIds;
   }
 
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getClientsData(): Promise<Map<string, any>> {
+async function getClientsData(): Promise<Map<string, Record<string, unknown>>> {
   const clientsTable = process.env.CLIENTS_TABLE;
-  const clients = new Map();
+  const clients = new Map<string, Record<string, unknown>>();
   
   if (!clientsTable) {
     return clients;
@@ -314,7 +314,7 @@ async function getClientsData(): Promise<Map<string, any>> {
     
     if (result.Items) {
       result.Items.forEach(client => {
-        clients.set(client.id, client);
+        clients.set(client.id as string, client as Record<string, unknown>);
       });
     }
   } catch (error) {
@@ -325,19 +325,19 @@ async function getClientsData(): Promise<Map<string, any>> {
 }
 
 async function transformProjectData(
-  projects: any[],
-  timeEntries: any[],
-  clients: Map<string, any>,
+  projects: Record<string, unknown>[],
+  timeEntries: Record<string, unknown>[],
+  clients: Map<string, Record<string, unknown>>,
   filters: ProjectReportFilters
 ): Promise<ProjectReportDataItem[]> {
   // Group time entries by project
-  const timeByProject = new Map<string, any[]>();
+  const timeByProject = new Map<string, Record<string, unknown>[]>();
   timeEntries.forEach(entry => {
     if (entry.projectId) {
-      if (!timeByProject.has(entry.projectId)) {
-        timeByProject.set(entry.projectId, []);
+      if (!timeByProject.has(entry.projectId as string)) {
+        timeByProject.set(entry.projectId as string, []);
       }
-      timeByProject.get(entry.projectId)!.push(entry);
+      timeByProject.get(entry.projectId as string)!.push(entry);
     }
   });
 
@@ -345,24 +345,24 @@ async function transformProjectData(
   const teamMembersByProject = await getTeamMembersByProject(projects);
 
   return projects.map(project => {
-    const client = clients.get(project.clientId);
-    const projectTimeEntries = timeByProject.get(project.id) || [];
-    const teamMembers = teamMembersByProject.get(project.id) || [];
+    const client = clients.get(project.clientId as string);
+    const projectTimeEntries = timeByProject.get(project.id as string) || [];
+    const teamMembers = teamMembersByProject.get(project.id as string) || [];
 
     // Calculate actual hours and cost
     const actualHours = projectTimeEntries.reduce((sum, entry) => {
-      return sum + (entry.duration ? (entry.duration || 0) / 60 : 0);
+      return sum + (entry.duration ? (Number(entry.duration) || 0) / 60 : 0);
     }, 0);
 
     const actualCost = projectTimeEntries.reduce((sum, entry) => {
-      const hours = entry.duration ? (entry.duration || 0) / 60 : 0;
-      const rate = entry.hourlyRate || project.hourlyRate || 0;
+      const hours = entry.duration ? (Number(entry.duration) || 0) / 60 : 0;
+      const rate = Number(entry.hourlyRate) || Number(project.hourlyRate) || 0;
       return sum + (hours * rate);
     }, 0);
 
     // Get budget information
-    const budgetHours = project.budgetHours || 0;
-    const budgetCost = project.budgetCost || (budgetHours * (project.hourlyRate || 0));
+    const budgetHours = Number(project.budgetHours) || 0;
+    const budgetCost = Number(project.budgetCost) || (budgetHours * (Number(project.hourlyRate) || 0));
 
     // Calculate metrics
     const hoursVariance = actualHours - budgetHours;
@@ -376,19 +376,19 @@ async function transformProjectData(
 
     // Check status flags
     const isOverBudget = actualCost > budgetCost;
-    const isOverdue = project.endDate && new Date(project.endDate) < new Date() && project.status === 'active';
+    const isOverdue = project.endDate && new Date(project.endDate as string) < new Date() && project.status === 'active';
 
     // Get recent activity
     const recentActivity = getRecentActivity(projectTimeEntries);
 
     return {
-      projectId: project.id,
-      projectName: project.name,
-      clientId: project.clientId || '',
-      clientName: client?.name || 'Unknown Client',
-      status: project.status || 'unknown',
-      startDate: project.startDate || '',
-      endDate: project.endDate || '',
+      projectId: project.id as string,
+      projectName: project.name as string,
+      clientId: (project.clientId as string) || '',
+      clientName: (client?.name as string) || 'Unknown Client',
+      status: (project.status as string) || 'unknown',
+      startDate: (project.startDate as string) || '',
+      endDate: (project.endDate as string) || '',
       budgetHours: Math.round(budgetHours * 100) / 100,
       actualHours: Math.round(actualHours * 100) / 100,
       budgetCost: Math.round(budgetCost * 100) / 100,
@@ -407,20 +407,20 @@ async function transformProjectData(
   });
 }
 
-async function getTeamMembersByProject(projects: any[]): Promise<Map<string, string[]>> {
+async function getTeamMembersByProject(projects: Record<string, unknown>[]): Promise<Map<string, string[]>> {
   // In a real implementation, this would query a project-team relationship table
   // For now, return empty arrays
   const teamMembers = new Map<string, string[]>();
   
   projects.forEach(project => {
     // Placeholder - in production, fetch actual team members
-    teamMembers.set(project.id, project.teamMembers || []);
+    teamMembers.set(project.id as string, (project.teamMembers as string[]) || []);
   });
 
   return teamMembers;
 }
 
-function calculateCompletionPercentage(project: any, actualHours: number, budgetHours: number): number {
+function calculateCompletionPercentage(project: Record<string, unknown>, actualHours: number, budgetHours: number): number {
   // Simple completion calculation based on hours
   if (project.status === 'completed') return 100;
   if (project.status === 'cancelled') return 0;
@@ -429,14 +429,14 @@ function calculateCompletionPercentage(project: any, actualHours: number, budget
   return Math.min((actualHours / budgetHours) * 100, 100);
 }
 
-function getRecentActivity(timeEntries: any[]): string {
+function getRecentActivity(timeEntries: Record<string, unknown>[]): string {
   if (timeEntries.length === 0) return 'No recent activity';
   
   // Sort by date and get the most recent entry
-  const sortedEntries = timeEntries.sort((a, b) => b.date.localeCompare(a.date));
+  const sortedEntries = timeEntries.sort((a, b) => (b.date as string).localeCompare(a.date as string));
   const mostRecent = sortedEntries[0];
   
-  const daysSince = Math.floor((Date.now() - new Date(mostRecent.date).getTime()) / (24 * 60 * 60 * 1000));
+  const daysSince = Math.floor((Date.now() - new Date(mostRecent.date as string).getTime()) / (24 * 60 * 60 * 1000));
   
   if (daysSince === 0) return 'Active today';
   if (daysSince === 1) return 'Active yesterday';
@@ -484,12 +484,12 @@ function calculateProjectSummary(data: ProjectReportDataItem[]): ProjectReportSu
 
 function sortProjectData(data: ProjectReportDataItem[], sortBy: string, sortOrder: string): ProjectReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: any = a[sortBy as keyof ProjectReportDataItem];
-    let bValue: any = b[sortBy as keyof ProjectReportDataItem];
+    let aValue: unknown = a[sortBy as keyof ProjectReportDataItem];
+    let bValue: unknown = b[sortBy as keyof ProjectReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
-      bValue = bValue.toLowerCase();
+      bValue = (bValue as string).toLowerCase();
     }
     
     if (sortOrder === 'desc') {

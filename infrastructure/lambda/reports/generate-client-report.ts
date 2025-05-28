@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 
 const dynamoClient = new DynamoDBClient({});
@@ -132,14 +132,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       dateRange: {
         startDate: queryParams.startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as any,
+        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
       },
       clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
       includeProjects: queryParams.includeProjects === 'true',
       includeBilling: queryParams.includeBilling === 'true',
-      groupBy: (queryParams.groupBy as any) || 'client',
+      groupBy: (queryParams.groupBy as 'client' | 'project' | 'date') || 'client',
       sortBy: queryParams.sortBy || 'totalRevenue',
-      sortOrder: (queryParams.sortOrder as any) || 'desc',
+      sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
     };
@@ -231,14 +231,14 @@ async function generateClientReport(filters: ClientReportFilters, userId: string
   };
 }
 
-async function getClientsData(filters: ClientReportFilters): Promise<any[]> {
+async function getClientsData(filters: ClientReportFilters): Promise<Record<string, unknown>[]> {
   const clientsTable = process.env.CLIENTS_TABLE;
   
   if (!clientsTable) {
     throw new Error('CLIENTS_TABLE environment variable not set');
   }
 
-  let queryParams: any = {
+  let queryParams: ScanCommandInput = {
     TableName: clientsTable,
   };
 
@@ -252,17 +252,17 @@ async function getClientsData(filters: ClientReportFilters): Promise<any[]> {
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getProjectsData(filters: ClientReportFilters): Promise<any[]> {
+async function getProjectsData(filters: ClientReportFilters): Promise<Record<string, unknown>[]> {
   const projectsTable = process.env.PROJECTS_TABLE;
   
   if (!projectsTable) {
     throw new Error('PROJECTS_TABLE environment variable not set');
   }
 
-  let queryParams: any = {
+  let queryParams: ScanCommandInput = {
     TableName: projectsTable,
   };
 
@@ -276,17 +276,17 @@ async function getProjectsData(filters: ClientReportFilters): Promise<any[]> {
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getTimeEntriesForClients(filters: ClientReportFilters): Promise<any[]> {
+async function getTimeEntriesForClients(filters: ClientReportFilters): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE;
   
   if (!timeEntriesTable) {
     throw new Error('TIME_ENTRIES_TABLE environment variable not set');
   }
 
-  const queryParams: any = {
+  const queryParams: ScanCommandInput = {
     TableName: timeEntriesTable,
     FilterExpression: 'begins_with(PK, :pkPrefix) AND #date BETWEEN :startDate AND :endDate',
     ExpressionAttributeNames: {
@@ -302,10 +302,10 @@ async function getTimeEntriesForClients(filters: ClientReportFilters): Promise<a
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getInvoicesData(filters: ClientReportFilters): Promise<any[]> {
+async function getInvoicesData(filters: ClientReportFilters): Promise<Record<string, unknown>[]> {
   const invoicesTable = process.env.INVOICES_TABLE_NAME;
   
   if (!invoicesTable) {
@@ -314,7 +314,7 @@ async function getInvoicesData(filters: ClientReportFilters): Promise<any[]> {
   }
 
   try {
-    let queryParams: any = {
+    let queryParams: ScanCommandInput = {
       TableName: invoicesTable,
     };
 
@@ -328,7 +328,7 @@ async function getInvoicesData(filters: ClientReportFilters): Promise<any[]> {
     const command = new ScanCommand(queryParams);
     const result = await docClient.send(command);
     
-    return result.Items || [];
+    return (result.Items || []) as Record<string, unknown>[];
   } catch (error) {
     console.error('Error fetching invoices:', error);
     return [];
@@ -336,48 +336,48 @@ async function getInvoicesData(filters: ClientReportFilters): Promise<any[]> {
 }
 
 async function transformClientData(
-  clients: any[],
-  projects: any[],
-  timeEntries: any[],
-  invoices: any[],
+  clients: Record<string, unknown>[],
+  projects: Record<string, unknown>[],
+  timeEntries: Record<string, unknown>[],
+  invoices: Record<string, unknown>[],
   filters: ClientReportFilters
 ): Promise<ClientReportDataItem[]> {
   // Group projects by client
-  const projectsByClient = new Map<string, any[]>();
+  const projectsByClient = new Map<string, Record<string, unknown>[]>();
   projects.forEach(project => {
     if (project.clientId) {
-      if (!projectsByClient.has(project.clientId)) {
-        projectsByClient.set(project.clientId, []);
+      if (!projectsByClient.has(project.clientId as string)) {
+        projectsByClient.set(project.clientId as string, []);
       }
-      projectsByClient.get(project.clientId)!.push(project);
+      projectsByClient.get(project.clientId as string)!.push(project);
     }
   });
 
   // Group time entries by project, then by client
-  const timeByProject = new Map<string, any[]>();
+  const timeByProject = new Map<string, Record<string, unknown>[]>();
   timeEntries.forEach(entry => {
     if (entry.projectId) {
-      if (!timeByProject.has(entry.projectId)) {
-        timeByProject.set(entry.projectId, []);
+      if (!timeByProject.has(entry.projectId as string)) {
+        timeByProject.set(entry.projectId as string, []);
       }
-      timeByProject.get(entry.projectId)!.push(entry);
+      timeByProject.get(entry.projectId as string)!.push(entry);
     }
   });
 
   // Group invoices by client
-  const invoicesByClient = new Map<string, any[]>();
+  const invoicesByClient = new Map<string, Record<string, unknown>[]>();
   invoices.forEach(invoice => {
     if (invoice.clientId) {
-      if (!invoicesByClient.has(invoice.clientId)) {
-        invoicesByClient.set(invoice.clientId, []);
+      if (!invoicesByClient.has(invoice.clientId as string)) {
+        invoicesByClient.set(invoice.clientId as string, []);
       }
-      invoicesByClient.get(invoice.clientId)!.push(invoice);
+      invoicesByClient.get(invoice.clientId as string)!.push(invoice);
     }
   });
 
   return clients.map(client => {
-    const clientProjects = projectsByClient.get(client.id) || [];
-    const clientInvoices = invoicesByClient.get(client.id) || [];
+    const clientProjects = projectsByClient.get(client.id as string) || [];
+    const clientInvoices = invoicesByClient.get(client.id as string) || [];
 
     // Calculate time and revenue across all client projects
     let totalHours = 0;
@@ -389,21 +389,21 @@ async function transformClientData(
     const projectSummaries: ClientProjectSummary[] = [];
 
     clientProjects.forEach(project => {
-      const projectTimeEntries = timeByProject.get(project.id) || [];
+      const projectTimeEntries = timeByProject.get(project.id as string) || [];
       
       const projectHours = projectTimeEntries.reduce((sum, entry) => {
-        return sum + (entry.duration ? (entry.duration || 0) / 60 : 0);
+        return sum + (entry.duration ? (Number(entry.duration) || 0) / 60 : 0);
       }, 0);
 
       const projectBillableHours = projectTimeEntries
         .filter(entry => entry.isBillable)
-        .reduce((sum, entry) => sum + (entry.duration ? (entry.duration || 0) / 60 : 0), 0);
+        .reduce((sum, entry) => sum + (entry.duration ? (Number(entry.duration) || 0) / 60 : 0), 0);
 
       const projectRevenue = projectTimeEntries
         .filter(entry => entry.isBillable)
         .reduce((sum, entry) => {
-          const hours = entry.duration ? (entry.duration || 0) / 60 : 0;
-          const rate = entry.hourlyRate || project.hourlyRate || 0;
+          const hours = entry.duration ? (Number(entry.duration) || 0) / 60 : 0;
+          const rate = Number(entry.hourlyRate) || Number(project.hourlyRate) || 0;
           return sum + (hours * rate);
         }, 0);
 
@@ -420,9 +420,9 @@ async function transformClientData(
 
       if (filters.includeProjects) {
         projectSummaries.push({
-          projectId: project.id,
-          projectName: project.name,
-          status: project.status || 'unknown',
+          projectId: project.id as string,
+          projectName: project.name as string,
+          status: (project.status as string) || 'unknown',
           hours: Math.round(projectHours * 100) / 100,
           revenue: Math.round(projectRevenue * 100) / 100,
           lastActivity: projectLastActivity || 'No activity',
@@ -446,9 +446,9 @@ async function transformClientData(
     const paymentStatus = determinePaymentStatus(invoiceData);
 
     return {
-      clientId: client.id,
-      clientName: client.name || 'Unknown Client',
-      contactEmail: client.email || '',
+      clientId: client.id as string,
+      clientName: (client.name as string) || 'Unknown Client',
+      contactEmail: (client.email as string) || '',
       totalHours: Math.round(totalHours * 100) / 100,
       billableHours: Math.round(billableHours * 100) / 100,
       nonBillableHours: Math.round(nonBillableHours * 100) / 100,
@@ -468,25 +468,25 @@ async function transformClientData(
   });
 }
 
-function getProjectLastActivity(timeEntries: any[]): string {
+function getProjectLastActivity(timeEntries: Record<string, unknown>[]): string {
   if (timeEntries.length === 0) return '';
   
-  const sortedEntries = timeEntries.sort((a, b) => b.date.localeCompare(a.date));
-  return sortedEntries[0].date;
+  const sortedEntries = timeEntries.sort((a, b) => (b.date as string).localeCompare(a.date as string));
+  return sortedEntries[0].date as string;
 }
 
-function calculateInvoiceData(invoices: any[]): ClientInvoiceData {
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+function calculateInvoiceData(invoices: Record<string, unknown>[]): ClientInvoiceData {
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const totalPaid = invoices
     .filter(inv => inv.status === 'paid')
-    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+    .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
   const totalOutstanding = invoices
     .filter(inv => inv.status !== 'paid')
-    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+    .reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
 
   // Get last invoice date
-  const sortedInvoices = invoices.sort((a, b) => b.issueDate?.localeCompare(a.issueDate) || 0);
-  const lastInvoiceDate = sortedInvoices.length > 0 ? sortedInvoices[0].issueDate : '';
+  const sortedInvoices = invoices.sort((a, b) => (b.issueDate as string)?.localeCompare(a.issueDate as string) || 0);
+  const lastInvoiceDate = sortedInvoices.length > 0 ? (sortedInvoices[0].issueDate as string) : '';
 
   // Calculate next invoice due (simplified - 30 days from last invoice)
   const nextInvoiceDue = lastInvoiceDate ? 

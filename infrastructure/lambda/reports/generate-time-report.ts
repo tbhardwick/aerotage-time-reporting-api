@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, GetCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 import { createHash } from 'crypto';
 
 const dynamoClient = new DynamoDBClient({});
@@ -94,15 +94,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       dateRange: {
         startDate: queryParams.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as any,
+        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
       },
       users: queryParams.userId ? [queryParams.userId] : undefined,
       projects: queryParams.projectId ? [queryParams.projectId] : undefined,
       clients: queryParams.clientId ? [queryParams.clientId] : undefined,
       billable: queryParams.billable ? queryParams.billable === 'true' : undefined,
-      groupBy: (queryParams.groupBy as any) || 'date',
+      groupBy: (queryParams.groupBy as 'user' | 'project' | 'client' | 'date') || 'date',
       sortBy: queryParams.sortBy || 'date',
-      sortOrder: (queryParams.sortOrder as any) || 'desc',
+      sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
       limit: queryParams.limit ? parseInt(queryParams.limit) : 100,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
     };
@@ -203,7 +203,7 @@ async function generateTimeReport(filters: ReportFilters, userId: string, userRo
   };
 }
 
-async function queryTimeEntries(filters: ReportFilters, userRole: string): Promise<any[]> {
+async function queryTimeEntries(filters: ReportFilters, userRole: string): Promise<Record<string, unknown>[]> {
   const timeEntriesTable = process.env.TIME_ENTRIES_TABLE;
   
   if (!timeEntriesTable) {
@@ -211,7 +211,7 @@ async function queryTimeEntries(filters: ReportFilters, userRole: string): Promi
   }
 
   // Build query parameters based on filters
-  const queryParams: any = {
+  const queryParams: ScanCommandInput = {
     TableName: timeEntriesTable,
     FilterExpression: 'begins_with(PK, :pkPrefix) AND #date BETWEEN :startDate AND :endDate',
     ExpressionAttributeNames: {
@@ -227,38 +227,38 @@ async function queryTimeEntries(filters: ReportFilters, userRole: string): Promi
   // Add additional filters
   if (filters.users && filters.users.length > 0) {
     queryParams.FilterExpression += ' AND #userId IN (:userIds)';
-    queryParams.ExpressionAttributeNames['#userId'] = 'userId';
-    queryParams.ExpressionAttributeValues[':userIds'] = filters.users;
+    queryParams.ExpressionAttributeNames!['#userId'] = 'userId';
+    queryParams.ExpressionAttributeValues![':userIds'] = filters.users;
   }
 
   if (filters.projects && filters.projects.length > 0) {
     queryParams.FilterExpression += ' AND #projectId IN (:projectIds)';
-    queryParams.ExpressionAttributeNames['#projectId'] = 'projectId';
-    queryParams.ExpressionAttributeValues[':projectIds'] = filters.projects;
+    queryParams.ExpressionAttributeNames!['#projectId'] = 'projectId';
+    queryParams.ExpressionAttributeValues![':projectIds'] = filters.projects;
   }
 
   if (filters.billable !== undefined) {
     queryParams.FilterExpression += ' AND #isBillable = :billable';
-    queryParams.ExpressionAttributeNames['#isBillable'] = 'isBillable';
-    queryParams.ExpressionAttributeValues[':billable'] = filters.billable;
+    queryParams.ExpressionAttributeNames!['#isBillable'] = 'isBillable';
+    queryParams.ExpressionAttributeValues![':billable'] = filters.billable;
   }
 
   if (filters.status && filters.status.length > 0) {
     queryParams.FilterExpression += ' AND #status IN (:statuses)';
-    queryParams.ExpressionAttributeNames['#status'] = 'status';
-    queryParams.ExpressionAttributeValues[':statuses'] = filters.status;
+    queryParams.ExpressionAttributeNames!['#status'] = 'status';
+    queryParams.ExpressionAttributeValues![':statuses'] = filters.status;
   }
 
   const command = new ScanCommand(queryParams);
   const result = await docClient.send(command);
   
-  return result.Items || [];
+  return (result.Items || []) as Record<string, unknown>[];
 }
 
-async function getUsersData(timeEntries: any[]): Promise<Map<string, any>> {
+async function getUsersData(timeEntries: Record<string, unknown>[]): Promise<Map<string, Record<string, unknown>>> {
   const usersTable = process.env.USERS_TABLE;
-  const userIds = [...new Set(timeEntries.map(entry => entry.userId))];
-  const users = new Map();
+  const userIds = [...new Set(timeEntries.map(entry => entry.userId as string))];
+  const users = new Map<string, Record<string, unknown>>();
 
   if (!usersTable || userIds.length === 0) {
     return users;
@@ -273,7 +273,7 @@ async function getUsersData(timeEntries: any[]): Promise<Map<string, any>> {
       });
       const result = await docClient.send(command);
       if (result.Item) {
-        users.set(userId, result.Item);
+        users.set(userId, result.Item as Record<string, unknown>);
       }
     } catch (error) {
       console.error(`Error fetching user ${userId}:`, error);
@@ -283,10 +283,10 @@ async function getUsersData(timeEntries: any[]): Promise<Map<string, any>> {
   return users;
 }
 
-async function getProjectsData(timeEntries: any[]): Promise<Map<string, any>> {
+async function getProjectsData(timeEntries: Record<string, unknown>[]): Promise<Map<string, Record<string, unknown>>> {
   const projectsTable = process.env.PROJECTS_TABLE;
-  const projectIds = [...new Set(timeEntries.map(entry => entry.projectId))];
-  const projects = new Map();
+  const projectIds = [...new Set(timeEntries.map(entry => entry.projectId as string))];
+  const projects = new Map<string, Record<string, unknown>>();
 
   if (!projectsTable || projectIds.length === 0) {
     return projects;
@@ -301,7 +301,7 @@ async function getProjectsData(timeEntries: any[]): Promise<Map<string, any>> {
       });
       const result = await docClient.send(command);
       if (result.Item) {
-        projects.set(projectId, result.Item);
+        projects.set(projectId, result.Item as Record<string, unknown>);
       }
     } catch (error) {
       console.error(`Error fetching project ${projectId}:`, error);
@@ -311,11 +311,11 @@ async function getProjectsData(timeEntries: any[]): Promise<Map<string, any>> {
   return projects;
 }
 
-async function getClientsData(timeEntries: any[]): Promise<Map<string, any>> {
+async function getClientsData(timeEntries: Record<string, unknown>[]): Promise<Map<string, Record<string, unknown>>> {
   const clientsTable = process.env.CLIENTS_TABLE;
   const projects = await getProjectsData(timeEntries);
-  const clientIds = [...new Set(Array.from(projects.values()).map(project => project.clientId))];
-  const clients = new Map();
+  const clientIds = [...new Set(Array.from(projects.values()).map(project => project.clientId as string))];
+  const clients = new Map<string, Record<string, unknown>>();
 
   if (!clientsTable || clientIds.length === 0) {
     return clients;
@@ -330,7 +330,7 @@ async function getClientsData(timeEntries: any[]): Promise<Map<string, any>> {
       });
       const result = await docClient.send(command);
       if (result.Item) {
-        clients.set(clientId, result.Item);
+        clients.set(clientId, result.Item as Record<string, unknown>);
       }
     } catch (error) {
       console.error(`Error fetching client ${clientId}:`, error);
@@ -341,21 +341,21 @@ async function getClientsData(timeEntries: any[]): Promise<Map<string, any>> {
 }
 
 function transformTimeEntries(
-  timeEntries: any[],
-  users: Map<string, any>,
-  projects: Map<string, any>,
-  clients: Map<string, any>
+  timeEntries: Record<string, unknown>[],
+  users: Map<string, Record<string, unknown>>,
+  projects: Map<string, Record<string, unknown>>,
+  clients: Map<string, Record<string, unknown>>
 ): TimeReportDataItem[] {
   return timeEntries.map(entry => {
-    const user = users.get(entry.userId);
-    const project = projects.get(entry.projectId);
-    const client = clients.get(project?.clientId);
+    const user = users.get(entry.userId as string);
+    const project = projects.get(entry.projectId as string);
+    const client = clients.get(project?.clientId as string);
     
     // Duration is in minutes, convert to hours
-    const hours = (entry.duration || 0) / 60;
+    const hours = (Number(entry.duration) || 0) / 60;
     const billableHours = entry.isBillable ? hours : 0;
     const nonBillableHours = entry.isBillable ? 0 : hours;
-    const hourlyRate = entry.hourlyRate || project?.hourlyRate || user?.hourlyRate || 0;
+    const hourlyRate = Number(entry.hourlyRate) || Number(project?.hourlyRate) || Number(user?.hourlyRate) || 0;
     const totalCost = billableHours * hourlyRate;
 
     // Parse tags if they're stored as JSON string
@@ -369,20 +369,20 @@ function transformTimeEntries(
     }
 
     return {
-      date: entry.date,
-      userId: entry.userId,
-      userName: user?.name || user?.email || 'Unknown User',
-      projectId: entry.projectId,
-      projectName: project?.name || 'Unknown Project',
-      clientId: project?.clientId || '',
-      clientName: client?.name || 'Unknown Client',
+      date: entry.date as string,
+      userId: entry.userId as string,
+      userName: (user?.name as string) || (user?.email as string) || 'Unknown User',
+      projectId: entry.projectId as string,
+      projectName: (project?.name as string) || 'Unknown Project',
+      clientId: (project?.clientId as string) || '',
+      clientName: (client?.name as string) || 'Unknown Client',
       hours,
       billableHours,
       nonBillableHours,
       hourlyRate,
       totalCost,
-      description: entry.description || '',
-      tags,
+      description: (entry.description as string) || '',
+      tags: tags as string[],
     };
   });
 }
@@ -420,12 +420,12 @@ function groupData(data: TimeReportDataItem[], groupBy: string): TimeReportDataI
 
 function sortData(data: TimeReportDataItem[], sortBy: string, sortOrder: string): TimeReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: any = a[sortBy as keyof TimeReportDataItem];
-    let bValue: any = b[sortBy as keyof TimeReportDataItem];
+    let aValue: unknown = a[sortBy as keyof TimeReportDataItem];
+    let bValue: unknown = b[sortBy as keyof TimeReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
-      bValue = bValue.toLowerCase();
+      bValue = (bValue as string).toLowerCase();
     }
     
     if (sortOrder === 'desc') {

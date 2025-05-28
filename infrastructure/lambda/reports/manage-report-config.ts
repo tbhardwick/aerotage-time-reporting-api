@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, DeleteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
 
 const dynamoClient = new DynamoDBClient({});
@@ -14,7 +14,7 @@ interface ReportConfig {
   reportType: 'time' | 'project' | 'client' | 'dashboard';
   name: string;
   description?: string;
-  filters: any;
+  filters: Record<string, unknown>;
   schedule?: ReportSchedule;
   isTemplate: boolean;
   isShared: boolean;
@@ -24,7 +24,7 @@ interface ReportConfig {
   lastGenerated?: string;
   generationCount: number;
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 interface ReportSchedule {
@@ -44,25 +44,25 @@ interface CreateReportConfigRequest {
   reportType: 'time' | 'project' | 'client' | 'dashboard';
   name: string;
   description?: string;
-  filters: any;
+  filters: Record<string, unknown>;
   schedule?: ReportSchedule;
   isTemplate?: boolean;
   isShared?: boolean;
   sharedWith?: string[];
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 interface UpdateReportConfigRequest {
   name?: string;
   description?: string;
-  filters?: any;
+  filters?: Record<string, unknown>;
   schedule?: ReportSchedule;
   isTemplate?: boolean;
   isShared?: boolean;
   sharedWith?: string[];
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
