@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -254,7 +254,7 @@ async function getProjectsData(filter: Record<string, unknown>): Promise<Record<
   }
 }
 
-async function getClientsData(filter: any): Promise<any[]> {
+async function getClientsData(filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
   const clientsTable = process.env.CLIENTS_TABLE_NAME;
   
   if (!clientsTable) {
@@ -275,26 +275,26 @@ async function getClientsData(filter: any): Promise<any[]> {
   }
 }
 
-async function getPreviousPeriodData(period: string, filter: any): Promise<any> {
+async function getPreviousPeriodData(period: string, filter: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   // Get data from previous period for trend calculation
   // This is a simplified implementation - in production, implement proper period calculation
   return null;
 }
 
-function calculateKPIs(timeEntries: any[], projects: any[], clients: any[]): DashboardData['kpis'] {
+function calculateKPIs(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): DashboardData['kpis'] {
   // Calculate total hours and revenue
   const totalHours = timeEntries.reduce((sum, entry) => {
-    return sum + (entry.duration ? entry.duration / 3600 : 0); // Convert seconds to hours
+    return sum + (Number(entry.duration || 0) / 3600); // Convert seconds to hours
   }, 0);
 
   const billableEntries = timeEntries.filter(entry => entry.billable);
   const billableHours = billableEntries.reduce((sum, entry) => {
-    return sum + (entry.duration ? entry.duration / 3600 : 0);
+    return sum + (Number(entry.duration || 0) / 3600);
   }, 0);
 
   const totalRevenue = billableEntries.reduce((sum, entry) => {
-    const hours = entry.duration ? entry.duration / 3600 : 0;
-    const rate = entry.hourlyRate || 0;
+    const hours = Number(entry.duration || 0) / 3600;
+    const rate = Number(entry.hourlyRate || 0);
     return sum + (hours * rate);
   }, 0);
 
@@ -319,7 +319,7 @@ function calculateKPIs(timeEntries: any[], projects: any[], clients: any[]): Das
   };
 }
 
-function calculateTrends(currentKPIs: DashboardData['kpis'], previousData: any): DashboardData['trends'] {
+function calculateTrends(currentKPIs: DashboardData['kpis'], previousData: Record<string, unknown> | null): DashboardData['trends'] {
   // If no previous data, return zero growth
   if (!previousData) {
     return {
@@ -337,14 +337,14 @@ function calculateTrends(currentKPIs: DashboardData['kpis'], previousData: any):
   };
 
   return {
-    revenueGrowth: Math.round(calculateGrowth(currentKPIs.totalRevenue, previousData.totalRevenue) * 100) / 100,
-    hoursGrowth: Math.round(calculateGrowth(currentKPIs.totalHours, previousData.totalHours) * 100) / 100,
-    projectGrowth: Math.round(calculateGrowth(currentKPIs.activeProjects, previousData.activeProjects) * 100) / 100,
-    clientGrowth: Math.round(calculateGrowth(currentKPIs.activeClients, previousData.activeClients) * 100) / 100,
+    revenueGrowth: Math.round(calculateGrowth(currentKPIs.totalRevenue, Number(previousData.totalRevenue || 0)) * 100) / 100,
+    hoursGrowth: Math.round(calculateGrowth(currentKPIs.totalHours, Number(previousData.totalHours || 0)) * 100) / 100,
+    projectGrowth: Math.round(calculateGrowth(currentKPIs.activeProjects, Number(previousData.activeProjects || 0)) * 100) / 100,
+    clientGrowth: Math.round(calculateGrowth(currentKPIs.activeClients, Number(previousData.activeClients || 0)) * 100) / 100,
   };
 }
 
-function generateChartData(timeEntries: any[], projects: any[], clients: any[], period: string): DashboardData['charts'] {
+function generateChartData(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], period: string): DashboardData['charts'] {
   // Revenue by month (simplified - group by month)
   const revenueByMonth = generateRevenueByMonth(timeEntries);
   
@@ -365,14 +365,14 @@ function generateChartData(timeEntries: any[], projects: any[], clients: any[], 
   };
 }
 
-function generateRevenueByMonth(timeEntries: any[]): ChartData[] {
+function generateRevenueByMonth(timeEntries: Record<string, unknown>[]): ChartData[] {
   const monthlyRevenue = new Map<string, number>();
 
   timeEntries.forEach(entry => {
     if (entry.billable && entry.date) {
-      const month = entry.date.substring(0, 7); // YYYY-MM
-      const hours = entry.duration ? entry.duration / 3600 : 0;
-      const revenue = hours * (entry.hourlyRate || 0);
+      const month = String(entry.date).substring(0, 7); // YYYY-MM
+      const hours = Number(entry.duration || 0) / 3600;
+      const revenue = hours * Number(entry.hourlyRate || 0);
       
       monthlyRevenue.set(month, (monthlyRevenue.get(month) || 0) + revenue);
     }
@@ -387,19 +387,20 @@ function generateRevenueByMonth(timeEntries: any[]): ChartData[] {
     .sort((a, b) => a.date!.localeCompare(b.date!));
 }
 
-function generateHoursByProject(timeEntries: any[], projects: any[]): ChartData[] {
+function generateHoursByProject(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[]): ChartData[] {
   const projectHours = new Map<string, number>();
   const projectNames = new Map<string, string>();
 
   // Build project name lookup
   projects.forEach(project => {
-    projectNames.set(project.id, project.name);
+    projectNames.set(String(project.id), String(project.name));
   });
 
   timeEntries.forEach(entry => {
     if (entry.projectId) {
-      const hours = entry.duration ? entry.duration / 3600 : 0;
-      projectHours.set(entry.projectId, (projectHours.get(entry.projectId) || 0) + hours);
+      const hours = Number(entry.duration || 0) / 3600;
+      const projectId = String(entry.projectId);
+      projectHours.set(projectId, (projectHours.get(projectId) || 0) + hours);
     }
   });
 
@@ -413,20 +414,21 @@ function generateHoursByProject(timeEntries: any[], projects: any[]): ChartData[
     .slice(0, 10); // Top 10 projects
 }
 
-function generateUtilizationByUser(timeEntries: any[]): ChartData[] {
+function generateUtilizationByUser(timeEntries: Record<string, unknown>[]): ChartData[] {
   const userStats = new Map<string, { total: number; billable: number; name: string }>();
 
   timeEntries.forEach(entry => {
     if (entry.userId) {
-      const hours = entry.duration ? entry.duration / 3600 : 0;
-      const stats = userStats.get(entry.userId) || { total: 0, billable: 0, name: entry.userName || 'Unknown User' };
+      const hours = Number(entry.duration || 0) / 3600;
+      const userId = String(entry.userId);
+      const stats = userStats.get(userId) || { total: 0, billable: 0, name: String(entry.userName || 'Unknown User') };
       
       stats.total += hours;
       if (entry.billable) {
         stats.billable += hours;
       }
       
-      userStats.set(entry.userId, stats);
+      userStats.set(userId, stats);
     }
   });
 
@@ -439,27 +441,27 @@ function generateUtilizationByUser(timeEntries: any[]): ChartData[] {
     .sort((a, b) => b.value - a.value);
 }
 
-function generateClientActivity(timeEntries: any[], projects: any[], clients: any[]): ChartData[] {
+function generateClientActivity(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): ChartData[] {
   const clientHours = new Map<string, number>();
   const clientNames = new Map<string, string>();
   const projectClientMap = new Map<string, string>();
 
   // Build lookup maps
   clients.forEach(client => {
-    clientNames.set(client.id, client.name);
+    clientNames.set(String(client.id), String(client.name));
   });
 
   projects.forEach(project => {
     if (project.clientId) {
-      projectClientMap.set(project.id, project.clientId);
+      projectClientMap.set(String(project.id), String(project.clientId));
     }
   });
 
   timeEntries.forEach(entry => {
     if (entry.projectId) {
-      const clientId = projectClientMap.get(entry.projectId);
+      const clientId = projectClientMap.get(String(entry.projectId));
       if (clientId) {
-        const hours = entry.duration ? entry.duration / 3600 : 0;
+        const hours = Number(entry.duration || 0) / 3600;
         clientHours.set(clientId, (clientHours.get(clientId) || 0) + hours);
       }
     }
@@ -475,7 +477,7 @@ function generateClientActivity(timeEntries: any[], projects: any[], clients: an
     .slice(0, 10); // Top 10 clients
 }
 
-function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['trends'], projects: any[]): Alert[] {
+function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['trends'], projects: Record<string, unknown>[]): Alert[] {
   const alerts: Alert[] = [];
   const now = new Date().toISOString();
 
@@ -508,7 +510,7 @@ function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['tren
   // Overdue projects alert (simplified check)
   const overdueProjects = projects.filter(project => {
     if (project.endDate && project.status === 'active') {
-      return new Date(project.endDate) < new Date();
+      return new Date(String(project.endDate)) < new Date();
     }
     return false;
   });
@@ -526,4 +528,4 @@ function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['tren
   }
 
   return alerts;
-} 
+}

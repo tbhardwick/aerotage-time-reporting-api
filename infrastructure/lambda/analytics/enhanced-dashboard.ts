@@ -438,7 +438,7 @@ async function fetchProjects(userId: string, userRole: string): Promise<Record<s
   }
 }
 
-async function fetchClients(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
+async function fetchClients(_userId: string, _userRole: string): Promise<Record<string, unknown>[]> {
   const clientsTable = process.env.CLIENTS_TABLE_NAME;
   if (!clientsTable) return [];
 
@@ -540,7 +540,7 @@ async function generateWidget(
   };
 }
 
-function generateKPIData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): Record<string, unknown> {
+function generateKPIData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[]): Record<string, unknown> {
   switch (metric) {
     case 'revenue':
       const totalRevenue = timeEntries
@@ -626,11 +626,11 @@ function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[
   }
 }
 
-function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
+function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[], _dateRange: DateRange): Record<string, unknown> {
   switch (config.metric) {
     case 'revenue':
       if (config.groupBy === 'month') {
-        const monthlyData = groupByMonth(timeEntries, dateRange);
+        const monthlyData = groupByMonth(timeEntries, _dateRange);
         return {
           type: config.chartType || 'line',
           labels: monthlyData.map(d => d.month),
@@ -668,7 +668,7 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<str
   }
 }
 
-function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): Record<string, unknown> {
+function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[]): Record<string, unknown> {
   switch (config.metric) {
     case 'top_projects':
       const projectHours = projects.map(project => {
@@ -735,8 +735,8 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: Record<s
   return { data: [] };
 }
 
-function generateTrendData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
-  const weeklyData = groupByWeek(timeEntries, dateRange);
+function generateTrendData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], _projects: Record<string, unknown>[], _dateRange: DateRange): Record<string, unknown> {
+  const weeklyData = groupByWeek(timeEntries, _dateRange);
   const values = weeklyData.map(d => d.value);
   
   if (values.length < 2) {
@@ -829,11 +829,8 @@ function generateDashboardSummary(timeEntries: Record<string, unknown>[], projec
   };
 }
 
-async function generateRealTimeMetrics(userId: string, userRole: string): Promise<RealTimeMetrics> {
+async function generateRealTimeMetrics(_userId: string, _userRole: string): Promise<RealTimeMetrics> {
   // Mock real-time data - in production, this would query live sessions and current activities
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
   return {
     activeUsers: 12,
     currentSessions: 8,
