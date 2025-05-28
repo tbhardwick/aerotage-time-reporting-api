@@ -8,7 +8,9 @@ import {
   QueryCommand, 
   ScanCommand,
   BatchWriteCommand,
-  BatchGetCommand
+  BatchGetCommand,
+  QueryCommandInput,
+  ScanCommandInput
 } from '@aws-sdk/lib-dynamodb';
 import { 
   TimeEntry, 
@@ -136,8 +138,8 @@ export class TimeEntryRepository {
     }
 
     const updateExpression: string[] = [];
-    const expressionAttributeNames: { [key: string]: string } = {};
-    const expressionAttributeValues: { [key: string]: any } = {};
+    const expressionAttributeNames: Record<string, string> = {};
+    const expressionAttributeValues: Record<string, unknown> = {};
 
     // Build update expression dynamically
     Object.entries(updates).forEach(([key, value]) => {
@@ -237,7 +239,7 @@ export class TimeEntryRepository {
     const limit = Math.min(filters.limit || 50, 100);
     const offset = filters.offset || 0;
 
-    let queryParams: any = {
+    let queryParams: Record<string, unknown> = {
       TableName: this.timeEntriesTable,
       Limit: limit + 1, // Get one extra to check if there are more
     };
@@ -251,7 +253,7 @@ export class TimeEntryRepository {
       
       if (filters.dateFrom || filters.dateTo) {
         queryParams.KeyConditionExpression += ' AND begins_with(GSI1SK, :datePrefix)';
-        queryParams.ExpressionAttributeValues[':datePrefix'] = 'DATE#';
+        (queryParams.ExpressionAttributeValues as Record<string, unknown>)[':datePrefix'] = 'DATE#';
       }
     } else if (filters.projectId) {
       // Query by project
@@ -270,13 +272,13 @@ export class TimeEntryRepository {
 
     // Add filter expressions
     const filterExpressions: string[] = [];
-    const expressionAttributeNames: { [key: string]: string } = {};
+    const expressionAttributeNames: Record<string, string> = {};
     
     if (filters.isBillable !== undefined) {
       filterExpressions.push('#isBillable = :isBillable');
       expressionAttributeNames['#isBillable'] = 'isBillable';
       queryParams.ExpressionAttributeValues = {
-        ...queryParams.ExpressionAttributeValues,
+        ...(queryParams.ExpressionAttributeValues as Record<string, unknown>),
         ':isBillable': filters.isBillable,
       };
     }
@@ -285,7 +287,7 @@ export class TimeEntryRepository {
       filterExpressions.push('#date >= :dateFrom');
       expressionAttributeNames['#date'] = 'date';
       queryParams.ExpressionAttributeValues = {
-        ...queryParams.ExpressionAttributeValues,
+        ...(queryParams.ExpressionAttributeValues as Record<string, unknown>),
         ':dateFrom': filters.dateFrom,
       };
     }
@@ -294,7 +296,7 @@ export class TimeEntryRepository {
       filterExpressions.push('#date <= :dateTo');
       expressionAttributeNames['#date'] = 'date';
       queryParams.ExpressionAttributeValues = {
-        ...queryParams.ExpressionAttributeValues,
+        ...(queryParams.ExpressionAttributeValues as Record<string, unknown>),
         ':dateTo': filters.dateTo,
       };
     }
@@ -312,8 +314,8 @@ export class TimeEntryRepository {
     }
 
     const result = queryParams.KeyConditionExpression 
-      ? await docClient.send(new QueryCommand(queryParams))
-      : await docClient.send(new ScanCommand(queryParams));
+      ? await docClient.send(new QueryCommand(queryParams as QueryCommandInput))
+      : await docClient.send(new ScanCommand(queryParams as ScanCommandInput));
 
     const items = (result.Items || [])
       .slice(0, limit) // Remove the extra item used for hasMore check
@@ -428,7 +430,7 @@ export class TimeEntryRepository {
   // Timer Operations
   // ==========================================
 
-  async startTimer(userId: string, request: any): Promise<TimerSession> {
+  async startTimer(userId: string, request: Record<string, unknown>): Promise<TimerSession> {
     // Check if user already has an active timer
     const existingTimer = await this.getActiveTimer(userId);
     if (existingTimer) {
@@ -441,13 +443,13 @@ export class TimeEntryRepository {
     const timerSession: TimerSession = {
       id: timerId,
       userId,
-      projectId: request.projectId,
-      taskId: request.taskId,
-      description: request.description,
+      projectId: request.projectId as string,
+      taskId: request.taskId as string,
+      description: request.description as string,
       startTime: now,
       isActive: true,
-      tags: request.tags || [],
-      notes: request.notes,
+      tags: (request.tags as string[]) || [],
+      notes: request.notes as string,
       createdAt: now,
     };
 
@@ -495,7 +497,7 @@ export class TimeEntryRepository {
     };
   }
 
-  async stopTimer(userId: string, timeEntryData?: any): Promise<TimeEntry> {
+  async stopTimer(userId: string, timeEntryData?: Record<string, unknown>): Promise<TimeEntry> {
     const timer = await this.getActiveTimer(userId);
     if (!timer) {
       throw new Error(TimeEntryErrorCodes.NO_ACTIVE_TIMER);
@@ -508,15 +510,15 @@ export class TimeEntryRepository {
     const timeEntry = await this.createTimeEntry(userId, {
       projectId: timer.projectId,
       taskId: timer.taskId,
-      description: timeEntryData?.finalDescription || timer.description,
+      description: (timeEntryData?.finalDescription as string) || timer.description,
       date: timer.startTime.split('T')[0], // Extract date from startTime
       startTime: timer.startTime,
       endTime: now,
       duration,
-      isBillable: timeEntryData?.isBillable ?? true,
-      hourlyRate: timeEntryData?.hourlyRate,
-      tags: timeEntryData?.finalTags || timer.tags,
-      notes: timeEntryData?.finalNotes || timer.notes,
+      isBillable: (timeEntryData?.isBillable as boolean) ?? true,
+      hourlyRate: timeEntryData?.hourlyRate as number,
+      tags: (timeEntryData?.finalTags as string[]) || timer.tags,
+      notes: (timeEntryData?.finalNotes as string) || timer.notes,
     });
 
     // Mark time entry as timer-created
@@ -549,11 +551,11 @@ export class TimeEntryRepository {
     const now = new Date().toISOString();
     
     const updateExpression: string[] = ['#status = :status', '#updatedAt = :updatedAt'];
-    const expressionAttributeNames: { [key: string]: string } = {
+    const expressionAttributeNames: Record<string, string> = {
       '#status': 'status',
       '#updatedAt': 'updatedAt',
     };
-    const expressionAttributeValues: { [key: string]: any } = {
+    const expressionAttributeValues: Record<string, unknown> = {
       ':status': status,
       ':updatedAt': now,
     };

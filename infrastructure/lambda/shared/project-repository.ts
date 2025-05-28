@@ -97,7 +97,7 @@ export class ProjectRepository {
       return null;
     }
 
-    return this.mapDynamoItemToProject(result.Item as any);
+    return this.mapDynamoItemToProject(result.Item as Record<string, unknown>);
   }
 
   /**
@@ -112,7 +112,7 @@ export class ProjectRepository {
     // Build update expression dynamically
     const updateExpressions: string[] = [];
     const expressionAttributeNames: Record<string, string> = {};
-    const expressionAttributeValues: Record<string, any> = {};
+    const expressionAttributeValues: Record<string, unknown> = {};
 
     if (updates.name !== undefined) {
       updateExpressions.push('#name = :name');
@@ -191,7 +191,7 @@ export class ProjectRepository {
       ReturnValues: 'ALL_NEW',
     }));
 
-    return this.mapDynamoItemToProject(result.Attributes as any);
+    return this.mapDynamoItemToProject(result.Attributes as Record<string, unknown>);
   }
 
   /**
@@ -252,10 +252,10 @@ export class ProjectRepository {
     }
 
     const result = await this.dynamoClient.send(queryCommand);
-    const items = (result as any).Items || [];
+    const items = (result as { Items?: Record<string, unknown>[] }).Items || [];
 
     // Convert DynamoDB items to Project objects
-    let projects = items.map(item => this.mapDynamoItemToProject(item as any));
+    let projects = items.map(item => this.mapDynamoItemToProject(item));
 
     // Apply team member filter if specified
     if (filters.teamMember) {
@@ -288,7 +288,7 @@ export class ProjectRepository {
       },
     }));
 
-    return ((result as any).Items || []).map(item => this.mapDynamoItemToProject(item as any));
+    return (result.Items || []).map(item => this.mapDynamoItemToProject(item as Record<string, unknown>));
   }
 
   /**
@@ -307,23 +307,23 @@ export class ProjectRepository {
   /**
    * Map DynamoDB item to Project object
    */
-  private mapDynamoItemToProject(item: any): Project {
+  private mapDynamoItemToProject(item: Record<string, unknown>): Project {
     return {
-      id: item.id,
-      name: item.name,
-      clientId: item.clientId,
-      clientName: item.clientName,
-      description: item.description,
+      id: item.id as string,
+      name: item.name as string,
+      clientId: item.clientId as string,
+      clientName: item.clientName as string,
+      description: item.description as string,
       status: item.status as 'active' | 'paused' | 'completed' | 'cancelled',
-      defaultHourlyRate: item.defaultHourlyRate,
-      defaultBillable: item.defaultBillable,
-      budget: item.budget ? JSON.parse(item.budget) : undefined,
-      deadline: item.deadline,
-      teamMembers: JSON.parse(item.teamMembers || '[]'),
-      tags: JSON.parse(item.tags || '[]'),
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      createdBy: item.createdBy,
+      defaultHourlyRate: item.defaultHourlyRate as number,
+      defaultBillable: item.defaultBillable as boolean,
+      budget: item.budget ? JSON.parse(item.budget as string) : undefined,
+      deadline: item.deadline as string,
+      teamMembers: JSON.parse((item.teamMembers as string) || '[]'),
+      tags: JSON.parse((item.tags as string) || '[]'),
+      createdAt: item.createdAt as string,
+      updatedAt: item.updatedAt as string,
+      createdBy: item.createdBy as string,
     };
   }
 } 

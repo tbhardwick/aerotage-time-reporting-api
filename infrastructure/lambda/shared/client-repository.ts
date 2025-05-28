@@ -91,7 +91,7 @@ export class ClientRepository {
       return null;
     }
 
-    return this.mapDynamoItemToClient(result.Item as any);
+    return this.mapDynamoItemToClient(result.Item as Record<string, unknown>);
   }
 
   /**
@@ -106,7 +106,7 @@ export class ClientRepository {
     // Build update expression dynamically
     const updateExpressions: string[] = [];
     const expressionAttributeNames: Record<string, string> = {};
-    const expressionAttributeValues: Record<string, any> = {};
+    const expressionAttributeValues: Record<string, unknown> = {};
 
     if (updates.name !== undefined) {
       updateExpressions.push('#name = :name');
@@ -169,7 +169,7 @@ export class ClientRepository {
       ReturnValues: 'ALL_NEW',
     }));
 
-    return this.mapDynamoItemToClient(result.Attributes as any);
+    return this.mapDynamoItemToClient(result.Attributes as Record<string, unknown>);
   }
 
   /**
@@ -222,10 +222,10 @@ export class ClientRepository {
     }
 
     const result = await this.dynamoClient.send(queryCommand);
-    const items = (result as any).Items || [];
+    const items = (result as { Items?: Record<string, unknown>[] }).Items || [];
 
     // Convert DynamoDB items to Client objects
-    const clients = items.map(item => this.mapDynamoItemToClient(item as any));
+    const clients = items.map(item => this.mapDynamoItemToClient(item));
 
     // Apply sorting if not using GSI
     if (filters.isActive === undefined && filters.sortBy) {
@@ -279,7 +279,7 @@ export class ClientRepository {
       },
     }));
 
-    return ((result as any).Items || []).map(item => this.mapDynamoItemToClient(item as any));
+    return (result.Items || []).map(item => this.mapDynamoItemToClient(item as Record<string, unknown>));
   }
 
   /**
@@ -297,10 +297,10 @@ export class ClientRepository {
       },
     }));
 
-    const existingClients = (result as any).Items || [];
+    const existingClients = result.Items || [];
     
     if (excludeClientId) {
-      return existingClients.some(item => item.id !== excludeClientId);
+      return existingClients.some(item => (item as Record<string, unknown>).id !== excludeClientId);
     }
     
     return existingClients.length > 0;
@@ -309,20 +309,20 @@ export class ClientRepository {
   /**
    * Map DynamoDB item to Client object
    */
-  private mapDynamoItemToClient(item: any): Client {
+  private mapDynamoItemToClient(item: Record<string, unknown>): Client {
     return {
-      id: item.id,
-      name: item.name,
-      email: item.email,
-      phone: item.phone,
-      address: item.address,
-      contactPerson: item.contactPerson,
-      defaultHourlyRate: item.defaultHourlyRate,
+      id: item.id as string,
+      name: item.name as string,
+      email: item.email as string,
+      phone: item.phone as string,
+      address: item.address as string,
+      contactPerson: item.contactPerson as string,
+      defaultHourlyRate: item.defaultHourlyRate as number,
       isActive: item.isActive === 'true', // Convert string back to boolean
-      notes: item.notes,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      createdBy: item.createdBy,
+      notes: item.notes as string,
+      createdAt: item.createdAt as string,
+      updatedAt: item.updatedAt as string,
+      createdBy: item.createdBy as string,
     };
   }
 } 

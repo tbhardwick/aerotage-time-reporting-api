@@ -16,7 +16,7 @@ const sesClient = new SESClient({});
 
 interface ExportRequest {
   reportId?: string;
-  reportData?: any;
+  reportData?: Record<string, unknown>;
   format: 'pdf' | 'csv' | 'excel';
   options?: ExportOptions;
   delivery?: DeliveryOptions;
@@ -199,7 +199,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function getReportData(reportId: string, userId: string, userRole: string): Promise<any> {
+async function getReportData(reportId: string, userId: string, userRole: string): Promise<Record<string, unknown> | null> {
   // This would typically fetch from the report cache or regenerate
   // For now, return null to indicate not found
   try {
@@ -215,8 +215,8 @@ async function getReportData(reportId: string, userId: string, userRole: string)
     
     const result = await docClient.send(command);
     
-    if (result.Item && result.Item.expiresAt > Date.now()) {
-      return result.Item.reportData;
+    if (result.Item && (result.Item.expiresAt as number) > Date.now()) {
+      return result.Item.reportData as Record<string, unknown>;
     }
     
     return null;
@@ -227,7 +227,7 @@ async function getReportData(reportId: string, userId: string, userRole: string)
 }
 
 async function generateExport(
-  reportData: any,
+  reportData: Record<string, unknown>,
   format: string,
   options: ExportOptions,
   userId: string,
@@ -281,7 +281,7 @@ async function generateExport(
   };
 }
 
-async function generateCSV(reportData: any, options: ExportOptions): Promise<Buffer> {
+async function generateCSV(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
   try {
     let csvContent = '';
     
@@ -294,24 +294,24 @@ async function generateCSV(reportData: any, options: ExportOptions): Promise<Buf
     // Add summary section
     if (reportData.summary) {
       csvContent += 'SUMMARY\n';
-      Object.entries(reportData.summary).forEach(([key, value]) => {
+      Object.entries(reportData.summary as Record<string, unknown>).forEach(([key, value]) => {
         csvContent += `${key},${value}\n`;
       });
       csvContent += '\n';
     }
 
     // Add main data
-    if (reportData.data && reportData.data.length > 0) {
+    if (reportData.data && Array.isArray(reportData.data) && reportData.data.length > 0) {
       csvContent += 'DETAILED DATA\n';
       
       // Headers
-      const headers = Object.keys(reportData.data[0]);
+      const headers = Object.keys(reportData.data[0] as Record<string, unknown>);
       csvContent += headers.join(',') + '\n';
       
       // Data rows
-      reportData.data.forEach((row: any) => {
+      (reportData.data as Record<string, unknown>[]).forEach((row) => {
         const values = headers.map(header => {
-          let value = row[header];
+          let value = (row as Record<string, unknown>)[header];
           if (typeof value === 'string' && value.includes(',')) {
             value = `"${value}"`;
           }
@@ -328,14 +328,14 @@ async function generateCSV(reportData: any, options: ExportOptions): Promise<Buf
   }
 }
 
-async function generateExcel(reportData: any, options: ExportOptions): Promise<Buffer> {
+async function generateExcel(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
   try {
     // Simplified Excel generation - in production, use a library like ExcelJS
     const workbookData = {
       worksheets: [
         {
           name: 'Summary',
-          data: reportData.summary ? Object.entries(reportData.summary).map(([key, value]) => [key, value]) : []
+          data: reportData.summary ? Object.entries(reportData.summary as Record<string, unknown>).map(([key, value]) => [key, value]) : []
         },
         {
           name: 'Data',
@@ -354,14 +354,14 @@ async function generateExcel(reportData: any, options: ExportOptions): Promise<B
   }
 }
 
-async function generatePDF(reportData: any, options: ExportOptions): Promise<Buffer> {
+async function generatePDF(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
   try {
     // Simplified PDF generation - in production, use Puppeteer or similar
     let htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${reportData.reportType} Report</title>
+        <title>${String(reportData.reportType).toUpperCase()} Report</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 20px; }
           .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
@@ -373,8 +373,8 @@ async function generatePDF(reportData: any, options: ExportOptions): Promise<Buf
       </head>
       <body>
         <div class="header">
-          <h1>${reportData.reportType.toUpperCase()} Report</h1>
-          <p>Generated: ${new Date(reportData.generatedAt).toLocaleString()}</p>
+          <h1>${String(reportData.reportType).toUpperCase()} Report</h1>
+          <p>Generated: ${new Date(String(reportData.generatedAt)).toLocaleString()}</p>
           <p>Report ID: ${reportData.reportId}</p>
         </div>
     `;
@@ -382,19 +382,19 @@ async function generatePDF(reportData: any, options: ExportOptions): Promise<Buf
     // Add summary
     if (reportData.summary) {
       htmlContent += '<div class="summary"><h2>Summary</h2>';
-      Object.entries(reportData.summary).forEach(([key, value]) => {
+      Object.entries(reportData.summary as Record<string, unknown>).forEach(([key, value]) => {
         htmlContent += `<p><strong>${key}:</strong> ${value}</p>`;
       });
       htmlContent += '</div>';
     }
 
     // Add data table
-    if (reportData.data && reportData.data.length > 0) {
+    if (reportData.data && Array.isArray(reportData.data) && reportData.data.length > 0) {
       htmlContent += '<h2>Detailed Data</h2>';
       htmlContent += '<table class="data-table">';
       
       // Headers
-      const headers = Object.keys(reportData.data[0]);
+      const headers = Object.keys(reportData.data[0] as Record<string, unknown>);
       htmlContent += '<tr>';
       headers.forEach(header => {
         htmlContent += `<th>${header}</th>`;
@@ -402,10 +402,10 @@ async function generatePDF(reportData: any, options: ExportOptions): Promise<Buf
       htmlContent += '</tr>';
       
       // Data rows
-      reportData.data.forEach((row: any) => {
+      (reportData.data as Record<string, unknown>[]).forEach((row) => {
         htmlContent += '<tr>';
         headers.forEach(header => {
-          htmlContent += `<td>${row[header] || ''}</td>`;
+          htmlContent += `<td>${(row as Record<string, unknown>)[header] || ''}</td>`;
         });
         htmlContent += '</tr>';
       });
@@ -424,7 +424,7 @@ async function generatePDF(reportData: any, options: ExportOptions): Promise<Buf
   }
 }
 
-async function uploadToS3(fileName: string, content: Buffer, contentType: string): Promise<any> {
+async function uploadToS3(fileName: string, content: Buffer, contentType: string): Promise<Record<string, unknown>> {
   const bucketName = process.env.EXPORTS_BUCKET_NAME;
   
   if (!bucketName) {
@@ -442,7 +442,7 @@ async function uploadToS3(fileName: string, content: Buffer, contentType: string
     },
   });
 
-  return await s3Client.send(command);
+  return await s3Client.send(command) as Record<string, unknown>;
 }
 
 async function generateDownloadUrl(fileName: string, expiresInHours: number): Promise<string> {
