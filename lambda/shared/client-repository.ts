@@ -1,1 +1,0 @@
-const items = (result as any).Items || []; 
