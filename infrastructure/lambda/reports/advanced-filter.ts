@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -22,8 +22,8 @@ interface FilterCriteria {
   operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 
            'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'between' | 'in' | 'not_in' |
            'is_null' | 'is_not_null' | 'regex' | 'date_range';
-  value: any;
-  secondValue?: any; // For 'between' operator
+  value: unknown;
+  secondValue?: unknown; // For 'between' operator
   caseSensitive?: boolean;
   logicalOperator?: 'AND' | 'OR';
 }
@@ -33,7 +33,7 @@ interface GroupByOptions {
   dateGrouping?: 'day' | 'week' | 'month' | 'quarter' | 'year';
   customGrouping?: {
     field: string;
-    ranges: { label: string; min?: number; max?: number; values?: any[] }[];
+    ranges: { label: string; min?: number; max?: number; values?: unknown[] }[];
   };
 }
 
@@ -61,9 +61,9 @@ interface FilteredDataResponse {
   dataSource: string;
   appliedFilters: FilterCriteria[];
   resultCount: number;
-  data: any[];
-  groupedData?: any[];
-  aggregations?: { [key: string]: any };
+  data: Record<string, unknown>[];
+  groupedData?: Record<string, unknown>[];
+  aggregations?: Record<string, unknown>;
   pagination?: {
     hasMore: boolean;
     nextCursor?: string;
@@ -244,7 +244,7 @@ async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: str
   };
 }
 
-async function fetchDataFromSource(dataSource: string): Promise<any[]> {
+async function fetchDataFromSource(dataSource: string): Promise<Record<string, unknown>[]> {
   let tableName: string;
   
   switch (dataSource) {
@@ -281,7 +281,7 @@ async function fetchDataFromSource(dataSource: string): Promise<any[]> {
   }
 }
 
-function applyFilters(data: any[], filters: FilterCriteria[]): any[] {
+function applyFilters(data: Record<string, unknown>[], filters: FilterCriteria[]): Record<string, unknown>[] {
   return data.filter(item => {
     let result = true;
     let currentLogicalOperator = 'AND';
@@ -373,16 +373,16 @@ function evaluateFilter(value: any, filter: FilterCriteria): boolean {
     
     case 'regex':
       try {
-        const regex = new RegExp(filterValue, caseSensitive ? 'g' : 'gi');
+        const regex = new RegExp(String(filterValue), caseSensitive ? 'g' : 'gi');
         return regex.test(stringValue);
       } catch {
         return false;
       }
     
     case 'date_range':
-      const dateValue = new Date(value);
-      const startDate = new Date(filterValue);
-      const endDate = new Date(secondValue);
+      const dateValue = new Date(String(value));
+      const startDate = new Date(String(filterValue));
+      const endDate = new Date(String(secondValue));
       return dateValue >= startDate && dateValue <= endDate;
     
     default:
