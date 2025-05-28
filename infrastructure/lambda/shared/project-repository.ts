@@ -252,7 +252,7 @@ export class ProjectRepository {
     }
 
     const result = await this.dynamoClient.send(queryCommand);
-    const items = result.Items || [];
+    const items = (result as any).Items || [];
 
     // Convert DynamoDB items to Project objects
     let projects = items.map(item => this.mapDynamoItemToProject(item as any));
@@ -288,7 +288,7 @@ export class ProjectRepository {
       },
     }));
 
-    return (result.Items || []).map(item => this.mapDynamoItemToProject(item as any));
+    return ((result as any).Items || []).map(item => this.mapDynamoItemToProject(item as any));
   }
 
   /**

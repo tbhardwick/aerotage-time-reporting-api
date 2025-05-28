@@ -59,13 +59,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         id: invitation.id,
         email: invitation.email,
         role: invitation.role,
-        teamId: invitation.teamId,
         department: invitation.department,
         jobTitle: invitation.jobTitle,
         hourlyRate: invitation.hourlyRate,
         permissions: invitation.permissions,
         expiresAt: invitation.expiresAt,
-        isExpired: false,
+        isExpired: isExpired,
       },
     };
 

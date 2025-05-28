@@ -39,13 +39,12 @@ info:
     name: Proprietary
     
 servers:
-  - url: https://time-api-dev.aerotage.com/
-    description: Development server
-  - url: https://time-api-staging.aerotage.com/
-    description: Staging server
-  - url: https://time-api.aerotage.com/
-    description: Production server
-
+  - url: https://time-api-dev.aerotage.com
+    description: Development server (Custom Domain)
+  - url: https://time-api-staging.aerotage.com
+    description: Staging server (Custom Domain)
+  - url: https://time-api.aerotage.com
+    description: Production server (Custom Domain)
 security:
   - CognitoAuth: []
 

@@ -125,12 +125,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       department: updatedUser.department,
       hourlyRate: updatedUser.hourlyRate,
       role: updatedUser.role,
-      contactInfo: updatedUser.contactInfo,
+      contactInfo: updatedUser.contactInfo ? {
+        phone: updatedUser.contactInfo.phone,
+        address: updatedUser.contactInfo.address,
+        emergencyContact: updatedUser.contactInfo.emergencyContact,
+      } : undefined,
       profilePicture: updatedUser.profilePicture,
       startDate: updatedUser.startDate,
       lastLogin: updatedUser.lastLogin,
       isActive: updatedUser.isActive,
-      teamId: updatedUser.teamId,
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
     };

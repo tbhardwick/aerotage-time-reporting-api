@@ -125,7 +125,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       startDate: user.startDate,
       lastLogin: user.lastLogin,
       isActive: user.isActive,
-      teamId: user.teamId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

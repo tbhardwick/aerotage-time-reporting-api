@@ -268,7 +268,7 @@ export class ValidationService {
 
     if (!request.permissions) {
       errors.push('Permissions are required');
-    } else if (!this.validatePermissions(request.permissions)) {
+    } else if (!this.validatePermissions(request.permissions as Record<string, unknown>)) {
       errors.push('Permissions must contain features and projects arrays');
     }
 
@@ -281,7 +281,7 @@ export class ValidationService {
       errors.push('Job title must be a string');
     }
 
-    if (request.hourlyRate !== undefined && !this.validateHourlyRate(request.hourlyRate)) {
+    if (request.hourlyRate !== undefined && request.hourlyRate !== null && !this.validateHourlyRate(request.hourlyRate as number)) {
       errors.push('Hourly rate must be a positive number less than 1000');
     }
 
@@ -311,7 +311,7 @@ export class ValidationService {
       return { isValid: false, errors };
     }
 
-    const { userData } = request;
+    const userData = request.userData as any; // Type assertion for validation
 
     if (!userData.name || typeof userData.name !== 'string') {
       errors.push('Name is required and must be a string');
@@ -468,7 +468,7 @@ export class ValidationService {
       if (typeof request.budget !== 'object') {
         errors.push('Budget must be an object');
       } else {
-        if (!['hours', 'amount'].includes(request.budget.type)) {
+        if (request.budget.type && !['hours', 'amount'].includes(request.budget.type)) {
           errors.push('Budget type must be either "hours" or "amount"');
         }
         if (typeof request.budget.value !== 'number' || request.budget.value <= 0) {
@@ -539,7 +539,7 @@ export class ValidationService {
       if (typeof request.budget !== 'object') {
         errors.push('Budget must be an object');
       } else {
-        if (!['hours', 'amount'].includes(request.budget.type)) {
+        if (request.budget.type && !['hours', 'amount'].includes(request.budget.type)) {
           errors.push('Budget type must be either "hours" or "amount"');
         }
         if (typeof request.budget.value !== 'number' || request.budget.value <= 0) {
@@ -746,7 +746,7 @@ export class ValidationService {
       errors.push('Project ID must be a string');
     }
 
-    if (filters.status && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(filters.status)) {
+    if (filters.status && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(filters.status as string)) {
       errors.push('Status must be one of: draft, sent, viewed, paid, overdue, cancelled, refunded');
     }
 
@@ -770,16 +770,10 @@ export class ValidationService {
       errors.push('Due date to must be a string (ISO date)');
     }
 
-    if (filters.amountMin !== undefined && (typeof filters.amountMin !== 'number' || filters.amountMin < 0)) {
-      errors.push('Amount minimum must be a non-negative number');
-    }
-
-    if (filters.amountMax !== undefined && (typeof filters.amountMax !== 'number' || filters.amountMax < 0)) {
-      errors.push('Amount maximum must be a non-negative number');
-    }
-
-    if (filters.amountMin !== undefined && filters.amountMax !== undefined && filters.amountMin > filters.amountMax) {
-      errors.push('Amount minimum cannot be greater than amount maximum');
+    if (filters.amountMin !== undefined && filters.amountMax !== undefined && 
+        filters.amountMin !== null && filters.amountMax !== null && 
+        (filters.amountMin as number) > (filters.amountMax as number)) {
+      errors.push('Minimum amount cannot be greater than maximum amount');
     }
 
     if (filters.currency && typeof filters.currency !== 'string') {
@@ -794,11 +788,11 @@ export class ValidationService {
       errors.push('Offset must be a non-negative number');
     }
 
-    if (filters.sortBy && !['invoiceNumber', 'issueDate', 'dueDate', 'totalAmount', 'status'].includes(filters.sortBy)) {
+    if (filters.sortBy && !['invoiceNumber', 'issueDate', 'dueDate', 'totalAmount', 'status'].includes(filters.sortBy as string)) {
       errors.push('SortBy must be one of: invoiceNumber, issueDate, dueDate, totalAmount, status');
     }
 
-    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
+    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder as string)) {
       errors.push('SortOrder must be either "asc" or "desc"');
     }
 

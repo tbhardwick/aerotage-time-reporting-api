@@ -97,9 +97,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           success: false,
           error: {
             code: TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA,
-            message: 'Validation failed',
-            details: validationErrors,
+            message: `Validation failed: ${validationErrors.join(', ')}`,
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }
@@ -155,9 +155,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
           success: false,
           error: {
             code: TimeEntryErrorCodes.UNAUTHORIZED_TIME_ENTRY_ACCESS,
-            message: 'Cannot submit time entries',
-            details: ownershipErrors,
+            message: `Cannot submit time entries: ${ownershipErrors.join(', ')}`,
           },
+          timestamp: new Date().toISOString(),
         } as ErrorResponse),
       };
     }

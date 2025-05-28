@@ -222,7 +222,7 @@ export class ClientRepository {
     }
 
     const result = await this.dynamoClient.send(queryCommand);
-    const items = result.Items || [];
+    const items = (result as any).Items || [];
 
     // Convert DynamoDB items to Client objects
     const clients = items.map(item => this.mapDynamoItemToClient(item as any));
@@ -279,7 +279,7 @@ export class ClientRepository {
       },
     }));
 
-    return (result.Items || []).map(item => this.mapDynamoItemToClient(item as any));
+    return ((result as any).Items || []).map(item => this.mapDynamoItemToClient(item as any));
   }
 
   /**
@@ -297,7 +297,7 @@ export class ClientRepository {
       },
     }));
 
-    const existingClients = result.Items || [];
+    const existingClients = (result as any).Items || [];
     
     if (excludeClientId) {
       return existingClients.some(item => item.id !== excludeClientId);

@@ -25,7 +25,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const requestBody: CreateInvitationRequest = JSON.parse(event.body);
 
     // Validate request
-    const validation = ValidationService.validateCreateInvitationRequest(requestBody);
+    const validation = ValidationService.validateCreateInvitationRequest(requestBody as unknown as Record<string, unknown>);
     if (!validation.isValid) {
       return createErrorResponse(
         400, 

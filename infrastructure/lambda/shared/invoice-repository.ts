@@ -220,11 +220,11 @@ export class InvoiceRepository {
       },
     }));
 
-    if (!result.Items || result.Items.length === 0) {
+    if (!(result as any).Items || (result as any).Items.length === 0) {
       return null;
     }
 
-    return this.mapDynamoItemToInvoice(result.Items[0] as InvoiceDynamoItem);
+    return this.mapDynamoItemToInvoice((result as any).Items[0] as InvoiceDynamoItem);
   }
 
   /**
@@ -379,7 +379,7 @@ export class InvoiceRepository {
     }
 
     const result = await this.dynamoClient.send(queryCommand);
-    const items = result.Items || [];
+    const items = (result as any).Items || [];
 
     // Convert DynamoDB items to Invoice objects
     let invoices = items.map(item => this.mapDynamoItemToInvoice(item as InvoiceDynamoItem));
@@ -517,7 +517,7 @@ export class InvoiceRepository {
       },
     }));
 
-    return (result.Items || []).map(item => this.mapDynamoItemToPayment(item as PaymentDynamoItem));
+    return ((result as any).Items || []).map(item => this.mapDynamoItemToPayment(item as PaymentDynamoItem));
   }
 
   // ===========================

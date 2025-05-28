@@ -527,35 +527,35 @@ async function generateWidget(
   switch (widget.type) {
     case 'kpi':
       data = generateKPIData(widget.config.metric!, timeEntries, projects, clients);
-      metadata.trend = calculateTrend(data.current, data.previous);
-      metadata.changePercent = calculateChangePercent(data.current, data.previous);
-      metadata.status = getKPIStatus(data.current, widget.config.target, widget.config.threshold);
+      metadata.trend = calculateTrend(data.current as number, data.previous as number);
+      metadata.changePercent = calculateChangePercent(data.current as number, data.previous as number);
+      metadata.status = getKPIStatus(data.current as number, widget.config.target, widget.config.threshold);
       break;
 
     case 'gauge':
       data = generateGaugeData(widget.config.metric!, timeEntries, projects, users);
-      metadata.status = getGaugeStatus(data.value, widget.config.target, widget.config.threshold);
+      metadata.status = getGaugeStatus(data.value as number, widget.config.target, widget.config.threshold);
       break;
 
     case 'chart':
       data = generateChartData(widget.config, timeEntries, projects, clients, dateRange);
-      metadata.dataPoints = data.datasets?.[0]?.data?.length || 0;
+      metadata.dataPoints = (data.rows as any[])?.length || 0;
       break;
 
     case 'table':
       data = generateTableData(widget.config, timeEntries, projects, clients);
-      metadata.dataPoints = data.rows?.length || 0;
+      metadata.dataPoints = (data.rows as any[])?.length || 0;
       break;
 
     case 'heatmap':
       data = generateHeatmapData(widget.config, timeEntries, users, dateRange);
-      metadata.dataPoints = data.data?.length || 0;
+      metadata.dataPoints = (data.data as any[])?.length || 0;
       break;
 
     case 'trend':
       data = generateTrendData(widget.config, timeEntries, projects, dateRange);
-      metadata.trend = data.trend;
-      metadata.changePercent = data.changePercent;
+      metadata.trend = data.trend as 'up' | 'down' | 'stable';
+      metadata.changePercent = data.changePercent as number;
       break;
 
     default:
