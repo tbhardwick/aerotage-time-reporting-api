@@ -7,14 +7,6 @@ export interface ValidationResult {
 }
 
 // Validation parameter interfaces
-interface InvitationFilters {
-  status?: string;
-  limit?: number;
-  offset?: number;
-  sortBy?: string;
-  sortOrder?: string;
-}
-
 interface ProjectRequest {
   name?: string;
   clientId?: string;
@@ -58,6 +50,14 @@ interface ProjectFilters {
 
 interface ClientFilters {
   isActive?: boolean;
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface InvitationFilters {
+  status?: string;
   limit?: number;
   offset?: number;
   sortBy?: string;
@@ -311,7 +311,7 @@ export class ValidationService {
       return { isValid: false, errors };
     }
 
-    const userData = request.userData as any; // Type assertion for validation
+    const userData = request.userData as Record<string, unknown>; // Type assertion for validation
 
     if (!userData.name || typeof userData.name !== 'string') {
       errors.push('Name is required and must be a string');
@@ -334,9 +334,9 @@ export class ValidationService {
     if (!userData.preferences || typeof userData.preferences !== 'object') {
       errors.push('Preferences are required');
     } else {
-      const { preferences } = userData;
+      const preferences = userData.preferences as Record<string, unknown>;
 
-      if (!this.validateTheme(preferences.theme)) {
+      if (!this.validateTheme(preferences.theme as string)) {
         errors.push('Theme must be either "light" or "dark"');
       }
 
@@ -344,14 +344,14 @@ export class ValidationService {
         errors.push('Notifications preference must be a boolean');
       }
 
-      if (!preferences.timezone || !this.validateTimezone(preferences.timezone)) {
+      if (!preferences.timezone || !this.validateTimezone(preferences.timezone as string)) {
         errors.push('Valid timezone is required');
       }
     }
 
     // Optional contact info validation
     if (userData.contactInfo) {
-      const { contactInfo } = userData;
+      const contactInfo = userData.contactInfo as Record<string, unknown>;
       
       if (contactInfo.phone && typeof contactInfo.phone !== 'string') {
         errors.push('Phone must be a string');
@@ -805,7 +805,7 @@ export class ValidationService {
   /**
    * Validates create invoice request
    */
-  static validateCreateInvoiceRequest(request: any): ValidationResult {
+  static validateCreateInvoiceRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // Required fields
@@ -854,23 +854,24 @@ export class ValidationService {
       errors.push('Additional line items must be an array');
     } else if (request.additionalLineItems) {
       // Validate each line item
-      request.additionalLineItems.forEach((item: any, index: number) => {
-        if (!item.type || !['time', 'expense', 'fixed', 'discount'].includes(item.type)) {
+      (request.additionalLineItems as unknown[]).forEach((item: unknown, index: number) => {
+        const lineItem = item as Record<string, unknown>;
+        if (!lineItem.type || !['time', 'expense', 'fixed', 'discount'].includes(lineItem.type as string)) {
           errors.push(`Line item ${index + 1}: type must be one of: time, expense, fixed, discount`);
         }
-        if (!item.description || typeof item.description !== 'string') {
+        if (!lineItem.description || typeof lineItem.description !== 'string') {
           errors.push(`Line item ${index + 1}: description is required and must be a string`);
         }
-        if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+        if (typeof lineItem.quantity !== 'number' || lineItem.quantity <= 0) {
           errors.push(`Line item ${index + 1}: quantity must be a positive number`);
         }
-        if (typeof item.rate !== 'number' || item.rate < 0) {
+        if (typeof lineItem.rate !== 'number' || lineItem.rate < 0) {
           errors.push(`Line item ${index + 1}: rate must be a non-negative number`);
         }
-        if (typeof item.amount !== 'number' || item.amount < 0) {
+        if (typeof lineItem.amount !== 'number' || lineItem.amount < 0) {
           errors.push(`Line item ${index + 1}: amount must be a non-negative number`);
         }
-        if (typeof item.taxable !== 'boolean') {
+        if (typeof lineItem.taxable !== 'boolean') {
           errors.push(`Line item ${index + 1}: taxable must be a boolean`);
         }
       });
@@ -892,9 +893,9 @@ export class ValidationService {
       if (typeof request.recurringConfig !== 'object') {
         errors.push('Recurring config must be an object');
       } else {
-        const config = request.recurringConfig;
+        const config = request.recurringConfig as Record<string, unknown>;
         
-        if (!config.frequency || !['weekly', 'monthly', 'quarterly', 'yearly'].includes(config.frequency)) {
+        if (!config.frequency || !['weekly', 'monthly', 'quarterly', 'yearly'].includes(config.frequency as string)) {
           errors.push('Recurring frequency must be one of: weekly, monthly, quarterly, yearly');
         }
         
@@ -929,9 +930,9 @@ export class ValidationService {
     }
 
     // Validate that at least one of projectIds or timeEntryIds is provided
-    if ((!request.projectIds || request.projectIds.length === 0) && 
-        (!request.timeEntryIds || request.timeEntryIds.length === 0) &&
-        (!request.additionalLineItems || request.additionalLineItems.length === 0)) {
+    if ((!request.projectIds || (request.projectIds as unknown[]).length === 0) && 
+        (!request.timeEntryIds || (request.timeEntryIds as unknown[]).length === 0) &&
+        (!request.additionalLineItems || (request.additionalLineItems as unknown[]).length === 0)) {
       errors.push('At least one of projectIds, timeEntryIds, or additionalLineItems must be provided');
     }
 
@@ -944,11 +945,11 @@ export class ValidationService {
   /**
    * Validates update invoice request
    */
-  static validateUpdateInvoiceRequest(request: any): ValidationResult {
+  static validateUpdateInvoiceRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // All fields are optional for updates, but if provided must be valid
-    if (request.status !== undefined && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(request.status)) {
+    if (request.status !== undefined && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(request.status as string)) {
       errors.push('Status must be one of: draft, sent, viewed, paid, overdue, cancelled, refunded');
     }
 
@@ -973,26 +974,27 @@ export class ValidationService {
         errors.push('Line items must be an array');
       } else {
         // Validate each line item
-        request.lineItems.forEach((item: any, index: number) => {
-          if (!item.id || typeof item.id !== 'string') {
+        (request.lineItems as unknown[]).forEach((item: unknown, index: number) => {
+          const lineItem = item as Record<string, unknown>;
+          if (!lineItem.id || typeof lineItem.id !== 'string') {
             errors.push(`Line item ${index + 1}: id is required and must be a string`);
           }
-          if (!item.type || !['time', 'expense', 'fixed', 'discount'].includes(item.type)) {
+          if (!lineItem.type || !['time', 'expense', 'fixed', 'discount'].includes(lineItem.type as string)) {
             errors.push(`Line item ${index + 1}: type must be one of: time, expense, fixed, discount`);
           }
-          if (!item.description || typeof item.description !== 'string') {
+          if (!lineItem.description || typeof lineItem.description !== 'string') {
             errors.push(`Line item ${index + 1}: description is required and must be a string`);
           }
-          if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+          if (typeof lineItem.quantity !== 'number' || lineItem.quantity <= 0) {
             errors.push(`Line item ${index + 1}: quantity must be a positive number`);
           }
-          if (typeof item.rate !== 'number' || item.rate < 0) {
+          if (typeof lineItem.rate !== 'number' || lineItem.rate < 0) {
             errors.push(`Line item ${index + 1}: rate must be a non-negative number`);
           }
-          if (typeof item.amount !== 'number' || item.amount < 0) {
+          if (typeof lineItem.amount !== 'number' || lineItem.amount < 0) {
             errors.push(`Line item ${index + 1}: amount must be a non-negative number`);
           }
-          if (typeof item.taxable !== 'boolean') {
+          if (typeof lineItem.taxable !== 'boolean') {
             errors.push(`Line item ${index + 1}: taxable must be a boolean`);
           }
         });
@@ -1020,7 +1022,7 @@ export class ValidationService {
   /**
    * Validates send invoice request
    */
-  static validateSendInvoiceRequest(request: any): ValidationResult {
+  static validateSendInvoiceRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // All fields are optional for sending invoices
@@ -1028,7 +1030,7 @@ export class ValidationService {
       if (!Array.isArray(request.recipientEmails)) {
         errors.push('Recipient emails must be an array');
       } else {
-        request.recipientEmails.forEach((email: any, index: number) => {
+        (request.recipientEmails as unknown[]).forEach((email: unknown, index: number) => {
           if (typeof email !== 'string' || !this.validateEmail(email)) {
             errors.push(`Recipient email ${index + 1} must be a valid email address`);
           }
@@ -1065,7 +1067,7 @@ export class ValidationService {
   /**
    * Validates record payment request
    */
-  static validateRecordPaymentRequest(request: any): ValidationResult {
+  static validateRecordPaymentRequest(request: Record<string, unknown>): ValidationResult {
     const errors: string[] = [];
 
     // Required fields
