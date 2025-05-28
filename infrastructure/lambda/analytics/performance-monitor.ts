@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -179,6 +179,12 @@ interface PerformanceSummary {
   nextActions: string[];
 }
 
+interface TimeRange {
+  startTime: Date;
+  endTime: Date;
+  periodMinutes: number;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     console.log('Performance monitor request:', JSON.stringify(event, null, 2));
@@ -232,7 +238,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Apply query parameters
     const queryParams = event.queryStringParameters || {};
     if (queryParams.timeframe) {
-      monitorRequest.timeframe = queryParams.timeframe as any;
+      monitorRequest.timeframe = queryParams.timeframe as PerformanceMonitorRequest['timeframe'];
     }
 
     // Generate performance monitoring data
@@ -324,7 +330,7 @@ async function generatePerformanceMonitoring(
   };
 }
 
-function calculateTimeRange(timeframe: string): { startTime: Date; endTime: Date; periodMinutes: number } {
+function calculateTimeRange(timeframe: string): TimeRange {
   const endTime = new Date();
   let startTime: Date;
   let periodMinutes: number;
@@ -354,7 +360,7 @@ function calculateTimeRange(timeframe: string): { startTime: Date; endTime: Date
   return { startTime, endTime, periodMinutes };
 }
 
-async function generateSystemPerformance(timeRange: any): Promise<SystemPerformance> {
+async function generateSystemPerformance(timeRange: TimeRange): Promise<SystemPerformance> {
   // Mock system performance data - in production, fetch from CloudWatch
   const generateMetricData = (baseValue: number, unit: string): MetricData => {
     const dataPoints = Array.from({ length: 24 }, () => 
@@ -394,7 +400,7 @@ async function generateSystemPerformance(timeRange: any): Promise<SystemPerforma
   };
 }
 
-async function generateApiPerformance(timeRange: any): Promise<ApiPerformance> {
+async function generateApiPerformance(timeRange: TimeRange): Promise<ApiPerformance> {
   const generateMetricData = (baseValue: number, unit: string): MetricData => {
     const dataPoints = Array.from({ length: 24 }, () => 
       baseValue + (Math.random() - 0.5) * baseValue * 0.2
@@ -477,7 +483,7 @@ async function generateApiPerformance(timeRange: any): Promise<ApiPerformance> {
   };
 }
 
-async function generateDatabasePerformance(timeRange: any): Promise<DatabasePerformance> {
+async function generateDatabasePerformance(timeRange: TimeRange): Promise<DatabasePerformance> {
   const generateMetricData = (baseValue: number, unit: string): MetricData => {
     const dataPoints = Array.from({ length: 24 }, () => 
       baseValue + (Math.random() - 0.5) * baseValue * 0.25
@@ -570,7 +576,7 @@ async function generateDatabasePerformance(timeRange: any): Promise<DatabasePerf
   };
 }
 
-async function generateUserExperience(timeRange: any): Promise<UserExperience> {
+async function generateUserExperience(timeRange: TimeRange): Promise<UserExperience> {
   const generateMetricData = (baseValue: number, unit: string): MetricData => {
     const dataPoints = Array.from({ length: 24 }, () => 
       baseValue + (Math.random() - 0.5) * baseValue * 0.15
@@ -780,7 +786,7 @@ function generatePerformanceAlerts(
   return alerts;
 }
 
-async function generatePerformanceComparisons(timeRange: any): Promise<PerformanceComparison> {
+async function generatePerformanceComparisons(timeRange: TimeRange): Promise<PerformanceComparison> {
   // Mock comparison data - in production, fetch historical data
   return {
     previousPeriod: {
