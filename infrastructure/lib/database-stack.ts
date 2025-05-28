@@ -29,6 +29,9 @@ export interface DatabaseTables {
   scheduledReportsTable: dynamodb.Table;
   // ✅ NEW - Daily/Weekly Time Tracking Tables
   userWorkSchedulesTable: dynamodb.Table;
+  // ✅ NEW - Phase 8 Email Change Tables
+  emailChangeRequestsTable: dynamodb.Table;
+  emailChangeAuditLogTable: dynamodb.Table;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -421,6 +424,67 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
+    // ✅ NEW - Phase 8 Email Change Tables
+    const emailChangeRequestsTable = new dynamodb.Table(this, 'EmailChangeRequestsTable', {
+      tableName: `aerotage-email-change-requests-${stage}`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for user lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'UserIndexV2',
+      partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for status lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'StatusIndexV2',
+      partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for verification token lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'VerificationTokenIndexV2',
+      partitionKey: { name: 'GSI3PK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for new email verification token lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'NewEmailVerificationTokenIndexV2',
+      partitionKey: { name: 'GSI4PK', type: dynamodb.AttributeType.STRING },
+    });
+
+    const emailChangeAuditLogTable = new dynamodb.Table(this, 'EmailChangeAuditLogTable', {
+      tableName: `aerotage-email-change-audit-log-${stage}`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Add GSI for request lookup
+    emailChangeAuditLogTable.addGlobalSecondaryIndex({
+      indexName: 'RequestIndexV2',
+      partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for action lookup
+    emailChangeAuditLogTable.addGlobalSecondaryIndex({
+      indexName: 'ActionIndexV2',
+      partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
+    });
+
     // Store all tables for easy access
     this.tables = {
       usersTable,
@@ -445,6 +509,9 @@ export class DatabaseStack extends cdk.Stack {
       scheduledReportsTable,
       // ✅ NEW - Daily/Weekly Time Tracking Tables
       userWorkSchedulesTable,
+      // ✅ NEW - Phase 8 Email Change Tables
+      emailChangeRequestsTable,
+      emailChangeAuditLogTable,
     };
 
     // CloudFormation Outputs
@@ -568,6 +635,19 @@ export class DatabaseStack extends cdk.Stack {
       value: userWorkSchedulesTable.tableName,
       description: 'User Work Schedules DynamoDB Table Name',
       exportName: `UserWorkSchedulesTableName-${stage}`,
+    });
+
+    // ✅ NEW - Phase 8 Email Change CloudFormation Outputs
+    new cdk.CfnOutput(this, 'EmailChangeRequestsTableName', {
+      value: emailChangeRequestsTable.tableName,
+      description: 'Email Change Requests DynamoDB Table Name',
+      exportName: `EmailChangeRequestsTableName-${stage}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailChangeAuditLogTableName', {
+      value: emailChangeAuditLogTable.tableName,
+      description: 'Email Change Audit Log DynamoDB Table Name',
+      exportName: `EmailChangeAuditLogTableName-${stage}`,
     });
   }
 } 

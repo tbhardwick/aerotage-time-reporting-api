@@ -141,6 +141,9 @@ export class ApiStack extends cdk.Stack {
                 tables.scheduledReportsTable.tableArn,
                 // Daily/Weekly Time Tracking Tables
                 tables.userWorkSchedulesTable.tableArn,
+                // Phase 8: Email Change Tables
+                tables.emailChangeRequestsTable.tableArn,
+                tables.emailChangeAuditLogTable.tableArn,
                 `${tables.usersTable.tableArn}/index/*`,
                 `${tables.teamsTable.tableArn}/index/*`, // DEPRECATED - kept for backward compatibility
                 `${tables.projectsTable.tableArn}/index/*`,
@@ -163,6 +166,9 @@ export class ApiStack extends cdk.Stack {
                 `${tables.scheduledReportsTable.tableArn}/index/*`,
                 // Daily/Weekly Time Tracking Table Indexes
                 `${tables.userWorkSchedulesTable.tableArn}/index/*`,
+                // Phase 8: Email Change Table Indexes
+                `${tables.emailChangeRequestsTable.tableArn}/index/*`,
+                `${tables.emailChangeAuditLogTable.tableArn}/index/*`,
               ],
             }),
           ],
@@ -261,6 +267,9 @@ export class ApiStack extends cdk.Stack {
       SCHEDULED_REPORTS_TABLE_NAME: tables.scheduledReportsTable.tableName,
       // Daily/Weekly Time Tracking Tables
       USER_WORK_SCHEDULES_TABLE: tables.userWorkSchedulesTable.tableName,
+      // Phase 8: Email Change Tables
+      EMAIL_CHANGE_REQUESTS_TABLE: tables.emailChangeRequestsTable.tableName,
+      EMAIL_CHANGE_AUDIT_LOG_TABLE: tables.emailChangeAuditLogTable.tableName,
       STORAGE_BUCKET: storageBucket.bucketName,
       // SES Configuration
       SES_FROM_EMAIL: sesStack.fromEmail,
@@ -396,7 +405,55 @@ export class ApiStack extends cdk.Stack {
     const acceptInvitationPageResource = this.api.root.addResource('accept-invitation');
     acceptInvitationPageResource.addMethod('GET', new apigateway.LambdaIntegration(acceptInvitationPageFunction));
 
-
+    // ✅ NEW - Email Change Workflow APIs
+    const emailChangeResource = this.api.root.addResource('email-change');
+    
+    // Submit email change request
+    const submitEmailChangeFunction = createLambdaFunction('SubmitEmailChange', 'email-change/submit-request', 'Submit email change request');
+    emailChangeResource.addMethod('POST', new apigateway.LambdaIntegration(submitEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    // List email change requests
+    const listEmailChangeFunction = createLambdaFunction('ListEmailChange', 'email-change/list-requests', 'List email change requests');
+    emailChangeResource.addMethod('GET', new apigateway.LambdaIntegration(listEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    // Email verification endpoint (public - no auth required)
+    const verifyEmailChangeFunction = createLambdaFunction('VerifyEmailChange', 'email-change/verify-email', 'Verify email change');
+    const verifyEmailResource = emailChangeResource.addResource('verify');
+    verifyEmailResource.addMethod('POST', new apigateway.LambdaIntegration(verifyEmailChangeFunction));
+    
+    // Individual email change request operations
+    const emailChangeRequestResource = emailChangeResource.addResource('{id}');
+    
+    // Cancel email change request
+    const cancelEmailChangeFunction = createLambdaFunction('CancelEmailChange', 'email-change/cancel-request', 'Cancel email change request');
+    emailChangeRequestResource.addMethod('DELETE', new apigateway.LambdaIntegration(cancelEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    // Resend verification email
+    const resendEmailVerificationFunction = createLambdaFunction('ResendEmailVerification', 'email-change/resend-verification', 'Resend email verification');
+    const resendVerificationResource = emailChangeRequestResource.addResource('resend');
+    resendVerificationResource.addMethod('POST', new apigateway.LambdaIntegration(resendEmailVerificationFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    // Admin approve email change request
+    const approveEmailChangeFunction = createLambdaFunction('ApproveEmailChange', 'email-change/admin-approve', 'Admin approve email change');
+    const approveEmailResource = emailChangeRequestResource.addResource('approve');
+    approveEmailResource.addMethod('POST', new apigateway.LambdaIntegration(approveEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
+    
+    // Admin reject email change request
+    const rejectEmailChangeFunction = createLambdaFunction('RejectEmailChange', 'email-change/admin-reject', 'Admin reject email change');
+    const rejectEmailResource = emailChangeRequestResource.addResource('reject');
+    rejectEmailResource.addMethod('POST', new apigateway.LambdaIntegration(rejectEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
 
     // Project APIs
     const projectsResource = this.api.root.addResource('projects');

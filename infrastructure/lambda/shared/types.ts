@@ -1632,4 +1632,298 @@ export enum TimeTrackingErrorCodes {
   INVALID_TIME_RANGE = 'INVALID_TIME_RANGE',
   GAP_ALREADY_FILLED = 'GAP_ALREADY_FILLED',
   INVALID_TIME_ENTRY_DATA = 'INVALID_TIME_ENTRY_DATA',
+}
+
+// ===========================
+// Email Change Workflow Types
+// ===========================
+
+export interface EmailChangeRequest {
+  id: string;
+  userId: string;
+  currentEmail: string;
+  newEmail: string;
+  status: 'pending_verification' | 'pending_approval' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  reason: 'name_change' | 'company_change' | 'personal_preference' | 'security_concern' | 'other';
+  customReason?: string;
+  
+  // Verification tracking
+  currentEmailVerified: boolean;
+  newEmailVerified: boolean;
+  currentEmailVerificationToken?: string;
+  newEmailVerificationToken?: string;
+  verificationTokensExpiresAt?: string; // ISO datetime
+  
+  // Approval tracking
+  approvedBy?: string;
+  approvedAt?: string; // ISO datetime
+  rejectedBy?: string;
+  rejectedAt?: string; // ISO datetime
+  rejectionReason?: string;
+  
+  // Completion tracking
+  completedAt?: string; // ISO datetime
+  estimatedCompletionTime?: string; // ISO datetime
+  
+  // Audit fields
+  requestedAt: string; // ISO datetime
+  verifiedAt?: string; // ISO datetime
+  cancelledAt?: string; // ISO datetime
+  cancelledBy?: string;
+  
+  // Metadata
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface EmailChangeAuditLog {
+  id: string;
+  requestId: string;
+  action: 'created' | 'current_email_verified' | 'new_email_verified' | 'approved' | 'rejected' | 'completed' | 'cancelled' | 'verification_resent';
+  performedBy?: string;
+  performedAt: string; // ISO datetime
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// API Request/Response Types
+export interface CreateEmailChangeRequest {
+  newEmail: string;
+  reason: 'name_change' | 'company_change' | 'personal_preference' | 'security_concern' | 'other';
+  customReason?: string;
+}
+
+export interface EmailVerificationRequest {
+  token: string;
+  emailType: 'current' | 'new';
+}
+
+export interface EmailChangeRequestFilters {
+  status?: 'pending_verification' | 'pending_approval' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  userId?: string;
+  reason?: string;
+  dateFrom?: string; // ISO date
+  dateTo?: string; // ISO date
+  limit?: number;
+  offset?: number;
+  sortBy?: 'requestedAt' | 'status' | 'reason';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface ResendVerificationRequest {
+  emailType: 'current' | 'new';
+}
+
+export interface ApproveEmailChangeRequest {
+  approvalNotes?: string;
+}
+
+export interface RejectEmailChangeRequest {
+  rejectionReason: string;
+}
+
+// Response Types
+export interface EmailChangeRequestResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    status: string;
+    currentEmail: string;
+    newEmail: string;
+    reason: string;
+    customReason?: string;
+    requestedAt: string;
+    estimatedCompletionTime?: string;
+    verificationRequired: {
+      currentEmail: boolean;
+      newEmail: boolean;
+    };
+    nextSteps: string[];
+  };
+  message: string;
+}
+
+export interface EmailVerificationResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    emailType: 'current' | 'new';
+    verified: boolean;
+    verificationStatus: {
+      currentEmailVerified: boolean;
+      newEmailVerified: boolean;
+    };
+    nextStep: 'verify_other_email' | 'pending_approval' | 'auto_approved' | 'processing';
+    message: string;
+  };
+}
+
+export interface EmailChangeRequestsResponse {
+  success: boolean;
+  data: {
+    requests: EmailChangeRequest[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  };
+}
+
+export interface CancelRequestResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    status: 'cancelled';
+    cancelledAt: string;
+    cancelledBy: string;
+  };
+  message: string;
+}
+
+export interface ResendVerificationResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    emailType: 'current' | 'new';
+    emailAddress: string;
+    resentAt: string;
+    expiresAt: string;
+  };
+  message: string;
+}
+
+export interface ApproveRequestResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    status: 'approved';
+    approvedAt: string;
+    approvedBy: {
+      id: string;
+      name: string;
+    };
+    estimatedCompletionTime?: string;
+  };
+  message: string;
+}
+
+export interface RejectRequestResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    status: 'rejected';
+    rejectedAt: string;
+    rejectedBy: {
+      id: string;
+      name: string;
+    };
+    rejectionReason: string;
+  };
+  message: string;
+}
+
+// Error Codes
+export enum EmailChangeErrorCodes {
+  // Request errors
+  EMAIL_CHANGE_REQUEST_NOT_FOUND = 'EMAIL_CHANGE_REQUEST_NOT_FOUND',
+  ACTIVE_REQUEST_EXISTS = 'ACTIVE_REQUEST_EXISTS',
+  COOLDOWN_ACTIVE = 'COOLDOWN_ACTIVE',
+  INVALID_NEW_EMAIL = 'INVALID_NEW_EMAIL',
+  EMAIL_ALREADY_EXISTS = 'EMAIL_ALREADY_EXISTS',
+  SAME_AS_CURRENT_EMAIL = 'SAME_AS_CURRENT_EMAIL',
+  
+  // Verification errors
+  INVALID_VERIFICATION_TOKEN = 'INVALID_VERIFICATION_TOKEN',
+  VERIFICATION_TOKEN_EXPIRED = 'VERIFICATION_TOKEN_EXPIRED',
+  EMAIL_ALREADY_VERIFIED = 'EMAIL_ALREADY_VERIFIED',
+  VERIFICATION_RATE_LIMITED = 'VERIFICATION_RATE_LIMITED',
+  
+  // Approval errors
+  INSUFFICIENT_APPROVAL_PERMISSIONS = 'INSUFFICIENT_APPROVAL_PERMISSIONS',
+  REQUEST_NOT_PENDING_APPROVAL = 'REQUEST_NOT_PENDING_APPROVAL',
+  CANNOT_APPROVE_OWN_REQUEST = 'CANNOT_APPROVE_OWN_REQUEST',
+  
+  // Cancellation errors
+  CANNOT_CANCEL_REQUEST = 'CANNOT_CANCEL_REQUEST',
+  REQUEST_ALREADY_COMPLETED = 'REQUEST_ALREADY_COMPLETED',
+  
+  // Email errors
+  EMAIL_SEND_FAILED = 'EMAIL_SEND_FAILED',
+  INVALID_EMAIL_TYPE = 'INVALID_EMAIL_TYPE',
+  
+  // Validation errors
+  INVALID_REASON = 'INVALID_REASON',
+  CUSTOM_REASON_REQUIRED = 'CUSTOM_REASON_REQUIRED',
+  INVALID_REQUEST_DATA = 'INVALID_REQUEST_DATA',
+  
+  // System errors
+  EMAIL_CHANGE_FAILED = 'EMAIL_CHANGE_FAILED',
+  AUDIT_LOG_FAILED = 'AUDIT_LOG_FAILED',
+}
+
+// DynamoDB Item Types
+export interface EmailChangeRequestDynamoItem {
+  id: string;
+  userId: string;
+  currentEmail: string;
+  newEmail: string;
+  status: string;
+  reason: string;
+  customReason?: string;
+  
+  currentEmailVerified: boolean;
+  newEmailVerified: boolean;
+  currentEmailVerificationToken?: string;
+  newEmailVerificationToken?: string;
+  verificationTokensExpiresAt?: string;
+  
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  
+  completedAt?: string;
+  estimatedCompletionTime?: string;
+  
+  requestedAt: string;
+  verifiedAt?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface EmailChangeAuditLogDynamoItem {
+  id: string;
+  requestId: string;
+  action: string;
+  performedBy?: string;
+  performedAt: string;
+  details?: string; // JSON serialized
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Configuration Types
+export interface EmailChangeConfig {
+  verificationTokenExpiryHours: number;
+  maxActiveRequestsPerUser: number;
+  requestCooldownHours: number;
+  autoApprovalReasons: string[];
+  adminApprovalRequired: {
+    roles: string[];
+    reasons: string[];
+    domainChanges: boolean;
+  };
+  emailTemplates: {
+    verificationSubject: string;
+    verificationTemplate: string;
+    approvalNotificationTemplate: string;
+    completionNotificationTemplate: string;
+  };
 } 
