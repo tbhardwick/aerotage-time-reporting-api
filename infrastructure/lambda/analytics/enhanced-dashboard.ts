@@ -1,11 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const client = new DynamoDBClient({ region: process.env.AWS_REGION });
+const docClient = DynamoDBDocumentClient.from(client);
 
 interface EnhancedDashboardRequest {
   widgets: WidgetConfig[];
@@ -415,8 +415,8 @@ async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: 
 
   try {
     let filterExpression = '#startDate BETWEEN :startDate AND :endDate';
-    let expressionAttributeNames: Record<string, string> = { '#startDate': 'startDate' };
-    let expressionAttributeValues: Record<string, any> = {
+    const expressionAttributeNames: Record<string, string> = { '#startDate': 'startDate' };
+    const expressionAttributeValues: Record<string, unknown> = {
       ':startDate': dateRange.startDate,
       ':endDate': dateRange.endDate,
     };
@@ -519,7 +519,7 @@ async function generateWidget(
   dateRange: DateRange
 ): Promise<WidgetData> {
   let data: Record<string, unknown>;
-  let metadata: WidgetData['metadata'] = {
+  const metadata: WidgetData['metadata'] = {
     lastUpdated: new Date().toISOString(),
     dataPoints: 0,
   };
@@ -539,17 +539,17 @@ async function generateWidget(
 
     case 'chart':
       data = generateChartData(widget.config, timeEntries, projects, clients, dateRange);
-      metadata.dataPoints = (data.rows as any[])?.length || 0;
+      metadata.dataPoints = (data.rows as unknown[])?.length || 0;
       break;
 
     case 'table':
       data = generateTableData(widget.config, timeEntries, projects, clients);
-      metadata.dataPoints = (data.rows as any[])?.length || 0;
+      metadata.dataPoints = (data.rows as unknown[])?.length || 0;
       break;
 
     case 'heatmap':
       data = generateHeatmapData(widget.config, timeEntries, users, dateRange);
-      metadata.dataPoints = (data.data as any[])?.length || 0;
+      metadata.dataPoints = (data.data as unknown[])?.length || 0;
       break;
 
     case 'trend':
@@ -571,12 +571,12 @@ async function generateWidget(
   };
 }
 
-function generateKPIData(metric: string, timeEntries: any[], projects: any[], clients: any[]): any {
+function generateKPIData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): Record<string, unknown> {
   switch (metric) {
     case 'revenue':
       const totalRevenue = timeEntries
         .filter(entry => entry.billable)
-        .reduce((sum, entry) => sum + (entry.hours * entry.hourlyRate), 0);
+        .reduce((sum, entry) => sum + (Number(entry.hours) * Number(entry.hourlyRate)), 0);
       return {
         current: totalRevenue,
         previous: totalRevenue * 0.85, // Mock previous period
@@ -585,7 +585,7 @@ function generateKPIData(metric: string, timeEntries: any[], projects: any[], cl
       };
 
     case 'hours':
-      const totalHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
+      const totalHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
       return {
         current: totalHours,
         previous: totalHours * 0.92,
@@ -604,7 +604,7 @@ function generateKPIData(metric: string, timeEntries: any[], projects: any[], cl
 
     case 'utilization':
       const workingHours = timeEntries.length * 8; // Assume 8 hours per day
-      const actualHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
+      const actualHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
       const utilization = workingHours > 0 ? (actualHours / workingHours) * 100 : 0;
       return {
         current: utilization,
@@ -618,11 +618,11 @@ function generateKPIData(metric: string, timeEntries: any[], projects: any[], cl
   }
 }
 
-function generateGaugeData(metric: string, timeEntries: any[], projects: any[], users: any[]): any {
+function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], users: Record<string, unknown>[]): Record<string, unknown> {
   switch (metric) {
     case 'utilization':
       const totalPossibleHours = users.length * 40 * 4; // 40 hours/week * 4 weeks
-      const totalActualHours = timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
+      const totalActualHours = timeEntries.reduce((sum, entry) => sum + (entry.hours as number), 0);
       const utilization = totalPossibleHours > 0 ? (totalActualHours / totalPossibleHours) * 100 : 0;
       
       return {
