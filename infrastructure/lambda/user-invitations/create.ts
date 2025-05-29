@@ -12,6 +12,7 @@ import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
 import { getCurrentUserId } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { UserRepository } from '../shared/user-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Create user invitation request:', JSON.stringify(event, null, 2));
@@ -46,15 +47,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const repository = new InvitationRepository();
     const emailService = new EmailService();
+    const userRepository = new UserRepository();
 
-    // Check if email already exists in users or pending invitations
+    // Check if email already exists in pending invitations
+    console.log('🔍 Checking if email has pending invitation...');
     const emailExists = await repository.checkEmailExists(requestBody.email);
     if (emailExists) {
+      console.log('❌ Email already has pending invitation:', requestBody.email);
       return createErrorResponse(409, InvitationErrorCodes.EMAIL_ALREADY_EXISTS, 'Email already has a pending invitation');
     }
 
-    // TODO: Check if email exists in Users table
-    // This would require querying the Users table by email
+    // Check if email already exists in Users table
+    console.log('🔍 Checking if email already exists in Users table...');
+    const existingUser = await userRepository.getUserByEmail(requestBody.email);
+    if (existingUser) {
+      console.log('❌ Email already exists in Users table:', requestBody.email);
+      return createErrorResponse(409, InvitationErrorCodes.EMAIL_ALREADY_EXISTS, 'Email address is already in use by an existing user');
+    }
 
     // Create invitation data
     const invitationData: CreateInvitationData = {

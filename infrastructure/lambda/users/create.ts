@@ -10,6 +10,7 @@ import {
 import { ValidationService } from '../shared/validation';
 import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { InvitationRepository } from '../shared/invitation-repository';
 
 const userRepo = new UserRepository();
 
@@ -70,6 +71,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(409, UserErrorCodes.USER_ALREADY_EXISTS, 'User with this email already exists');
     }
 
+    // Check if there's a pending invitation for this email
+    console.log('🔍 Checking if email has pending invitation...');
+    const invitationRepo = new InvitationRepository();
+    const hasPendingInvitation = await invitationRepo.checkEmailExists(createUserRequest.email);
+    if (hasPendingInvitation) {
+      console.log('❌ Email has pending invitation:', createUserRequest.email);
+      return createErrorResponse(409, UserErrorCodes.USER_ALREADY_EXISTS, 'Email address has a pending invitation. Please accept the invitation or cancel it before creating a user directly.');
+    }
+
     // Create the user
     console.log('👤 Creating new user...');
     const newUser = await userRepo.createUser({
@@ -102,18 +112,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
       },
-      body: JSON.stringify(response),
+      body: JSON.stringify(response)
     };
 
   } catch (error) {
-    console.error('❌ Error creating user:', error);
-
-    // Handle specific errors
-    if ((error as Error).message === UserErrorCodes.USER_ALREADY_EXISTS) {
-      return createErrorResponse(409, UserErrorCodes.USER_ALREADY_EXISTS, 'User with this email already exists');
-    }
-
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred while creating the user');
+    console.error('❌ Create user error:', error);
+    
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 }; 

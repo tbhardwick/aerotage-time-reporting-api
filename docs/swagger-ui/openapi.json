@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Aerotage Time Reporting API",
-    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 28, 2025 at 01:52:20 PM",
-    "version": "1.0.0-dev-2025-05-28T17-52-20",
+    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 29, 2025 at 09:29:02 AM",
+    "version": "1.0.0-dev-2025-05-29T13-29-02",
     "contact": {
       "name": "Aerotage Support",
       "email": "support@aerotage.com"
@@ -14,7 +14,7 @@
   },
   "servers": [
     {
-      "url": "https://time-api-dev.aerotage.com/",
+      "url": "https://k60bobrd9h.execute-api.us-east-1.amazonaws.com/dev/",
       "description": "Development server"
     }
   ],
@@ -2451,7 +2451,7 @@
           "User Management"
         ],
         "summary": "Create new user",
-        "description": "Create a new user account (admin only)",
+        "description": "Create a new user account (admin only).\n\n**Duplicate Email Prevention**: This endpoint enforces strict business rules to prevent duplicate email addresses:\n- ✅ **Existing Users**: Returns 409 if email already exists in the Users table\n- ✅ **Pending Invitations**: Returns 409 if email has a pending invitation\n- ✅ **Case Insensitive**: Email comparison is case-insensitive\n\n**Business Rules**:\n1. Email must be unique across all users\n2. Email must not have a pending invitation\n3. If a pending invitation exists, it must be accepted or cancelled before creating a user directly\n\n**Error Responses**:\n- `409 Conflict`: Email already exists or has pending invitation\n- `403 Forbidden`: Only admins can create users\n- `400 Bad Request`: Invalid input data\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -2466,7 +2466,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "format": "email"
+                    "format": "email",
+                    "description": "Must be unique across all users and not have pending invitations"
                   },
                   "name": {
                     "type": "string"
@@ -2509,11 +2510,77 @@
             }
           },
           "400": {
-            "description": "Bad request",
+            "description": "Bad request - Invalid input data",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "validation_error": {
+                    "summary": "Validation error",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_USER_DATA",
+                        "message": "Validation failed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Only admins can create users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "insufficient_permissions": {
+                    "summary": "Insufficient permissions",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INSUFFICIENT_PERMISSIONS",
+                        "message": "Only admins can create users"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Email already exists or has pending invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "user_exists": {
+                    "summary": "User already exists",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "USER_ALREADY_EXISTS",
+                        "message": "User with this email already exists"
+                      }
+                    }
+                  },
+                  "pending_invitation": {
+                    "summary": "Pending invitation exists",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "USER_ALREADY_EXISTS",
+                        "message": "Email address has a pending invitation. Please accept the invitation or cancel it before creating a user directly."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3282,7 +3349,7 @@
           "User Invitations"
         ],
         "summary": "Create invitation",
-        "description": "Create a new user invitation",
+        "description": "Create a new user invitation.\n\n**Duplicate Email Prevention**: This endpoint enforces strict business rules to prevent duplicate email addresses:\n- ✅ **Existing Users**: Returns 409 if email already exists in the Users table\n- ✅ **Pending Invitations**: Returns 409 if email already has a pending invitation\n- ✅ **Case Insensitive**: Email comparison is case-insensitive\n\n**Business Rules**:\n1. Email must be unique across all users\n2. Email must not have an existing pending invitation\n3. Only one pending invitation per email address is allowed\n\n**Error Responses**:\n- `409 Conflict`: Email already exists or has pending invitation\n- `403 Forbidden`: Insufficient permissions\n- `400 Bad Request`: Invalid input data\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -3296,7 +3363,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "format": "email"
+                    "format": "email",
+                    "description": "Must be unique across all users and not have pending invitations"
                   },
                   "role": {
                     "type": "string",
@@ -3355,6 +3423,82 @@
                     },
                     "data": {
                       "$ref": "#/components/schemas/UserInvitation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid input data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "validation_error": {
+                    "summary": "Validation error",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INVALID_EMAIL",
+                        "message": "Email format is invalid"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "insufficient_permissions": {
+                    "summary": "Insufficient permissions",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INSUFFICIENT_PERMISSIONS",
+                        "message": "User authentication required"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Email already exists or has pending invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "user_exists": {
+                    "summary": "Email already exists in Users table",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "EMAIL_ALREADY_EXISTS",
+                        "message": "Email address is already in use by an existing user"
+                      }
+                    }
+                  },
+                  "pending_invitation": {
+                    "summary": "Email has pending invitation",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "EMAIL_ALREADY_EXISTS",
+                        "message": "Email already has a pending invitation"
+                      }
                     }
                   }
                 }
