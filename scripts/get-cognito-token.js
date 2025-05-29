@@ -103,7 +103,6 @@ async function getCognitoToken(email, password) {
         success: true,
         AccessToken: AccessToken,
         IdToken: IdToken,
-        RefreshToken: RefreshToken,
         token: AccessToken,
         idToken: IdToken,
         userId: userId
