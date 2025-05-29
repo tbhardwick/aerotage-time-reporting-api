@@ -277,7 +277,8 @@ export class ApiStack extends cdk.Stack {
       INVITATION_TEMPLATE_NAME: cdk.Fn.importValue(`SesInvitationTemplate-${stage}`),
       REMINDER_TEMPLATE_NAME: cdk.Fn.importValue(`SesReminderTemplate-${stage}`),
       WELCOME_TEMPLATE_NAME: cdk.Fn.importValue(`SesWelcomeTemplate-${stage}`),
-      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : 'http://localhost:3000',
+      FRONTEND_BASE_URL: 'https://time.aerotage.com',
+      API_BASE_URL: stage === 'prod' ? 'https://time-api.aerotage.com' : 'https://time-api-dev.aerotage.com',
     };
 
     // Store Lambda functions for monitoring
@@ -404,6 +405,11 @@ export class ApiStack extends cdk.Stack {
     const acceptInvitationPageFunction = createLambdaFunction('AcceptInvitationPage', 'user-invitations/accept-page', 'Accept invitation page');
     const acceptInvitationPageResource = this.api.root.addResource('accept-invitation');
     acceptInvitationPageResource.addMethod('GET', new apigateway.LambdaIntegration(acceptInvitationPageFunction));
+
+    // Email verification page (for direct email links)
+    const verifyEmailPageFunction = createLambdaFunction('VerifyEmailPage', 'email-change/verify-email-page', 'Email verification page');
+    const verifyEmailPageResource = this.api.root.addResource('verify-email');
+    verifyEmailPageResource.addMethod('GET', new apigateway.LambdaIntegration(verifyEmailPageFunction));
 
     // ✅ NEW - Email Change Workflow APIs
     const emailChangeResource = this.api.root.addResource('email-change');

@@ -97,8 +97,13 @@ export class EmailChangeRepository {
   }
 
   // Get email change request by verification token
+  async getRequestByVerificationToken(token: string, emailType: 'current' | 'new'): Promise<EmailChangeRequest | null> {
+    return this.getEmailChangeRequestByToken(token, emailType);
+  }
+
+  // Get email change request by token
   async getEmailChangeRequestByToken(token: string, tokenType: 'current' | 'new'): Promise<EmailChangeRequest | null> {
-    const indexName = tokenType === 'current' ? 'VerificationTokenIndex' : 'NewEmailVerificationTokenIndex';
+    const indexName = tokenType === 'current' ? 'VerificationTokenIndexV2' : 'NewEmailVerificationTokenIndexV2';
     const fieldName = tokenType === 'current' ? 'currentEmailVerificationToken' : 'newEmailVerificationToken';
 
     const result = await this.dynamoClient.send(new QueryCommand({
