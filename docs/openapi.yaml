@@ -256,7 +256,92 @@ components:
           type: number
           format: float
           
-
+    EmailChangeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique email change request identifier
+        userId:
+          type: string
+          description: User ID who requested the email change
+        userName:
+          type: string
+          description: User name (for admin view)
+        userCurrentEmail:
+          type: string
+          format: email
+          description: User's current email (for admin view)
+        currentEmail:
+          type: string
+          format: email
+          description: Current email address
+        newEmail:
+          type: string
+          format: email
+          description: New email address requested
+        status:
+          type: string
+          enum: [pending_verification, pending_approval, approved, rejected, cancelled, completed]
+          description: Current status of the email change request
+        reason:
+          type: string
+          enum: [personal_preference, security_concern, company_change, other]
+          description: Reason for email change
+        customReason:
+          type: string
+          description: Custom reason if 'other' is selected
+        currentEmailVerified:
+          type: boolean
+          description: Whether the current email has been verified
+        newEmailVerified:
+          type: boolean
+          description: Whether the new email has been verified
+        currentEmailVerificationToken:
+          type: string
+          description: Verification token for current email
+        newEmailVerificationToken:
+          type: string
+          description: Verification token for new email
+        verificationTokensExpiresAt:
+          type: string
+          format: date-time
+          description: When verification tokens expire
+        requestedAt:
+          type: string
+          format: date-time
+          description: When the request was created
+        verifiedAt:
+          type: string
+          format: date-time
+          description: When both emails were verified
+        approvedAt:
+          type: string
+          format: date-time
+          description: When the request was approved
+        approvedBy:
+          type: string
+          description: User ID who approved the request
+        rejectedAt:
+          type: string
+          format: date-time
+          description: When the request was rejected
+        rejectedBy:
+          type: string
+          description: User ID who rejected the request
+        completedAt:
+          type: string
+          format: date-time
+          description: When the email change was completed
+        adminNotes:
+          type: string
+          description: Admin notes for approval/rejection
+        ipAddress:
+          type: string
+          description: IP address of the request
+        userAgent:
+          type: string
+          description: User agent of the request
           
     Project:
       type: object
@@ -2645,6 +2730,663 @@ paths:
                       message:
                         type: string
                         example: Account created successfully
+
+  # Email Change Management
+  /email-change:
+    get:
+      tags:
+        - Email Change Management
+      summary: List email change requests
+      description: |
+        List email change requests with role-based filtering.
+        
+        **Business Logic (Updated)**:
+        - ✅ **Admin Users**: Can view ALL email change requests (for approval purposes)
+        - ✅ **Manager/Employee Users**: Can view only their own email change requests
+        
+        **Admin Features**:
+        - View all pending, approved, and rejected requests
+        - Filter by status, user, or date range
+        - Access to approval/rejection controls
+        
+        **Regular User Features**:
+        - View only personal email change requests
+        - Track verification and approval status
+        - No approval controls (read-only)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+          description: Filter by user ID (admin only - regular users automatically filtered to own requests)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_verification, pending_approval, approved, rejected, cancelled, completed]
+          description: Filter by request status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of results to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [requestedAt, verifiedAt, approvedAt]
+            default: requestedAt
+          description: Sort field
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order
+      responses:
+        '200':
+          description: List of email change requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requests:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/EmailChangeRequest'
+                      pagination:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                          limit:
+                            type: integer
+                          offset:
+                            type: integer
+                          hasMore:
+                            type: boolean
+              examples:
+                admin_view:
+                  summary: Admin view - all requests
+                  value:
+                    success: true
+                    data:
+                      requests:
+                        - id: "b828162a-1933-44ca-881e-72cd04d5ff0e"
+                          userId: "0408a498-40c1-7071-acc9-90665ef117c3"
+                          userName: "Thomas Hardwick"
+                          currentEmail: "bhardwick@aerotage.com"
+                          newEmail: "brad.hardwick@voltasis.com"
+                          status: "pending_approval"
+                          reason: "personal_preference"
+                          currentEmailVerified: true
+                          newEmailVerified: true
+                          requestedAt: "2025-05-29T14:21:41.122Z"
+                          verifiedAt: "2025-05-29T19:16:03.134Z"
+                      pagination:
+                        total: 1
+                        limit: 20
+                        offset: 0
+                        hasMore: false
+                user_view:
+                  summary: Regular user view - own requests only
+                  value:
+                    success: true
+                    data:
+                      requests:
+                        - id: "b828162a-1933-44ca-881e-72cd04d5ff0e"
+                          currentEmail: "user@example.com"
+                          newEmail: "newuser@example.com"
+                          status: "pending_approval"
+                          reason: "personal_preference"
+                          currentEmailVerified: true
+                          newEmailVerified: true
+                          requestedAt: "2025-05-29T14:21:41.122Z"
+                      pagination:
+                        total: 1
+                        limit: 20
+                        offset: 0
+                        hasMore: false
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+                
+    post:
+      tags:
+        - Email Change Management
+      summary: Create email change request
+      description: |
+        Create a new email change request.
+        
+        **Process Flow**:
+        1. User submits request with new email address
+        2. System sends verification emails to both current and new email addresses
+        3. User must verify both emails before admin approval
+        4. Admin approves/rejects the request
+        5. System processes the email change (24-48 hours)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newEmail
+                - reason
+              properties:
+                newEmail:
+                  type: string
+                  format: email
+                  description: New email address
+                reason:
+                  type: string
+                  enum: [personal_preference, security_concern, company_change, other]
+                  description: Reason for email change
+                customReason:
+                  type: string
+                  description: Custom reason if 'other' is selected
+      responses:
+        '201':
+          description: Email change request created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/EmailChangeRequest'
+                  message:
+                    type: string
+                    example: "Email change request created. Please check both email addresses for verification links."
+        '400':
+          description: Bad request - invalid input or business rule violation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - active request already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /email-change/{id}/approve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Email change request ID
+        
+    post:
+      tags:
+        - Email Change Management
+      summary: Approve email change request
+      description: |
+        Approve an email change request (admin only).
+        
+        **Updated Business Logic**:
+        - ✅ **Admins can approve their own email change requests** (new behavior)
+        - ✅ **Admins can approve other users' email change requests**
+        - ❌ **Managers/Employees cannot approve any requests** (including their own)
+        
+        **Requirements**:
+        - Both current and new emails must be verified
+        - Request must be in 'pending_approval' status
+        - Admin notes are required for audit trail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+              properties:
+                approved:
+                  type: boolean
+                  description: Whether to approve the request
+                  example: true
+                adminNotes:
+                  type: string
+                  description: Admin notes for approval (recommended)
+                  example: "Email change approved - user verified both addresses"
+      responses:
+        '200':
+          description: Email change request approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                        example: "b828162a-1933-44ca-881e-72cd04d5ff0e"
+                      status:
+                        type: string
+                        example: "approved"
+                      approvedAt:
+                        type: string
+                        format: date-time
+                        example: "2025-05-29T20:58:48.218Z"
+                      approvedBy:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                        example:
+                          id: "0408a498-40c1-7071-acc9-90665ef117c3"
+                          name: "Thomas Hardwick"
+                      estimatedCompletionTime:
+                        type: string
+                        format: date-time
+                        example: "2025-05-30T20:58:49.097Z"
+                  message:
+                    type: string
+                    example: "Email change request approved successfully"
+        '400':
+          description: Bad request - invalid request state or data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_pending_approval:
+                  summary: Request not in pending approval state
+                  value:
+                    success: false
+                    error:
+                      code: "REQUEST_NOT_PENDING_APPROVAL"
+                      message: "Cannot approve request with status: completed"
+                emails_not_verified:
+                  summary: Emails not verified
+                  value:
+                    success: false
+                    error:
+                      code: "INVALID_REQUEST_DATA"
+                      message: "Both email addresses must be verified before approval"
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_admin:
+                  summary: Only admins can approve requests
+                  value:
+                    success: false
+                    error:
+                      code: "INSUFFICIENT_APPROVAL_PERMISSIONS"
+                      message: "Only administrators can approve email change requests"
+        '404':
+          description: Email change request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /email-change/{id}/reject:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Email change request ID
+        
+    post:
+      tags:
+        - Email Change Management
+      summary: Reject email change request
+      description: Reject an email change request (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+                - adminNotes
+              properties:
+                approved:
+                  type: boolean
+                  description: Must be false for rejection
+                  example: false
+                adminNotes:
+                  type: string
+                  description: Required reason for rejection
+                  example: "Email change rejected - security concerns"
+      responses:
+        '200':
+          description: Email change request rejected successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      status:
+                        type: string
+                        example: "rejected"
+                      rejectedAt:
+                        type: string
+                        format: date-time
+                      rejectedBy:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                  message:
+                    type: string
+                    example: "Email change request rejected"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Email change request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /email-change/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Email change request ID
+        
+    delete:
+      tags:
+        - Email Change Management
+      summary: Cancel email change request
+      description: Cancel a pending email change request (user can cancel their own request)
+      responses:
+        '200':
+          description: Email change request cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Email change request cancelled successfully"
+        '400':
+          description: Cannot cancel request in current state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - can only cancel own requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Email change request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /email-change/{id}/resend:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Email change request ID
+        
+    post:
+      tags:
+        - Email Change Management
+      summary: Resend verification emails
+      description: Resend verification emails for an email change request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - emailType
+              properties:
+                emailType:
+                  type: string
+                  enum: [current, new, both]
+                  description: Which verification email(s) to resend
+                  example: "new"
+      responses:
+        '200':
+          description: Verification emails resent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Verification email resent successfully"
+                      emailsSent:
+                        type: array
+                        items:
+                          type: string
+                        example: ["new"]
+        '400':
+          description: Bad request - invalid email type or request state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Email change request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /verify-email:
+    get:
+      tags:
+        - Email Change Management
+      summary: Email verification page
+      description: |
+        AWS-hosted email verification page (public endpoint).
+        
+        **Note**: This endpoint serves HTML pages for email verification and does not require authentication.
+        Users click verification links in emails which lead to this page.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Email verification token
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [current, new]
+          description: Type of email being verified
+      responses:
+        '200':
+          description: Email verification page
+          content:
+            text/html:
+              schema:
+                type: string
+                example: |
+                  <!DOCTYPE html>
+                  <html>
+                  <head><title>Email Verification</title></head>
+                  <body>
+                    <h1>Email Verification</h1>
+                    <p>Click the button below to verify your email address.</p>
+                    <button onclick="verifyEmail()">Verify Email Address</button>
+                  </body>
+                  </html>
+        '400':
+          description: Invalid or expired verification token
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /email-change/verify:
+    post:
+      tags:
+        - Email Change Management
+      summary: Process email verification
+      description: |
+        Process email verification (called by verification page).
+        
+        **Note**: This endpoint is called by the AWS-hosted verification page and does not require authentication.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - emailType
+              properties:
+                token:
+                  type: string
+                  description: Email verification token
+                emailType:
+                  type: string
+                  enum: [current, new]
+                  description: Type of email being verified
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                      emailType:
+                        type: string
+                      verified:
+                        type: boolean
+                        example: true
+                      verificationStatus:
+                        type: object
+                        properties:
+                          currentEmailVerified:
+                            type: boolean
+                          newEmailVerified:
+                            type: boolean
+                      nextStep:
+                        type: string
+                        enum: [verify_other_email, pending_approval, auto_approved, processing]
+                      message:
+                        type: string
+        '400':
+          description: Invalid verification request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Invalid or expired verification token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Verification token expired or email already verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # Project Management Endpoints - Phase 5
   /projects:
@@ -5498,6 +6240,8 @@ tags:
     description: User session management
   - name: User Invitations
     description: User invitation system
+  - name: Email Change Management
+    description: Email address change requests and verification system
   - name: Project Management
     description: Project lifecycle management
   - name: Client Management
