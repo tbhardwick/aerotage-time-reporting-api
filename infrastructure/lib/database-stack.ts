@@ -424,32 +424,36 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // TODO: Email change tables temporarily removed due to GSI deployment issues
-    // Will be added in a separate deployment after the main stack is stable
-    // ✅ NEW - Phase 8 Email Change Tables
-    // const emailChangeRequestsTable = new dynamodb.Table(this, 'EmailChangeRequestsTable', {
-    //   tableName: `aerotage-email-change-requests-${stage}`,
-    //   partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-    //   sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
-    //   billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-    //   encryption: dynamodb.TableEncryption.AWS_MANAGED,
-    //   pointInTimeRecovery: stage === 'prod',
-    //   removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    // });
+    // ✅ RE-ENABLED - Phase 8 Email Change Tables (GSIs already exist manually)
+    const emailChangeRequestsTable = new dynamodb.Table(this, 'EmailChangeRequestsTable', {
+      tableName: `aerotage-email-change-requests-${stage}`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
 
-    // const emailChangeAuditLogTable = new dynamodb.Table(this, 'EmailChangeAuditLogTable', {
-    //   tableName: `aerotage-email-change-audit-log-${stage}`,
-    //   partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-    //   sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
-    //   billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-    //   encryption: dynamodb.TableEncryption.AWS_MANAGED,
-    //   pointInTimeRecovery: stage === 'prod',
-    //   removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    // });
+    // Note: GSIs already exist and will be imported automatically
+    // - UserIndex: userId + createdAt
+    // - StatusIndex: status + updatedAt  
+    // - NewEmailVerificationTokenIndex: newEmailVerificationToken
+    // - CurrentEmailVerificationTokenIndex: currentEmailVerificationToken
 
-    // Create placeholder tables for now to satisfy the interface
-    const emailChangeRequestsTable = userWorkSchedulesTable; // Temporary placeholder
-    const emailChangeAuditLogTable = userWorkSchedulesTable; // Temporary placeholder
+    const emailChangeAuditLogTable = new dynamodb.Table(this, 'EmailChangeAuditLogTable', {
+      tableName: `aerotage-email-change-audit-log-${stage}`,
+      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: stage === 'prod',
+      removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Note: GSIs already exist and will be imported automatically
+    // - RequestIndex: requestId + timestamp
+    // - ActionIndex: action + timestamp
 
     // Store all tables for easy access
     this.tables = {
@@ -603,17 +607,17 @@ export class DatabaseStack extends cdk.Stack {
       exportName: `UserWorkSchedulesTableName-${stage}`,
     });
 
-    // ✅ NEW - Phase 8 Email Change CloudFormation Outputs
-    // new cdk.CfnOutput(this, 'EmailChangeRequestsTableName', {
-    //   value: emailChangeRequestsTable.tableName,
-    //   description: 'Email Change Requests DynamoDB Table Name',
-    //   exportName: `EmailChangeRequestsTableName-${stage}`,
-    // });
+    // ✅ RE-ENABLED - Phase 8 Email Change CloudFormation Outputs
+    new cdk.CfnOutput(this, 'EmailChangeRequestsTableName', {
+      value: emailChangeRequestsTable.tableName,
+      description: 'Email Change Requests DynamoDB Table Name',
+      exportName: `EmailChangeRequestsTableName-${stage}`,
+    });
 
-    // new cdk.CfnOutput(this, 'EmailChangeAuditLogTableName', {
-    //   value: emailChangeAuditLogTable.tableName,
-    //   description: 'Email Change Audit Log DynamoDB Table Name',
-    //   exportName: `EmailChangeAuditLogTableName-${stage}`,
-    // });
+    new cdk.CfnOutput(this, 'EmailChangeAuditLogTableName', {
+      value: emailChangeAuditLogTable.tableName,
+      description: 'Email Change Audit Log DynamoDB Table Name',
+      exportName: `EmailChangeAuditLogTableName-${stage}`,
+    });
   }
 } 
