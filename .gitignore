@@ -6,6 +6,10 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# Compiled JavaScript files (should not be committed)
+infrastructure/*.js
+infrastructure/*.js.map
+
 # Runtime data
 pids
 *.pid

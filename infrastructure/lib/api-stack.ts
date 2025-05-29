@@ -411,7 +411,7 @@ export class ApiStack extends cdk.Stack {
     const verifyEmailPageResource = this.api.root.addResource('verify-email');
     verifyEmailPageResource.addMethod('GET', new apigateway.LambdaIntegration(verifyEmailPageFunction));
 
-    // ✅ RE-ENABLED - Email Change Workflow APIs (tables exist manually)
+    // ✅ NEW - Email Change Workflow APIs
     const emailChangeResource = this.api.root.addResource('email-change');
     
     // Submit email change request
@@ -458,13 +458,6 @@ export class ApiStack extends cdk.Stack {
     const rejectEmailChangeFunction = createLambdaFunction('RejectEmailChange', 'email-change/admin-reject', 'Admin reject email change');
     const rejectEmailResource = emailChangeRequestResource.addResource('reject');
     rejectEmailResource.addMethod('POST', new apigateway.LambdaIntegration(rejectEmailChangeFunction), {
-      authorizer: customAuthorizer,
-    });
-
-    // ✅ NEW - Process approved email change request (actually change the email)
-    const processEmailChangeFunction = createLambdaFunction('ProcessEmailChange', 'email-change/process-email-change', 'Process approved email change');
-    const processEmailResource = emailChangeRequestResource.addResource('process');
-    processEmailResource.addMethod('POST', new apigateway.LambdaIntegration(processEmailChangeFunction), {
       authorizer: customAuthorizer,
     });
 

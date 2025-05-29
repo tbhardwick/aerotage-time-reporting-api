@@ -424,7 +424,7 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // ✅ RE-ENABLED - Phase 8 Email Change Tables (GSIs already exist manually)
+    // ✅ NEW - Phase 8 Email Change Tables
     const emailChangeRequestsTable = new dynamodb.Table(this, 'EmailChangeRequestsTable', {
       tableName: `aerotage-email-change-requests-${stage}`,
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
@@ -435,11 +435,31 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // Note: GSIs already exist and will be imported automatically
-    // - UserIndex: userId + createdAt
-    // - StatusIndex: status + updatedAt  
-    // - NewEmailVerificationTokenIndex: newEmailVerificationToken
-    // - CurrentEmailVerificationTokenIndex: currentEmailVerificationToken
+    // Add GSI for user lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'UserIndexV2',
+      partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for status lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'StatusIndexV2',
+      partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for verification token lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'VerificationTokenIndexV2',
+      partitionKey: { name: 'GSI3PK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for new email verification token lookup
+    emailChangeRequestsTable.addGlobalSecondaryIndex({
+      indexName: 'NewEmailVerificationTokenIndexV2',
+      partitionKey: { name: 'GSI4PK', type: dynamodb.AttributeType.STRING },
+    });
 
     const emailChangeAuditLogTable = new dynamodb.Table(this, 'EmailChangeAuditLogTable', {
       tableName: `aerotage-email-change-audit-log-${stage}`,
@@ -451,9 +471,19 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: stage === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
-    // Note: GSIs already exist and will be imported automatically
-    // - RequestIndex: requestId + timestamp
-    // - ActionIndex: action + timestamp
+    // Add GSI for request lookup
+    emailChangeAuditLogTable.addGlobalSecondaryIndex({
+      indexName: 'RequestIndexV2',
+      partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Add GSI for action lookup
+    emailChangeAuditLogTable.addGlobalSecondaryIndex({
+      indexName: 'ActionIndexV2',
+      partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
+    });
 
     // Store all tables for easy access
     this.tables = {
@@ -607,7 +637,7 @@ export class DatabaseStack extends cdk.Stack {
       exportName: `UserWorkSchedulesTableName-${stage}`,
     });
 
-    // ✅ RE-ENABLED - Phase 8 Email Change CloudFormation Outputs
+    // ✅ NEW - Phase 8 Email Change CloudFormation Outputs
     new cdk.CfnOutput(this, 'EmailChangeRequestsTableName', {
       value: emailChangeRequestsTable.tableName,
       description: 'Email Change Requests DynamoDB Table Name',
