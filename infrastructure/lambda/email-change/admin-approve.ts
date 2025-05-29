@@ -86,10 +86,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, EmailChangeErrorCodes.INVALID_REQUEST_DATA, 'Both email addresses must be verified before approval');
     }
 
-    // Check if admin is trying to approve their own request
+    // Business Logic: Only prevent non-admins from approving requests
+    // Admins can approve their own requests, but managers/employees cannot approve any requests
+    if (emailChangeRequest.userId === currentUserId && userRole !== 'admin') {
+      console.log('❌ Non-admin user trying to approve their own request');
+      return createErrorResponse(400, EmailChangeErrorCodes.CANNOT_APPROVE_OWN_REQUEST, 'Only administrators can approve email change requests');
+    }
+
+    // Log approval action for audit trail
     if (emailChangeRequest.userId === currentUserId) {
-      console.log('❌ Admin trying to approve their own request');
-      return createErrorResponse(400, EmailChangeErrorCodes.CANNOT_APPROVE_OWN_REQUEST, 'You cannot approve your own email change request');
+      console.log('ℹ️ Admin approving their own email change request');
+    } else {
+      console.log('ℹ️ Admin approving another user\'s email change request');
     }
 
     // Extract IP address and user agent for audit trail

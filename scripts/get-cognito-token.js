@@ -90,7 +90,7 @@ async function getCognitoToken(email, password) {
     );
 
     if (authResponse.AuthenticationResult) {
-      const { AccessToken, IdToken } = authResponse.AuthenticationResult;
+      const { AccessToken, IdToken, RefreshToken } = authResponse.AuthenticationResult;
       
       // Decode the access token to get user ID
       const tokenParts = AccessToken.split('.');
@@ -101,6 +101,9 @@ async function getCognitoToken(email, password) {
       
       return {
         success: true,
+        AccessToken: AccessToken,
+        IdToken: IdToken,
+        RefreshToken: RefreshToken,
         token: AccessToken,
         idToken: IdToken,
         userId: userId
