@@ -5,11 +5,13 @@ export class EmailChangeService {
   private sesClient: SESClient;
   private fromEmail: string;
   private frontendBaseUrl: string;
+  private apiBaseUrl: string;
 
   constructor() {
     this.sesClient = new SESClient({});
     this.fromEmail = process.env.SES_FROM_EMAIL || 'noreply@aerotage.com';
     this.frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com';
+    this.apiBaseUrl = process.env.API_BASE_URL || 'https://time-api-dev.aerotage.com';
   }
 
   // Send verification email for current or new email address
@@ -27,7 +29,14 @@ export class EmailChangeService {
       throw new Error('Verification token not found');
     }
 
+    // Frontend verification URL - MUST be a public page (no authentication required)
+    // The frontend page should call the API endpoint: POST /email-change/verify
+    // with body: { token: "...", emailType: "current|new" }
     const verificationUrl = `${this.frontendBaseUrl}/verify-email?token=${token}&type=${emailType}`;
+    
+    // Direct API verification URL (alternative if frontend can't handle public pages)
+    const directApiUrl = `${this.apiBaseUrl}/email-change/verify`;
+    
     const requiresApproval = this.requiresAdminApproval(request);
 
     const templateData = {
@@ -38,8 +47,12 @@ export class EmailChangeService {
       customReason: request.customReason || '',
       emailAddress,
       verificationUrl,
+      directApiUrl, // Include direct API URL for reference
       requiresApproval: requiresApproval.toString(),
-      expiresIn: '24 hours'
+      expiresIn: '24 hours',
+      // Additional data for frontend implementation
+      verificationToken: token,
+      emailType: emailType
     };
 
     await this.sesClient.send(new SendTemplatedEmailCommand({
