@@ -1844,7 +1844,7 @@ export enum EmailChangeErrorCodes {
   // Approval errors
   INSUFFICIENT_APPROVAL_PERMISSIONS = 'INSUFFICIENT_APPROVAL_PERMISSIONS',
   REQUEST_NOT_PENDING_APPROVAL = 'REQUEST_NOT_PENDING_APPROVAL',
-  CANNOT_APPROVE_OWN_REQUEST = 'CANNOT_APPROVE_OWN_REQUEST',
+  REQUEST_NOT_APPROVED = 'REQUEST_NOT_APPROVED',
   
   // Cancellation errors
   CANNOT_CANCEL_REQUEST = 'CANNOT_CANCEL_REQUEST',
@@ -1926,4 +1926,27 @@ export interface EmailChangeConfig {
     approvalNotificationTemplate: string;
     completionNotificationTemplate: string;
   };
+}
+
+export interface ProcessEmailChangeRequest {
+  // This request type is intentionally minimal as processing is typically automated
+  // Additional fields can be added if manual processing options are needed
+  force?: boolean; // Force processing even if there are warnings
+  notes?: string; // Optional processing notes
+}
+
+export interface ProcessEmailChangeResponse {
+  success: boolean;
+  data: {
+    requestId: string;
+    status: 'completed';
+    oldEmail: string;
+    newEmail: string;
+    completedAt: string;
+    processedBy: {
+      id: string;
+      name: string;
+    };
+  };
+  message: string;
 } 

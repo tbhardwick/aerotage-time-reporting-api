@@ -461,6 +461,13 @@ export class ApiStack extends cdk.Stack {
       authorizer: customAuthorizer,
     });
 
+    // ✅ NEW - Process approved email change request (actually change the email)
+    const processEmailChangeFunction = createLambdaFunction('ProcessEmailChange', 'email-change/process-email-change', 'Process approved email change');
+    const processEmailResource = emailChangeRequestResource.addResource('process');
+    processEmailResource.addMethod('POST', new apigateway.LambdaIntegration(processEmailChangeFunction), {
+      authorizer: customAuthorizer,
+    });
+
     // Project APIs
     const projectsResource = this.api.root.addResource('projects');
     const getProjectsFunction = createLambdaFunction('GetProjects', 'projects/list', 'List projects');

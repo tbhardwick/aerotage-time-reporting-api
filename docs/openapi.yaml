@@ -3147,6 +3147,152 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /email-change/{id}/process:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Email change request ID
+        
+    post:
+      tags:
+        - Email Change Management
+      summary: Process approved email change request
+      description: |
+        Process an approved email change request by actually changing the email in Cognito and user profiles (admin only).
+        
+        **This endpoint performs the actual email change**:
+        1. Updates the email address in AWS Cognito User Pool
+        2. Updates the email address in the user profile database
+        3. Marks the request as "completed"
+        4. Sends completion notification to the user
+        
+        **Requirements**:
+        - Request must be in "approved" status
+        - Only admins can process email changes
+        - Both current and new emails must be verified
+        
+        **After processing**:
+        - User must login with the new email address
+        - Old email address will no longer work for authentication
+        - Request status changes to "completed"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: Force processing even if there are warnings
+                  default: false
+                notes:
+                  type: string
+                  description: Optional processing notes
+                  example: "Email change processed successfully"
+      responses:
+        '200':
+          description: Email change processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      requestId:
+                        type: string
+                        example: "b828162a-1933-44ca-881e-72cd04d5ff0e"
+                      status:
+                        type: string
+                        example: "completed"
+                      oldEmail:
+                        type: string
+                        format: email
+                        example: "bhardwick@aerotage.com"
+                      newEmail:
+                        type: string
+                        format: email
+                        example: "brad.hardwick@voltasis.com"
+                      completedAt:
+                        type: string
+                        format: date-time
+                        example: "2025-05-29T21:30:15.123Z"
+                      processedBy:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "0408a498-40c1-7071-acc9-90665ef117c3"
+                          name:
+                            type: string
+                            example: "admin@aerotage.com"
+                  message:
+                    type: string
+                    example: "Email change processed successfully"
+        '400':
+          description: Bad request - invalid request state or data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_approved:
+                  summary: Request not approved
+                  value:
+                    success: false
+                    error:
+                      code: "REQUEST_NOT_APPROVED"
+                      message: "Cannot process request with status: pending_approval"
+                cognito_user_not_found:
+                  summary: User not found in Cognito
+                  value:
+                    success: false
+                    error:
+                      code: "COGNITO_USER_NOT_FOUND"
+                      message: "User not found in Cognito User Pool"
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_admin:
+                  summary: Only admins can process email changes
+                  value:
+                    success: false
+                    error:
+                      code: "INSUFFICIENT_APPROVAL_PERMISSIONS"
+                      message: "Only administrators can process email changes"
+        '404':
+          description: Email change request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error - processing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                processing_failed:
+                  summary: Email processing failed
+                  value:
+                    success: false
+                    error:
+                      code: "EMAIL_PROCESSING_FAILED"
+                      message: "Failed to process email change. Please try again later."
+
   /email-change/{id}:
     parameters:
       - name: id

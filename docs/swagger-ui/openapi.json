@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Aerotage Time Reporting API",
-    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 29, 2025 at 05:10:40 PM",
-    "version": "1.0.0-dev-2025-05-29T21-10-40",
+    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 29, 2025 at 05:30:10 PM",
+    "version": "1.0.0-dev-2025-05-29T21-30-10",
     "contact": {
       "name": "Aerotage Support",
       "email": "support@aerotage.com"
@@ -4444,6 +4444,197 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email-change/{id}/process": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Email change request ID"
+        }
+      ],
+      "post": {
+        "tags": [
+          "Email Change Management"
+        ],
+        "summary": "Process approved email change request",
+        "description": "Process an approved email change request by actually changing the email in Cognito and user profiles (admin only).\n\n**This endpoint performs the actual email change**:\n1. Updates the email address in AWS Cognito User Pool\n2. Updates the email address in the user profile database\n3. Marks the request as \"completed\"\n4. Sends completion notification to the user\n\n**Requirements**:\n- Request must be in \"approved\" status\n- Only admins can process email changes\n- Both current and new emails must be verified\n\n**After processing**:\n- User must login with the new email address\n- Old email address will no longer work for authentication\n- Request status changes to \"completed\"\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "description": "Force processing even if there are warnings",
+                    "default": false
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Optional processing notes",
+                    "example": "Email change processed successfully"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email change processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "example": "b828162a-1933-44ca-881e-72cd04d5ff0e"
+                        },
+                        "status": {
+                          "type": "string",
+                          "example": "completed"
+                        },
+                        "oldEmail": {
+                          "type": "string",
+                          "format": "email",
+                          "example": "bhardwick@aerotage.com"
+                        },
+                        "newEmail": {
+                          "type": "string",
+                          "format": "email",
+                          "example": "brad.hardwick@voltasis.com"
+                        },
+                        "completedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "example": "2025-05-29T21:30:15.123Z"
+                        },
+                        "processedBy": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "example": "0408a498-40c1-7071-acc9-90665ef117c3"
+                            },
+                            "name": {
+                              "type": "string",
+                              "example": "admin@aerotage.com"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Email change processed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid request state or data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "not_approved": {
+                    "summary": "Request not approved",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "REQUEST_NOT_APPROVED",
+                        "message": "Cannot process request with status: pending_approval"
+                      }
+                    }
+                  },
+                  "cognito_user_not_found": {
+                    "summary": "User not found in Cognito",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "COGNITO_USER_NOT_FOUND",
+                        "message": "User not found in Cognito User Pool"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "not_admin": {
+                    "summary": "Only admins can process email changes",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "INSUFFICIENT_APPROVAL_PERMISSIONS",
+                        "message": "Only administrators can process email changes"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Email change request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - processing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "processing_failed": {
+                    "summary": "Email processing failed",
+                    "value": {
+                      "success": false,
+                      "error": {
+                        "code": "EMAIL_PROCESSING_FAILED",
+                        "message": "Failed to process email change. Please try again later."
+                      }
+                    }
+                  }
                 }
               }
             }
