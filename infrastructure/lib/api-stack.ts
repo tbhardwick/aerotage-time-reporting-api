@@ -277,7 +277,7 @@ export class ApiStack extends cdk.Stack {
       INVITATION_TEMPLATE_NAME: cdk.Fn.importValue(`SesInvitationTemplate-${stage}`),
       REMINDER_TEMPLATE_NAME: cdk.Fn.importValue(`SesReminderTemplate-${stage}`),
       WELCOME_TEMPLATE_NAME: cdk.Fn.importValue(`SesWelcomeTemplate-${stage}`),
-      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : `https://time-api-${stage}.aerotage.com`,
+      FRONTEND_BASE_URL: stage === 'prod' ? 'https://time.aerotage.com' : 'https://time.aerotage.com',
     };
 
     // Store Lambda functions for monitoring
