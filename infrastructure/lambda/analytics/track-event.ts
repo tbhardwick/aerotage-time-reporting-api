@@ -25,7 +25,6 @@ class AnalyticsRepository {
     });
 
     await this.docClient.send(command);
-    console.log('Analytics event stored:', analyticsEvent.eventId);
   }
 }
 
@@ -105,6 +104,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const user = getAuthenticatedUser(event);
+    // Get sessionId from context if available (optional for analytics)
     const sessionId = event.requestContext.authorizer?.sessionId;
 
     // Parse request body
@@ -259,7 +259,6 @@ async function updateRateLimit(userId: string): Promise<void> {
     const _rateLimitKey = `${userId}-${currentHour}`;
     
     // Placeholder for rate limit update logic
-    console.log('Rate limit updated for:', _rateLimitKey);
     
   } catch {
     console.error('Error updating rate limit');

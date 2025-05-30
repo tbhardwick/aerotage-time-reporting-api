@@ -1,44 +1,31 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
 import { 
   CreateUserRequest, 
   User, 
   UserErrorCodes, 
-  SuccessResponse, 
-  ErrorResponse 
+  SuccessResponse
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
-import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
 import { InvitationRepository } from '../shared/invitation-repository';
 
 const userRepo = new UserRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('📝 Create User Handler - Request received:', {
-      httpMethod: event.httpMethod,
-      path: event.path,
-      body: event.body ? 'Present' : 'None',
-      headers: {
-        authorization: event.headers.authorization ? 'Bearer [REDACTED]' : 'None',
-        'content-type': event.headers['content-type']
-      }
-    });
-
-    // Extract user information from authorization context
-    const authContext = event.requestContext.authorizer;
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
     if (!currentUserId) {
-      console.log('❌ No user ID found in authorization context');
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Check if user has permission to create users (admin only)
     if (userRole !== 'admin') {
-      console.log(`❌ Insufficient permissions. User role: ${userRole}`);
       return createErrorResponse(403, UserErrorCodes.INSUFFICIENT_PERMISSIONS, 'Only admins can create users');
     }
 
@@ -53,35 +40,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     } catch (error) {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
-
-    console.log('📋 Validating create user request...');
     
     // Validate request data
     const validation = ValidationService.validateCreateUserRequest(createUserRequest as unknown as Record<string, unknown>);
     if (!validation.isValid) {
-      console.log('❌ Validation failed:', validation.errors);
       return createErrorResponse(400, UserErrorCodes.INVALID_USER_DATA, 'Validation failed');
     }
 
     // Check if user already exists
-    console.log('🔍 Checking if user already exists...');
     const existingUser = await userRepo.getUserByEmail(createUserRequest.email);
     if (existingUser) {
-      console.log('❌ User already exists with email:', createUserRequest.email);
       return createErrorResponse(409, UserErrorCodes.USER_ALREADY_EXISTS, 'User with this email already exists');
     }
 
     // Check if there's a pending invitation for this email
-    console.log('🔍 Checking if email has pending invitation...');
     const invitationRepo = new InvitationRepository();
     const hasPendingInvitation = await invitationRepo.checkEmailExists(createUserRequest.email);
     if (hasPendingInvitation) {
-      console.log('❌ Email has pending invitation:', createUserRequest.email);
       return createErrorResponse(409, UserErrorCodes.USER_ALREADY_EXISTS, 'Email address has a pending invitation. Please accept the invitation or cancel it before creating a user directly.');
     }
 
     // Create the user
-    console.log('👤 Creating new user...');
     const newUser = await userRepo.createUser({
       email: createUserRequest.email,
       name: createUserRequest.name,
@@ -98,8 +77,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       contactInfo: createUserRequest.contactInfo,
       invitedBy: currentUserId
     });
-
-    console.log('✅ User created successfully:', newUser.id);
 
     const response: SuccessResponse<User> = {
       success: true,
@@ -119,7 +96,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('❌ Create user error:', error);
+    console.error('Create user error:', error);
     
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }

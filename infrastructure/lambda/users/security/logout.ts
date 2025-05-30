@@ -1,9 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -12,36 +13,21 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Logout request:', JSON.stringify(event, null, 2));
-
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const userId = authContext?.userId;
-
-    if (!userId) {
-      return createErrorResponse(401, ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 'User authentication required');
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     // Get current request's user agent and IP for session matching
     const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
     const currentIP = getClientIP(event);
-    
-    console.log('Logout request details:');
-    console.log(`  User ID: ${userId}`);
-    console.log(`  User Agent: ${currentUserAgent}`);
-    console.log(`  IP Address: ${currentIP}`);
 
     // Find and delete the current session
-    const currentSessionId = await findAndDeleteCurrentSession(userId, currentUserAgent, currentIP);
-
-    if (currentSessionId) {
-      console.log(`Successfully deleted current session: ${currentSessionId}`);
-    } else {
-      console.log('No current session found to delete');
-    }
+    const currentSessionId = await findAndDeleteCurrentSession(currentUserId, currentUserAgent, currentIP);
 
     // Also clean up any expired sessions for this user
-    await cleanupExpiredSessions(userId);
+    await cleanupExpiredSessions(currentUserId);
 
     const response: SuccessResponse<{ message: string; sessionId?: string }> = {
       success: true,
@@ -62,7 +48,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Logout error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Logout failed');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -87,15 +73,12 @@ async function findAndDeleteCurrentSession(userId: string, userAgent: string, ip
     const result = await docClient.send(queryCommand);
     const activeSessions = result.Items || [];
 
-    console.log(`Found ${activeSessions.length} active sessions for user ${userId}`);
-
     // Find sessions that match current UA and IP
     const matchingSessions = activeSessions.filter(s => 
       s.userAgent === userAgent && s.ipAddress === ipAddress
     );
 
     if (matchingSessions.length === 0) {
-      console.log('No matching sessions found for current request');
       return null;
     }
 
@@ -108,8 +91,6 @@ async function findAndDeleteCurrentSession(userId: string, userAgent: string, ip
 
     const currentSession = matchingSessions[0];
     const sessionId = currentSession.sessionId;
-
-    console.log(`Identified current session to delete: ${sessionId}`);
 
     // Delete the current session
     const deleteCommand = new DeleteCommand({
@@ -164,8 +145,6 @@ async function cleanupExpiredSessions(userId: string): Promise<void> {
       );
     });
 
-    console.log(`Found ${expiredSessions.length} expired sessions to clean up`);
-
     // Delete expired sessions
     const deletePromises = expiredSessions.map(session => {
       const deleteCommand = new DeleteCommand({
@@ -176,10 +155,6 @@ async function cleanupExpiredSessions(userId: string): Promise<void> {
     });
 
     await Promise.all(deletePromises);
-
-    if (expiredSessions.length > 0) {
-      console.log(`Cleaned up ${expiredSessions.length} expired sessions`);
-    }
 
   } catch (error) {
     console.error('Error cleaning up expired sessions:', error);
@@ -200,28 +175,4 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   }
   
   return xRealIP || cfConnectingIP || sourceIP || 'unknown';
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 
