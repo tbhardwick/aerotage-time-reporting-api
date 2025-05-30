@@ -1,25 +1,40 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
+import { UserRepository } from '../../shared/user-repository';
 import { 
   UpdateUserProfileRequest, 
   UserProfile, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const userRepo = new UserRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Update user profile request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = (user?.role as 'employee' | 'admin' | 'manager') || 'employee';
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
     if (!userId) {
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
+    }
+
+    // Authorization check: users can only update their own profile unless they're admin
+    if (userId !== currentUserId && userRole !== 'admin') {
+      return createErrorResponse(
+        403, 
+        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
+        'You can only update your own profile'
+      );
     }
 
     // Parse request body
@@ -29,20 +44,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const updateData: UpdateUserProfileRequest = JSON.parse(event.body);
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
-
-    // Authorization check: users can only update their own profile unless they're admin
-    if (userId !== authenticatedUserId && userRole !== 'admin') {
-      return createErrorResponse(
-        403, 
-        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
-        'You can only update your own profile'
-      );
-    }
-
     // Validate input data
     const validationError = validateUpdateRequest(updateData);
     if (validationError) {
@@ -50,7 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Check if hourly rate change requires admin approval
-    if (updateData.hourlyRate !== undefined && userRole !== 'admin' && userId === authenticatedUserId) {
+    if (updateData.hourlyRate !== undefined && userRole !== 'admin' && userId === currentUserId) {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -58,21 +59,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current user profile (if it exists)
-    const getCommand = new GetCommand({
-      TableName: process.env.USERS_TABLE!,
-      Key: { id: userId },
-    });
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const currentUser = await userRepo.getUserById(userId);
 
-    const currentResult = await docClient.send(getCommand);
-    const currentUser = currentResult.Item;
-
-    // Create default profile data from JWT token for new profiles
+    // Create default profile data from user context for new profiles
     const currentTimestamp = new Date().toISOString();
     const defaultProfile = {
       id: userId,
-      email: authContext?.email || '',
-      name: authContext?.email?.split('@')[0] || '',
+      email: user?.email || '',
+      name: user?.email?.split('@')[0] || '',
       role: userRole,
       isActive: true,
       startDate: currentTimestamp.split('T')[0], // ISO date format
@@ -107,35 +102,29 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Name is required but not found in token or update data');
     }
 
-    // Save profile (create or update)
-    const putCommand = new PutCommand({
-      TableName: process.env.USERS_TABLE!,
-      Item: profileData,
-    });
-
-    await docClient.send(putCommand);
+    // MANDATORY: Use repository pattern for save operation
+    await userRepo.updateUser(userId, profileData);
 
     // Transform saved data to UserProfile response format
-    const updatedUser = profileData;
     const profile: UserProfile = {
-      id: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      jobTitle: updatedUser.jobTitle,
-      department: updatedUser.department,
-      hourlyRate: updatedUser.hourlyRate,
-      role: updatedUser.role,
-      contactInfo: updatedUser.contactInfo ? {
-        phone: updatedUser.contactInfo.phone,
-        address: updatedUser.contactInfo.address,
-        emergencyContact: updatedUser.contactInfo.emergencyContact,
+      id: profileData.id,
+      email: profileData.email,
+      name: profileData.name,
+      jobTitle: profileData.jobTitle,
+      department: profileData.department,
+      hourlyRate: profileData.hourlyRate,
+      role: profileData.role as 'employee' | 'admin' | 'manager',
+      contactInfo: profileData.contactInfo ? {
+        phone: profileData.contactInfo.phone,
+        address: profileData.contactInfo.address,
+        emergencyContact: profileData.contactInfo.emergencyContact,
       } : undefined,
-      profilePicture: updatedUser.profilePicture,
-      startDate: updatedUser.startDate,
-      lastLogin: updatedUser.lastLogin,
-      isActive: updatedUser.isActive,
-      createdAt: updatedUser.createdAt,
-      updatedAt: updatedUser.updatedAt,
+      profilePicture: profileData.profilePicture,
+      startDate: profileData.startDate,
+      lastLogin: profileData.lastLogin,
+      isActive: profileData.isActive,
+      createdAt: profileData.createdAt,
+      updatedAt: profileData.updatedAt,
     };
 
     const response: SuccessResponse<UserProfile> = {
@@ -155,7 +144,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error updating user profile:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -178,28 +167,4 @@ function validateUpdateRequest(data: UpdateUserProfileRequest): string | null {
   }
 
   return null;
-}
-
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: ProfileSettingsErrorCodes | string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
 } 

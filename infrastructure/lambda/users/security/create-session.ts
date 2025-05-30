@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,7 +8,6 @@ import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -15,54 +16,28 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('🔥 SESSION CREATION LAMBDA INVOKED 🔥');
-    console.log('='.repeat(50));
-    console.log('📋 SESSION CREATION DEBUG DETAILS:');
-    console.log(`   Timestamp: ${new Date().toISOString()}`);
-    console.log(`   HTTP Method: ${event.httpMethod}`);
-    console.log(`   Resource Path: ${event.resource}`);
-    console.log(`   Path Parameters:`, JSON.stringify(event.pathParameters, null, 2));
-    console.log(`   Request Context:`, JSON.stringify(event.requestContext, null, 2));
-    console.log(`   Headers:`, JSON.stringify(event.headers, null, 2));
-    console.log(`   Body:`, event.body);
-    console.log('📋 Full event object:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
-    console.log('\n🔍 STEP 1: User ID Extraction and Validation');
-    console.log('-'.repeat(45));
     const userId = event.pathParameters?.id;
-    console.log(`   User ID from path: ${userId}`);
-    
     if (!userId) {
-      console.log('❌ FAILED: No user ID in path parameters');
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
     }
-    console.log('✅ SUCCESS: User ID extracted from path');
-
-    // Get authenticated user from context
-    console.log('\n🔍 STEP 2: Authorization Context Analysis');
-    console.log('-'.repeat(42));
-    const authorizerContext = event.requestContext.authorizer;
-    // Custom authorizer sets userId directly in context, not in claims
-    const authenticatedUserId = authorizerContext?.userId || authorizerContext?.claims?.sub;
-    console.log(`   Authorizer context:`, JSON.stringify(authorizerContext, null, 2));
-    console.log(`   Authenticated user ID: ${authenticatedUserId}`);
-    console.log(`   Path user ID: ${userId}`);
 
     // Authorization check: users can only create sessions for themselves
-    console.log('\n🔍 STEP 3: Authorization Validation');
-    console.log('-'.repeat(35));
-    if (userId !== authenticatedUserId) {
-      console.log('❌ AUTHORIZATION FAILED: User ID mismatch');
-      console.log(`   Path user ID: ${userId}`);
-      console.log(`   Authenticated user ID: ${authenticatedUserId}`);
+    if (userId !== currentUserId) {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
         'You can only create sessions for yourself'
       );
     }
-    console.log('✅ SUCCESS: Authorization validation passed');
 
     // Parse request body
     let requestBody;
@@ -107,9 +82,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Ensure the new session has the most recent timestamp
     const currentTime = new Date().toISOString();
 
-    console.log('Generated stable session identifier:', sessionIdentifier);
-    console.log('Session creation time:', currentTime);
-
     // Check user security settings for multiple sessions
     const securitySettings = await getUserSecuritySettings(userId);
     
@@ -146,16 +118,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: currentTime,
     };
 
-    console.log('Session data to be stored:', {
-      sessionId,
-      userId,
-      sessionIdentifier,
-      ipAddress,
-      userAgent,
-      loginTime,
-      expiresAt
-    });
-
     // Save session to DynamoDB
     const command = new PutCommand({
       TableName: process.env.USER_SESSIONS_TABLE!,
@@ -191,7 +153,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Create session error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Failed to create session record');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -342,28 +304,4 @@ async function terminateUserSessions(userId: string, currentSessionToken: string
     console.error('Error terminating user sessions:', error);
     // Don't throw - session creation should still succeed even if cleanup fails
   }
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 

@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
@@ -6,7 +8,6 @@ import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -21,12 +22,28 @@ interface ChangePasswordRequest {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Change password request:', JSON.stringify({ ...event, body: '[REDACTED]' }, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userEmail = user?.email;
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
     if (!userId) {
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
+    }
+
+    // Authorization check: users can only change their own password
+    if (userId !== currentUserId) {
+      return createErrorResponse(
+        403, 
+        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
+        'You can only change your own password'
+      );
     }
 
     // Parse request body
@@ -35,21 +52,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const { currentPassword, newPassword }: ChangePasswordRequest = JSON.parse(event.body);
-
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
-    const userEmail = authContext?.email;
-
-    // Authorization check: users can only change their own password
-    if (userId !== authenticatedUserId) {
-      return createErrorResponse(
-        403, 
-        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
-        'You can only change your own password'
-      );
-    }
 
     // Validate password requirements
     const passwordValidation = validatePassword(newPassword);
@@ -130,7 +132,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Change password error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -298,28 +300,4 @@ async function resetFailedLoginAttempts(userId: string): Promise<void> {
   } catch (error) {
     console.error('Error resetting failed login attempts:', error);
   }
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 

@@ -1,11 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { 
   UpdateUserSecuritySettingsRequest,
   UserSecuritySettings, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -14,12 +15,27 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Update user security settings request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
     if (!userId) {
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
+    }
+
+    // Authorization check: users can only update their own security settings
+    if (userId !== currentUserId) {
+      return createErrorResponse(
+        403, 
+        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
+        'You can only update your own security settings'
+      );
     }
 
     // Parse request body
@@ -28,19 +44,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const updateData: UpdateUserSecuritySettingsRequest = JSON.parse(event.body);
-
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-
-    // Authorization check: users can only update their own security settings
-    if (userId !== authenticatedUserId) {
-      return createErrorResponse(
-        403, 
-        ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
-        'You can only update your own security settings'
-      );
-    }
 
     // Validate input data
     const validationError = validateUpdateRequest(updateData);
@@ -120,7 +123,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Update security settings error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -147,28 +150,4 @@ function validateUpdateRequest(data: UpdateUserSecuritySettingsRequest): string 
   }
 
   return null;
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 
