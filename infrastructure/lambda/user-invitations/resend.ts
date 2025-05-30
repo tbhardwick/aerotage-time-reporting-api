@@ -1,8 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   ResendOptions, 
   SuccessResponse, 
-  ErrorResponse, 
   InvitationErrorCodes,
   UserInvitation
 } from '../shared/types';
@@ -11,19 +12,27 @@ import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Resend user invitation request:', JSON.stringify(event, null, 2));
-
   try {
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    // Role-based access control
+    if (userRole === 'employee') {
+      // Employees cannot resend invitations
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to resend invitations');
+    }
+    // Managers and admins can resend invitations
+
     // Get invitation ID from path parameters
     const invitationId = event.pathParameters?.id;
     if (!invitationId) {
       return createErrorResponse(400, InvitationErrorCodes.INVITATION_NOT_FOUND, 'Invitation ID is required');
-    }
-
-    // Get current user from Cognito token
-    const currentUserId = getCurrentUserId(event);
-    if (!currentUserId) {
-      return createErrorResponse(401, InvitationErrorCodes.INSUFFICIENT_PERMISSIONS, 'User authentication required');
     }
 
     // Parse request body (optional)
@@ -70,8 +79,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const invitationUrl = `${frontendBaseUrl}/accept-invitation?token=${updatedInvitation.invitationToken}`;
     
     const emailData: EmailTemplateData = {
-      inviterName: 'Admin', // TODO: Get actual inviter name from Users table
-      inviterEmail: 'admin@aerotage.com', // TODO: Get actual inviter email
+      inviterName: user?.email?.split('@')[0] || 'Admin',
+      inviterEmail: user?.email || 'admin@aerotage.com',
       role: updatedInvitation.role,
       department: updatedInvitation.department,
       jobTitle: updatedInvitation.jobTitle,
@@ -117,66 +126,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error resending user invitation:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
-};
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims (for backward compatibility)
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: InvitationErrorCodes, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 
+}; 

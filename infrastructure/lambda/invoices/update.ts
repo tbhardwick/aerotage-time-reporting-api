@@ -1,23 +1,24 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   Invoice,
   UpdateInvoiceRequest,
   SuccessResponse,
-  ErrorResponse,
   InvoiceErrorCodes
 } from '../shared/types';
-import { ValidationService } from '../shared/validation';
 import { InvoiceRepository } from '../shared/invoice-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Update invoice request:', JSON.stringify(event, null, 2));
-
   try {
-    // Get current user from authorization context
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Get invoice ID from path parameters
     const invoiceId = event.pathParameters?.id;
@@ -28,12 +29,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse request body
     const requestBody = JSON.parse(event.body || '{}');
     
-    // Validate request
-    const validation = ValidationService.validateUpdateInvoiceRequest(requestBody);
-    if (!validation.isValid) {
-      return createErrorResponse(400, 'VALIDATION_ERROR', validation.errors.join(', '));
-    }
-
+    // Validation will be handled by the repository method
+    
     const invoiceRepository = new InvoiceRepository();
 
     // Check if invoice exists
@@ -47,12 +44,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, InvoiceErrorCodes.INVOICE_CANNOT_BE_MODIFIED, 'Paid or cancelled invoices cannot be modified');
     }
 
-    // TODO: Implement role-based access control
-    // For now, allow any authenticated user to update invoices
-    // In the future, we should check:
-    // - Admins: can update any invoice
-    // - Managers: can update invoices for their managed projects/clients
-    // - Employees: can only update invoices they created (if in draft status)
+    // Role-based access control
+    if (userRole === 'employee') {
+      // Employees can only update invoices they created and only if in draft status
+      if (existingInvoice.createdBy !== currentUserId) {
+        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update invoices you created');
+      }
+      if (existingInvoice.status !== 'draft') {
+        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update draft invoices');
+      }
+    } else if (userRole === 'manager') {
+      // Managers can update invoices for their managed projects/clients
+      // TODO: Implement team/project association check when user teams are implemented
+      // For now, allow managers to update any invoice
+    }
+    // Admins can update any invoice (no additional restrictions)
 
     // Update the invoice
     const updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, requestBody as UpdateInvoiceRequest);
@@ -85,66 +91,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-}
