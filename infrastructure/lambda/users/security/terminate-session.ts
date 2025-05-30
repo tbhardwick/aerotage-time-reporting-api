@@ -1,10 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import jwt from 'jsonwebtoken';
 import { 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -13,7 +14,11 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Terminate session request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
 
     // Extract user ID and session ID from path parameters
     const userId = event.pathParameters?.id;
@@ -27,12 +32,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.SESSION_NOT_FOUND, 'Session ID is required');
     }
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-
     // Authorization check: users can only terminate their own sessions
-    if (userId !== authenticatedUserId) {
+    if (userId !== currentUserId) {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -43,10 +44,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Get current request's user agent and IP for session matching
     const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
     const currentIP = getClientIP(event);
-    
-    console.log('Current request details for session matching:');
-    console.log(`  User Agent: ${currentUserAgent}`);
-    console.log(`  IP Address: ${currentIP}`);
 
     // Get the session to verify it exists and belongs to the user
     const getCommand = new GetCommand({
@@ -63,7 +60,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const session = getResult.Item;
 
     // Verify the session belongs to the authenticated user
-    if (session.userId !== authenticatedUserId) {
+    if (session.userId !== currentUserId) {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -125,17 +122,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       
       // The most recently active matching session is the current one
       currentSessionId = matchingSessions[0].sessionId;
-      console.log(`Identified current session: ${currentSessionId} (most recent of ${matchingSessions.length} matching sessions)`);
     }
 
     // Check if the session being terminated is the current session
     const isCurrentSession = sessionId === currentSessionId;
 
     if (isCurrentSession) {
-      console.log('Preventing termination of current session:', {
-        sessionId,
-        reason: 'Cannot terminate current session'
-      });
       return createErrorResponse(
         400, 
         ProfileSettingsErrorCodes.CANNOT_TERMINATE_CURRENT_SESSION, 
@@ -150,12 +142,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     });
 
     await docClient.send(deleteCommand);
-
-    console.log('Session deleted successfully:', {
-      sessionId,
-      userId,
-      terminatedBy: authenticatedUserId
-    });
 
     const response: SuccessResponse<{ message: string }> = {
       success: true,
@@ -175,7 +161,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Terminate session error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -192,28 +178,4 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   }
   
   return xRealIP || cfConnectingIP || sourceIP || 'unknown';
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 

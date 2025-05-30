@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
@@ -6,12 +8,8 @@ import { UserRepository } from '../shared/user-repository';
 import { 
   CreateEmailChangeRequest, 
   EmailChangeRequestResponse,
-  EmailChangeErrorCodes,
-  SuccessResponse, 
-  ErrorResponse 
+  EmailChangeErrorCodes
 } from '../shared/types';
-import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
 const emailService = new EmailChangeService();
@@ -19,32 +17,20 @@ const userRepo = new UserRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('📧 Submit Email Change Request - Request received:', {
-      httpMethod: event.httpMethod,
-      path: event.path,
-      body: event.body ? 'Present' : 'None',
-      headers: {
-        authorization: event.headers.authorization ? 'Bearer [REDACTED]' : 'None',
-        'content-type': event.headers['content-type']
-      }
-    });
-
-    // Extract user information from authorization context
-    const authContext = event.requestContext.authorizer;
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
     if (!currentUserId) {
-      console.log('❌ No user ID found in authorization context');
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Get user ID from path parameters (for admin operations) or use current user
     const targetUserId = event.pathParameters?.id || currentUserId;
 
     // Check permissions - users can only change their own email, admins can change any
     if (targetUserId !== currentUserId && userRole !== 'admin') {
-      console.log(`❌ Insufficient permissions. User ${currentUserId} trying to change email for ${targetUserId}`);
       return createErrorResponse(403, EmailChangeErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS, 'You can only change your own email address');
     }
 
@@ -59,34 +45,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     } catch (error) {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
-
-    console.log('📋 Validating email change request...');
     
     // Validate request data
     const validation = EmailChangeValidation.validateCreateEmailChangeRequest(createRequest as unknown as Record<string, unknown>);
     if (!validation.isValid) {
-      console.log('❌ Validation failed:', validation.errors);
       return createErrorResponse(400, EmailChangeErrorCodes.INVALID_REQUEST_DATA, validation.errors.join(', '));
     }
 
     // Get current user information
-    console.log('🔍 Getting current user information...');
     const currentUser = await userRepo.getUserById(targetUserId);
     if (!currentUser) {
-      console.log('❌ User not found:', targetUserId);
       return createErrorResponse(404, 'USER_NOT_FOUND', 'User not found');
     }
 
     // Check if new email already exists
-    console.log('🔍 Checking if new email already exists...');
     const existingUser = await userRepo.getUserByEmail(createRequest.newEmail);
     if (existingUser) {
-      console.log('❌ Email already exists:', createRequest.newEmail);
       return createErrorResponse(409, EmailChangeErrorCodes.EMAIL_ALREADY_EXISTS, 'Email address is already in use');
     }
 
     // Check for active email change requests
-    console.log('🔍 Checking for active email change requests...');
     const hasActiveRequest = await emailChangeRepo.hasActiveEmailChangeRequest(targetUserId);
 
     // Validate business rules
@@ -98,7 +76,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     );
 
     if (!businessValidation.isValid) {
-      console.log('❌ Business validation failed:', businessValidation.errors);
       const errorCode = businessValidation.errors[0] as EmailChangeErrorCodes;
       return createErrorResponse(409, errorCode, businessValidation.errors.join(', '));
     }
@@ -108,7 +85,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userAgent = event.headers['User-Agent'] || event.headers['user-agent'];
 
     // Create email change request
-    console.log('📧 Creating email change request...');
     const emailChangeRequest = await emailChangeRepo.createEmailChangeRequest(
       targetUserId,
       currentUser.email,
@@ -120,7 +96,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     );
 
     // Send verification emails
-    console.log('📨 Sending verification emails...');
     try {
       // Send verification email to current email
       await emailService.sendVerificationEmail(emailChangeRequest, 'current', currentUser.name);
@@ -128,7 +103,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // Send verification email to new email
       await emailService.sendVerificationEmail(emailChangeRequest, 'new', currentUser.name);
     } catch (emailError) {
-      console.error('❌ Failed to send verification emails:', emailError);
+      console.error('Failed to send verification emails:', emailError);
       // Don't fail the request if email sending fails, but log it
       // The user can resend verification emails later
     }
@@ -150,8 +125,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Calculate estimated completion time (24-48 hours depending on approval requirement)
     const estimatedHours = requiresApproval ? 48 : 24;
     const estimatedCompletionTime = new Date(Date.now() + estimatedHours * 60 * 60 * 1000).toISOString();
-
-    console.log('✅ Email change request created successfully:', emailChangeRequest.id);
 
     const response: EmailChangeRequestResponse = {
       success: true,
@@ -183,7 +156,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('❌ Error submitting email change request:', error);
+    console.error('Error submitting email change request:', error);
 
     // Handle specific errors
     if ((error as Error).message === EmailChangeErrorCodes.EMAIL_ALREADY_EXISTS) {
@@ -194,6 +167,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(409, EmailChangeErrorCodes.ACTIVE_REQUEST_EXISTS, 'You already have an active email change request');
     }
 
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred while submitting the email change request');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 }; 
