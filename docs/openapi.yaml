@@ -1724,10 +1724,26 @@ components:
           properties:
             code:
               type: string
+              description: Error code identifier
+              example: "UNAUTHORIZED"
             message:
               type: string
+              description: Human-readable error message
+              example: "User authentication required"
             details:
               type: object
+              description: Optional additional error details
+              additionalProperties: true
+              required: false
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO timestamp when the error occurred
+          example: "2025-05-30T16:10:23.529Z"
+      required:
+        - success
+        - error
+        - timestamp
 
 paths:
   # System Health
