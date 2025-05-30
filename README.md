@@ -68,9 +68,27 @@ The Aerotage Time Reporting API is a **production-ready serverless backend** tha
 - **Amazon SES** - Email service for notifications and invoice delivery
 - **Amazon CloudWatch** - Monitoring, logging, and alerting
 
+### **🏗️ 8-Stack Architecture Organization**
+```
+Foundation Layer (Parallel Deployment):
+├── CognitoStack      # Authentication & User Management
+├── DatabaseStack     # DynamoDB Tables & Indexes  
+├── StorageStack      # S3 Buckets (storage, invoices, exports)
+└── SesStack          # Email Service & Templates
+
+API Layer (Depends on Foundation):
+└── ApiStack          # API Gateway + 46+ Lambda Functions
+
+Supporting Services (Depends on API + Foundation):
+├── DomainStack       # Route 53 + SSL + Custom Domains
+├── DocumentationStack # S3 + CloudFront for Swagger UI
+└── MonitoringStack   # CloudWatch Logs, Metrics & Alarms
+```
+
 ### API Design
 - RESTful API design principles
-- **Standardized authentication and response patterns** ✅ **ENHANCED**
+- **🔐 MANDATORY Authentication Patterns** - See `.cursor/rules/aerotage-api-project-rule.mdc` (**SINGLE SOURCE OF TRUTH**)
+- **🔐 MANDATORY Database Access** - Repository pattern required (NO direct DynamoDB access)
 - Comprehensive error handling with consistent format
 - Rate limiting and throttling
 - CORS support for web applications
@@ -136,26 +154,36 @@ Detailed documentation is available in the [`/docs`](./docs) directory:
 ```
 ├── 📁 infrastructure/          # AWS CDK Infrastructure Code
 │   ├── bin/                    # CDK app entry points
-│   ├── lib/                    # CDK stack definitions
+│   ├── lib/                    # CDK stack definitions (8 stacks)
 │   ├── lambda/                 # Lambda function implementations (52+ functions)
+│   │   ├── shared/             # auth-helper, response-helper, repositories
+│   │   ├── users/              # create, update, delete, list, security
+│   │   ├── time-entries/       # create, update, delete, list, bulk-operations
+│   │   ├── projects/           # create, update, delete, list, assignments
+│   │   ├── clients/            # create, update, delete, list
+│   │   ├── reports/            # generate, export, scheduled
+│   │   ├── invoices/           # generate, export, templates
+│   │   ├── analytics/          # dashboard, metrics, insights
+│   │   ├── email-change/       # request, confirm, validate
+│   │   ├── user-invitations/   # send, accept, resend
+│   │   └── health/             # health-check (public endpoint)
 │   └── test/                   # Infrastructure unit tests
 ├── 📁 scripts/                 # Operational & Testing Scripts
 │   ├── test-*.js              # API endpoint testing scripts
 │   ├── setup-*.sh             # Environment setup scripts
+│   ├── get-cognito-token.js    # MANDATORY authentication utility
 │   └── build-*.js             # Build and deployment utilities
 ├── 📁 docs/                    # Project Documentation
 │   ├── API_REFERENCE.md       # Complete API documentation
 │   ├── openapi.yaml           # OpenAPI specification
 │   └── swagger-ui/            # Interactive API documentation
 ├── 📁 tools/                   # Development Utilities
-│   └── auth/                  # Authentication utilities and test payloads
+│   └── debug/                  # Debug utilities and test tools
 ├── 📁 tests/                   # Jest Unit Tests
 │   └── setup.ts              # Test setup configuration
-└── 📁 src/                     # Source Code (TypeScript)
-    ├── handlers/              # Lambda handlers
-    ├── middleware/            # Middleware functions
-    ├── models/                # Data models
-    └── types/                 # TypeScript type definitions
+└── 📁 .cursor/                # **SINGLE SOURCE OF TRUTH**
+    └── rules/                 # **MANDATORY development patterns**
+        └── aerotage-api-project-rule.mdc  # **Core development rules**
 ```
 
 ### Available Scripts
@@ -221,7 +249,11 @@ npm run destroy:dev        # Destroy development stack
 - Write tests for new functionality
 - Update documentation for API changes
 - Follow AWS CDK best practices
-- **Use standardized authentication and response patterns** ✅ **REQUIRED**
+- **📋 FOLLOW CURSOR RULES** - `.cursor/rules/aerotage-api-project-rule.mdc` (**SINGLE SOURCE OF TRUTH**)
+- **🔐 MANDATORY Authentication**: Use `getCurrentUserId()` and `getAuthenticatedUser()` from shared helpers
+- **🔐 MANDATORY Database Access**: Use repository pattern (NO direct DynamoDB access)
+- **🚫 FORBIDDEN**: Dual TypeScript/JavaScript implementations
+- **🚫 FORBIDDEN**: Direct AWS SDK usage in Lambda functions
 
 ## 📄 License
 

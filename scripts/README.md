@@ -1,5 +1,13 @@
 # Scripts Directory
 
+## 🚨 **CRITICAL: Development Patterns Authority**
+
+**⚠️ MANDATORY**: All scripts must follow `.cursor/rules/aerotage-api-project-rule.mdc` (**SINGLE SOURCE OF TRUTH**) for:
+- **Authentication patterns** (MANDATORY `getCognitoToken()` with AccessToken)
+- **Database access** (MANDATORY repository pattern - NO direct DynamoDB)
+- **Infrastructure assumptions** (8-stack architecture)
+- **Testing patterns** (Standardized error handling and validation)
+
 ## 📁 **Operational & Testing Scripts**
 
 This directory contains all operational scripts, testing utilities, and automation tools for the Aerotage Time Reporting API. These scripts support development, testing, deployment, and maintenance workflows.
@@ -164,9 +172,25 @@ node scripts/update-documentation.js
 
 ## 🔐 **Authentication Requirements**
 
-### **Test Scripts Authentication**
-Most test scripts require valid AWS Cognito credentials:
+### **🚨 MANDATORY Test Authentication Pattern**
+**⚠️ CRITICAL**: Follow `.cursor/rules/aerotage-api-project-rule.mdc` (**SINGLE SOURCE OF TRUTH**) for authentication patterns.
 
+All test scripts MUST use this MANDATORY pattern:
+
+```javascript
+const { getCognitoToken } = require('./scripts/get-cognito-token');
+
+async function testEndpoints() {
+  const authResult = await getCognitoToken('bhardwick@aerotage.com', 'Aerotage*2025');
+  const token = authResult.AccessToken; // USE AccessToken, NOT IdToken
+  
+  const response = await makeRequest(`${API_BASE_URL}/endpoint`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+}
+```
+
+### **Configuration Requirements**
 ```javascript
 const CONFIG = {
   API_BASE_URL: 'https://time-api-dev.aerotage.com',
@@ -178,11 +202,6 @@ const CONFIG = {
   }
 };
 ```
-
-### **Required Permissions**
-- **Admin/Manager Role**: For full API testing
-- **Valid Cognito Account**: Active user in the user pool
-- **Network Access**: Connectivity to AWS API Gateway
 
 ## 📈 **Performance Expectations**
 

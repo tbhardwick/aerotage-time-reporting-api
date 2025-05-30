@@ -1,5 +1,21 @@
 # Documentation
 
+## 🚨 **CRITICAL: Documentation Authority**
+
+**⚠️ IMPORTANT**: The `.cursor/rules/aerotage-api-project-rule.mdc` file is the **SINGLE SOURCE OF TRUTH** for all development patterns.
+
+- ✅ **Follow ONLY cursor rules** - Ignore conflicting guidance in documentation files
+- ❌ **Documentation files may be outdated** - Many contain deprecated patterns being standardized
+- 🔄 **Documentation cleanup in progress** - 52 files being reduced to 12 essential guides
+- 📋 **When in doubt**: Cursor rules take precedence over ANY other documentation
+
+### **🔐 MANDATORY Patterns (Cursor Rules Only)**
+- **Authentication**: Use `getCurrentUserId()` and `getAuthenticatedUser()` from shared helpers
+- **Database Access**: Use repository pattern (NO direct DynamoDB access)
+- **Test Authentication**: Use `getCognitoToken()` with AccessToken (NOT IdToken)
+- **Infrastructure**: Follow 8-stack architecture pattern
+- **Forbidden**: Dual TypeScript/JavaScript implementations
+
 ## 📚 **Documentation Navigation**
 
 This directory contains comprehensive technical documentation for the Aerotage Time Reporting API. Use this guide to navigate to the specific documentation you need.
@@ -149,11 +165,11 @@ Interactive API documentation:
 ## 👥 **Documentation by Role**
 
 ### **🧑‍💻 Backend Developers**
+- **[Cursor Rules](../.cursor/rules/aerotage-api-project-rule.mdc)** - **🚨 MANDATORY FIRST - SINGLE SOURCE OF TRUTH**
 - [DEVELOPMENT.md](./DEVELOPMENT.md) - Development environment setup
 - [API_REFERENCE.md](./API_REFERENCE.md) - Complete API documentation
 - [LINTING_GUIDE.md](./LINTING_GUIDE.md) - Code quality standards
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common development issues
-- **[Cursor Rules](../.cursor/rules/aerotage-api-project-rule.mdc)** - **MANDATORY authentication patterns**
 
 ### **🎨 Frontend Developers**
 - [FRONTEND_INTEGRATION_GUIDE.md](./FRONTEND_INTEGRATION_GUIDE.md) - Complete integration guide
@@ -185,19 +201,21 @@ Interactive API documentation:
 ## 📝 **Documentation Maintenance**
 
 ### **Keeping Docs Updated**
+- **🚨 CURSOR RULES FIRST**: All changes must align with `.cursor/rules/aerotage-api-project-rule.mdc`
 - **API Changes**: Update [API_REFERENCE.md](./API_REFERENCE.md) when endpoints change
 - **New Features**: Update [PROJECT_STATUS.md](./PROJECT_STATUS.md) when features are added
 - **Issues Found**: Add solutions to [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
 - **Security Changes**: Update [SECURITY_GUIDE.md](./SECURITY_GUIDE.md) when security features change
 - **Integration Changes**: Update [FRONTEND_INTEGRATION_GUIDE.md](./FRONTEND_INTEGRATION_GUIDE.md) when patterns change
-- **Authentication Patterns**: **Update cursor rules only** - single source of truth ✅ **CRITICAL**
+- **⚠️ CRITICAL**: Changes conflicting with cursor rules are FORBIDDEN
 
 ### **Contributing to Documentation**
 - All documentation is version controlled with the codebase
 - Changes should be reviewed as part of the development process
 - Breaking changes must be clearly documented
 - Follow the established format and style
-- **Authentication patterns must align with cursor rules** ✅ **MANDATORY**
+- **📋 MANDATORY**: All documentation must align with cursor rules (**SINGLE SOURCE OF TRUTH**)
+- **🚫 FORBIDDEN**: Documentation that conflicts with cursor rules
 
 ---
 
