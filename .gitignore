@@ -6,9 +6,10 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-# Compiled JavaScript files (should not be committed)
-infrastructure/*.js
-infrastructure/*.js.map
+# Compiled TypeScript outputs (✅ FIXED: dist/ contains all compiled files)
+dist/
+*.js.map
+*.d.ts.map
 
 # Runtime data
 pids
@@ -85,9 +86,12 @@ aws-exports.js
 # AWS SAM
 .aws-sam/
 
-# CDK
+# CDK specific (✅ ENHANCED)
 cdk.out/
 .cdk.staging/
+cdk.context.json
+*.template.json
+*.template.yaml
 
 # Terraform
 *.tfstate
@@ -119,11 +123,21 @@ amplifytools.xcconfig
 .secret-*
 
 # Build artifacts
-dist/
+# dist/ - already covered above
 build/
 # lib/ - commented out to allow infrastructure/lib
 tmp/
 temp/
+
+# Backup files (✅ NEW)
+dns-backups/
+*.backup
+*.bak
+*-backup-*
+backup-*
+
+# Obsolete directories (✅ NEW)
+src/
 
 # Logs
 logs
