@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
@@ -105,29 +105,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Calculate estimated completion time (usually 24-48 hours for email change processing)
     const estimatedCompletionTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const response: ApproveRequestResponse = {
-      success: true,
-      data: {
-        requestId: approvedRequest.id,
-        status: 'approved',
-        approvedAt: approvedRequest.approvedAt!,
-        approvedBy: {
-          id: currentUserId,
-          name: approverUser?.name || 'Unknown Admin'
-        },
-        estimatedCompletionTime
+    const responseData = {
+      requestId: approvedRequest.id,
+      status: 'approved',
+      approvedAt: approvedRequest.approvedAt!,
+      approvedBy: {
+        id: currentUserId,
+        name: approverUser?.name || 'Unknown Admin'
       },
-      message: 'Email change request approved successfully'
+      estimatedCompletionTime
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, 'Email change request approved successfully');
 
   } catch (error) {
     console.error('Error approving email change request:', error);

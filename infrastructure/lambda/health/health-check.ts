@@ -1,4 +1,5 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 interface HealthCheckResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -39,22 +40,7 @@ export const handler = async (): Promise<APIGatewayProxyResult> => {
       uptime,
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: healthResponse,
-      }),
-    };
+    return createSuccessResponse(healthResponse);
   } catch (error) {
     console.error('Health check error:', error);
     
@@ -71,25 +57,6 @@ export const handler = async (): Promise<APIGatewayProxyResult> => {
       uptime: Math.floor((Date.now() - startTime) / 1000),
     };
 
-    return {
-      statusCode: 503,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-      body: JSON.stringify({
-        success: false,
-        data: errorResponse,
-        error: {
-          code: 'HEALTH_CHECK_FAILED',
-          message: 'Health check failed',
-        },
-      }),
-    };
+    return createErrorResponse(503, 'HEALTH_CHECK_FAILED', 'Health check failed');
   }
 }; 

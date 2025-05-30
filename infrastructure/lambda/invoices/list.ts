@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
   Invoice,
-  PaginationResponse,
   InvoiceFilters
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { InvoiceRepository } from '../shared/invoice-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Log request for debugging in development
@@ -103,32 +102,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // - Managers: see invoices for their managed projects/clients
     // - Employees: see only invoices they created or are assigned to
 
-    const response: PaginationResponse<Invoice> = {
-      success: true,
-      data: {
-        items: result.invoices,
-        pagination: {
-          total: result.total,
-          limit: filters.limit || 50,
-          offset: filters.offset || 0,
-          hasMore: result.hasMore,
-        },
+    const responseData = {
+      items: result.invoices,
+      pagination: {
+        total: result.total,
+        limit: filters.limit || 50,
+        offset: filters.offset || 0,
+        hasMore: result.hasMore,
       },
     };
 
     console.log('✅ Successfully prepared response:', {
-      itemCount: response.data.items.length,
-      pagination: response.data.pagination
+      itemCount: responseData.items.length,
+      pagination: responseData.pagination
     });
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(responseData, 200, 'Invoices retrieved successfully');
 
   } catch (error) {
     // Log error for debugging

@@ -2,8 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
   AcceptInvitationRequest, 
   AcceptInvitationResponse, 
-  SuccessResponse, 
-  ErrorResponse, 
   InvitationErrorCodes,
   User
 } from '../shared/types';
@@ -12,6 +10,7 @@ import { InvitationRepository } from '../shared/invitation-repository';
 import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
 import { UserRepository } from '../shared/user-repository';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Accept invitation request:', JSON.stringify(event, null, 2));
@@ -93,72 +92,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Prepare response
-    const response: SuccessResponse<AcceptInvitationResponse> = {
-      success: true,
-      data: {
-        user,
-        invitation: {
-          ...updatedInvitation,
-          invitationToken: '', // Don't return the token
-          tokenHash: '', // Don't return the hash
-        },
+    const responseData = {
+      user,
+      invitation: {
+        ...updatedInvitation,
+        invitationToken: '', // Don't return the token
+        tokenHash: '', // Don't return the hash
       },
-      message: 'Invitation accepted successfully',
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, 'Invitation accepted successfully');
 
   } catch (error) {
     console.error('Error accepting invitation:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: InvitationErrorCodes, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 

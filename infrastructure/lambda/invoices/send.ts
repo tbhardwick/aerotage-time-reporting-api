@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   Invoice,
   SendInvoiceRequest,
-  SuccessResponse,
   InvoiceErrorCodes
 } from '../shared/types';
 import { InvoiceRepository } from '../shared/invoice-repository';
@@ -75,20 +74,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // TODO: Record the actual sending in a separate operation
     // This would update sentAt, sentBy, and increment remindersSent if this is a reminder
 
-    const response: SuccessResponse<Invoice> = {
-      success: true,
-      data: updatedInvoice,
-      message: 'Invoice sent successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(updatedInvoice, 200, 'Invoice sent successfully');
 
   } catch (error) {
     console.error('Error sending invoice:', error);

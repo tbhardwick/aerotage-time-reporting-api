@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  SuccessResponse, 
   InvitationErrorCodes
 } from '../shared/types';
 import { InvitationRepository } from '../shared/invitation-repository';
@@ -48,20 +47,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status: 'cancelled',
     });
 
-    const response: SuccessResponse<void> = {
-      success: true,
-      data: undefined,
-      message: 'Invitation cancelled successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(undefined, 200, 'Invitation cancelled successfully');
 
   } catch (error) {
     console.error('Error cancelling user invitation:', error);

@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { UserRepository } from '../shared/user-repository';
 
@@ -99,39 +99,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Validate required fields
     if (!filterRequest.dataSource || !filterRequest.filters) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_REQUIRED_FIELDS',
-            message: 'dataSource and filters are required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_REQUIRED_FIELDS', 'dataSource and filters are required');
     }
 
     // Validate data source
     const validDataSources = ['time-entries', 'projects', 'clients', 'users'];
     if (!validDataSources.includes(filterRequest.dataSource)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_DATA_SOURCE',
-            message: `Data source must be one of: ${validDataSources.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_DATA_SOURCE', `Data source must be one of: ${validDataSources.join(', ')}`);
     }
 
     // Apply role-based access control
@@ -143,35 +117,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const executionTime = Date.now() - startTime;
     filteredData.executionTime = executionTime;
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: filteredData,
-      }),
-    };
+    return createSuccessResponse(filteredData);
 
   } catch (error) {
     console.error('Error in advanced filtering:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'FILTER_FAILED',
-          message: 'Failed to execute advanced filter',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'FILTER_FAILED', 'Failed to execute advanced filter');
   }
 };
 

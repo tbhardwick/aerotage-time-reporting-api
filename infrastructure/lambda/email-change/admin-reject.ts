@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
@@ -99,29 +99,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    const response: RejectRequestResponse = {
-      success: true,
-      data: {
-        requestId: rejectedRequest.id,
-        status: 'rejected',
-        rejectedAt: rejectedRequest.rejectedAt!,
-        rejectedBy: {
-          id: currentUserId,
-          name: rejecterUser?.name || 'Unknown Admin'
-        },
-        rejectionReason: rejectRequest.rejectionReason
+    const responseData = {
+      requestId: rejectedRequest.id,
+      status: 'rejected',
+      rejectedAt: rejectedRequest.rejectedAt!,
+      rejectedBy: {
+        id: currentUserId,
+        name: rejecterUser?.name || 'Unknown Admin'
       },
-      message: 'Email change request rejected successfully'
+      rejectionReason: rejectRequest.rejectionReason
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, 'Email change request rejected successfully');
 
   } catch (error) {
     console.error('Error rejecting email change request:', error);

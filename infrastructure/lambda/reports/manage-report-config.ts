@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { randomUUID } from 'crypto';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
@@ -94,57 +94,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       
       case 'PUT':
         if (!reportId) {
-          return {
-            statusCode: 400,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              success: false,
-              error: {
-                code: 'MISSING_REPORT_ID',
-                message: 'Report ID is required for updates',
-              },
-            }),
-          };
+          return createErrorResponse(400, 'MISSING_REPORT_ID', 'Report ID is required for updates');
         }
         return await updateReportConfig(reportId, event, userId, userRole);
       
       case 'DELETE':
         if (!reportId) {
-          return {
-            statusCode: 400,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              success: false,
-              error: {
-                code: 'MISSING_REPORT_ID',
-                message: 'Report ID is required for deletion',
-              },
-            }),
-          };
+          return createErrorResponse(400, 'MISSING_REPORT_ID', 'Report ID is required for deletion');
         }
         return await deleteReportConfig(reportId, userId, userRole);
       
       default:
-        return {
-          statusCode: 405,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: 'METHOD_NOT_ALLOWED',
-              message: `HTTP method ${httpMethod} not allowed`,
-            },
-          }),
-        };
+        return createErrorResponse(405, 'METHOD_NOT_ALLOWED', `HTTP method ${httpMethod} not allowed`);
     }
 
   } catch (error) {
@@ -166,57 +127,18 @@ async function createReportConfig(event: APIGatewayProxyEvent, userId: string, u
 
     // Validate required fields
     if (!requestBody.reportType || !requestBody.name || !requestBody.filters) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_REQUIRED_FIELDS',
-            message: 'reportType, name, and filters are required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_REQUIRED_FIELDS', 'reportType, name, and filters are required');
     }
 
     // Validate report type
     const validReportTypes = ['time', 'project', 'client', 'dashboard'];
     if (!validReportTypes.includes(requestBody.reportType)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REPORT_TYPE',
-            message: `Report type must be one of: ${validReportTypes.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_REPORT_TYPE', `Report type must be one of: ${validReportTypes.join(', ')}`);
     }
 
     // Check permissions for shared reports
     if (requestBody.isShared && userRole === 'employee') {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INSUFFICIENT_PERMISSIONS',
-            message: 'Only managers and admins can create shared reports',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'Only managers and admins can create shared reports');
     }
 
     // Create report configuration
@@ -246,17 +168,7 @@ async function createReportConfig(event: APIGatewayProxyEvent, userId: string, u
     // Save to database
     await saveReportConfig(reportConfig);
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: reportConfig,
-      }),
-    };
+    return createSuccessResponse(reportConfig, 201);
 
   } catch (error) {
     console.error('Error creating report config:', error);
@@ -269,51 +181,15 @@ async function getReportConfig(reportId: string, userId: string, userRole: strin
     const reportConfig = await fetchReportConfig(reportId);
     
     if (!reportConfig) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'REPORT_NOT_FOUND',
-            message: 'Report configuration not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report configuration not found');
     }
 
     // Check access permissions
     if (!canAccessReport(reportConfig, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to access this report',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to access this report');
     }
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: reportConfig,
-      }),
-    };
+    return createSuccessResponse(reportConfig);
 
   } catch (error) {
     console.error('Error getting report config:', error);
@@ -348,23 +224,13 @@ async function listReportConfigs(event: APIGatewayProxyEvent, userId: string, us
     // Sort by updatedAt descending
     uniqueReports.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+    return createSuccessResponse({
+      reports: uniqueReports,
+      pagination: {
+        hasMore: uniqueReports.length >= limit,
+        totalCount: uniqueReports.length,
       },
-      body: JSON.stringify({
-        success: true,
-        data: {
-          reports: uniqueReports,
-          pagination: {
-            hasMore: uniqueReports.length >= limit,
-            totalCount: uniqueReports.length,
-          },
-        },
-      }),
-    };
+    });
 
   } catch (error) {
     console.error('Error listing report configs:', error);
@@ -378,38 +244,12 @@ async function updateReportConfig(reportId: string, event: APIGatewayProxyEvent,
     const existingConfig = await fetchReportConfig(reportId);
     
     if (!existingConfig) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'REPORT_NOT_FOUND',
-            message: 'Report configuration not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report configuration not found');
     }
 
     // Check permissions
     if (!canModifyReport(existingConfig, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to modify this report',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to modify this report');
     }
 
     // Parse request body
@@ -435,17 +275,7 @@ async function updateReportConfig(reportId: string, event: APIGatewayProxyEvent,
     // Save updated configuration
     await saveReportConfig(updatedConfig);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: updatedConfig,
-      }),
-    };
+    return createSuccessResponse(updatedConfig);
 
   } catch (error) {
     console.error('Error updating report config:', error);
@@ -459,57 +289,21 @@ async function deleteReportConfig(reportId: string, userId: string, userRole: st
     const existingConfig = await fetchReportConfig(reportId);
     
     if (!existingConfig) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'REPORT_NOT_FOUND',
-            message: 'Report configuration not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report configuration not found');
     }
 
     // Check permissions
     if (!canModifyReport(existingConfig, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to delete this report',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to delete this report');
     }
 
     // Delete the configuration
     await deleteReportConfigFromDB(reportId);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: {
-          message: 'Report configuration deleted successfully',
-          reportId,
-        },
-      }),
-    };
+    return createSuccessResponse({
+      message: 'Report configuration deleted successfully',
+      reportId,
+    });
 
   } catch (error) {
     console.error('Error deleting report config:', error);

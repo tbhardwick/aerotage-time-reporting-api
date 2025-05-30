@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   InvitationFilters, 
   PaginationResponse, 
@@ -55,27 +55,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       tokenHash: '', // Don't return the token hash
     }));
 
-    const response: PaginationResponse<UserInvitation> = {
-      success: true,
-      data: {
-        items: sanitizedInvitations,
-        pagination: {
-          total: result.total,
-          limit: filters.limit || 50,
-          offset: filters.offset || 0,
-          hasMore: result.hasMore,
-        },
+    const responseData = {
+      items: sanitizedInvitations,
+      pagination: {
+        total: result.total,
+        limit: filters.limit || 50,
+        offset: filters.offset || 0,
+        hasMore: result.hasMore,
       },
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData);
 
   } catch (error) {
     console.error('Error listing user invitations:', error);

@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { InvoiceRepository } from '../shared/invoice-repository';
 import { 
   CreateInvoiceRequest,
   Invoice,
-  SuccessResponse,
   InvoiceErrorCodes
 } from '../shared/types';
 
@@ -55,19 +54,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Generate invoice
     const invoice = await invoiceRepository.createInvoice(requestData, currentUserId);
 
-    const response: SuccessResponse<Invoice> = {
-      success: true,
-      data: invoice,
-    };
-
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(invoice, 201, 'Invoice generated successfully');
 
   } catch (error) {
     console.error('Error generating invoice:', error);

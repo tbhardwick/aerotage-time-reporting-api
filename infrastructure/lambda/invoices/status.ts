@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   Invoice,
   Payment,
@@ -109,20 +109,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       responseData.payment = payment;
     }
 
-    const response: SuccessResponse<any> = {
-      success: true,
-      data: responseData,
-      message: operation === 'recordPayment' ? 'Payment recorded successfully' : 'Invoice status updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    const message = operation === 'recordPayment' ? 'Payment recorded successfully' : 'Invoice status updated successfully';
+    
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(responseData, 200, message);
 
   } catch (error) {
     console.error('Error updating invoice status:', error);

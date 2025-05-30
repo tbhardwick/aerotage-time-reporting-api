@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
@@ -126,34 +126,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const estimatedHours = requiresApproval ? 48 : 24;
     const estimatedCompletionTime = new Date(Date.now() + estimatedHours * 60 * 60 * 1000).toISOString();
 
-    const response: EmailChangeRequestResponse = {
-      success: true,
-      data: {
-        requestId: emailChangeRequest.id,
-        status: emailChangeRequest.status,
-        currentEmail: emailChangeRequest.currentEmail,
-        newEmail: emailChangeRequest.newEmail,
-        reason: emailChangeRequest.reason,
-        customReason: emailChangeRequest.customReason,
-        requestedAt: emailChangeRequest.requestedAt,
-        estimatedCompletionTime,
-        verificationRequired: {
-          currentEmail: true,
-          newEmail: true
-        },
-        nextSteps
+    const responseData = {
+      requestId: emailChangeRequest.id,
+      status: emailChangeRequest.status,
+      currentEmail: emailChangeRequest.currentEmail,
+      newEmail: emailChangeRequest.newEmail,
+      reason: emailChangeRequest.reason,
+      customReason: emailChangeRequest.customReason,
+      requestedAt: emailChangeRequest.requestedAt,
+      estimatedCompletionTime,
+      verificationRequired: {
+        currentEmail: true,
+        newEmail: true
       },
-      message: 'Email change request submitted successfully'
+      nextSteps
     };
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 201, 'Email change request submitted successfully');
 
   } catch (error) {
     console.error('Error submitting email change request:', error);

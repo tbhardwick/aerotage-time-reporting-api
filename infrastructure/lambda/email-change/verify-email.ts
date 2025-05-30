@@ -8,7 +8,7 @@ import {
   EmailVerificationResponse,
   EmailChangeErrorCodes
 } from '../shared/types';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
 const emailService = new EmailChangeService();
@@ -154,29 +154,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log('✅ Email verification completed successfully');
 
-    const response: EmailVerificationResponse = {
-      success: true,
-      data: {
-        requestId: updatedRequest.id,
-        emailType: verificationRequest.emailType,
-        verified: true,
-        verificationStatus: {
-          currentEmailVerified: updatedRequest.currentEmailVerified,
-          newEmailVerified: updatedRequest.newEmailVerified
-        },
-        nextStep,
-        message
-      }
+    const responseData = {
+      requestId: updatedRequest.id,
+      emailType: verificationRequest.emailType,
+      verified: true,
+      verificationStatus: {
+        currentEmailVerified: updatedRequest.currentEmailVerified,
+        newEmailVerified: updatedRequest.newEmailVerified
+      },
+      nextStep,
+      message
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData);
 
   } catch (error) {
     console.error('❌ Error verifying email:', error);

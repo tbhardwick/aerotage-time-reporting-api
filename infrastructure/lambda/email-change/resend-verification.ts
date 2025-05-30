@@ -9,7 +9,7 @@ import {
   EmailChangeErrorCodes
 } from '../shared/types';
 import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
 const emailService = new EmailChangeService();
@@ -137,26 +137,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log('✅ Verification email resent successfully');
 
-    const response: ResendVerificationResponse = {
-      success: true,
-      data: {
-        requestId: emailChangeRequest.id,
-        emailType: resendRequest.emailType,
-        emailAddress,
-        resentAt: new Date().toISOString(),
-        expiresAt: tokenInfo.expiresAt
-      },
-      message: `Verification email resent to ${emailAddress}`
+    const responseData = {
+      requestId: emailChangeRequest.id,
+      emailType: resendRequest.emailType,
+      emailAddress,
+      resentAt: new Date().toISOString(),
+      expiresAt: tokenInfo.expiresAt
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, `Verification email resent to ${emailAddress}`);
 
   } catch (error) {
     console.error('❌ Error resending verification email:', error);

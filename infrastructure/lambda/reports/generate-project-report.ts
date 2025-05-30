@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { createHash } from 'crypto';
 
@@ -97,20 +97,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Check permissions - only managers and admins can view project reports
     if (userRole === 'employee') {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INSUFFICIENT_PERMISSIONS',
-            message: 'Project reports require manager or admin privileges',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'Project reports require manager or admin privileges');
     }
 
     // Parse query parameters
@@ -139,17 +126,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const cachedReport = await getCachedReport(cacheKey);
     if (cachedReport) {
       console.log('Returning cached project report');
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: true,
-          data: cachedReport,
-        }),
-      };
+      return createSuccessResponse(cachedReport);
     }
 
     // Generate new report
@@ -158,17 +135,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Cache the report (30 minutes TTL for project reports)
     await cacheReport(cacheKey, reportData, 1800);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: reportData,
-      }),
-    };
+    return createSuccessResponse(reportData);
 
   } catch (error) {
     console.error('Error generating project report:', error);

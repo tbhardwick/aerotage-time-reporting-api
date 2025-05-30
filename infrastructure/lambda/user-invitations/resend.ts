@@ -1,9 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   ResendOptions, 
-  SuccessResponse, 
   InvitationErrorCodes,
   UserInvitation
 } from '../shared/types';
@@ -104,24 +103,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       tokenHash: '', // Don't return the token hash
     };
 
-    const response: SuccessResponse<{ id: string; expiresAt: string; resentAt: string }> = {
-      success: true,
-      data: {
-        id: responseInvitation.id,
-        expiresAt: responseInvitation.expiresAt,
-        resentAt: responseInvitation.lastResentAt!,
-      },
-      message: 'Invitation resent successfully',
+    const responseData = {
+      id: responseInvitation.id,
+      expiresAt: responseInvitation.expiresAt,
+      resentAt: responseInvitation.lastResentAt!,
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, 'Invitation resent successfully');
 
   } catch (error) {
     console.error('Error resending user invitation:', error);

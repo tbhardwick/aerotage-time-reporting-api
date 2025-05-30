@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { UserRepository } from '../shared/user-repository';
 import { createHash } from 'crypto';
@@ -125,17 +125,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Check cache first
     const cachedReport = await getCachedReport(cacheKey);
     if (cachedReport) {
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: true,
-          data: cachedReport,
-        }),
-      };
+      return createSuccessResponse(cachedReport);
     }
 
     // Generate new report
@@ -144,17 +134,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Cache the report (1 hour TTL)
     await cacheReport(cacheKey, reportData, 3600);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: reportData,
-      }),
-    };
+    return createSuccessResponse(reportData);
 
   } catch (error) {
     console.error('Error generating time report:', error);

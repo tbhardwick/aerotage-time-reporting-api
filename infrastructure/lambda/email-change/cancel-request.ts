@@ -5,8 +5,8 @@ import {
   CancelRequestResponse,
   EmailChangeErrorCodes
 } from '../shared/types';
-import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
 const userRepo = new UserRepository();
@@ -82,25 +82,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log('✅ Email change request cancelled successfully');
 
-    const response: CancelRequestResponse = {
-      success: true,
-      data: {
-        requestId: cancelledRequest.id,
-        status: 'cancelled',
-        cancelledAt: cancelledRequest.cancelledAt!,
-        cancelledBy: currentUserId
-      },
-      message: 'Email change request cancelled successfully'
+    const responseData = {
+      requestId: cancelledRequest.id,
+      status: 'cancelled',
+      cancelledAt: cancelledRequest.cancelledAt!,
+      cancelledBy: currentUserId
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(responseData, 200, 'Email change request cancelled successfully');
 
   } catch (error) {
     console.error('❌ Error cancelling email change request:', error);

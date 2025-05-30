@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   Invoice,
   UpdateInvoiceRequest,
@@ -63,20 +63,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update the invoice
     const updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, requestBody as UpdateInvoiceRequest);
 
-    const response: SuccessResponse<Invoice> = {
-      success: true,
-      data: updatedInvoice,
-      message: 'Invoice updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(updatedInvoice, 200, 'Invoice updated successfully');
 
   } catch (error) {
     console.error('Error updating invoice:', error);

@@ -111,17 +111,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       await handleDelivery(exportResult, exportRequest.delivery, userEmail);
     }
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: exportResult,
-      }),
-    };
+    return createSuccessResponse(exportResult);
 
   } catch (error) {
     console.error('Error exporting report:', error);

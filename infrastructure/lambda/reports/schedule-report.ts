@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { EventBridgeClient, PutRuleCommand, PutTargetsCommand, DeleteRuleCommand, RemoveTargetsCommand } from '@aws-sdk/client-eventbridge';
 import { randomUUID } from 'crypto';
 
@@ -91,76 +91,24 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       
       case 'PUT':
         if (!scheduleId) {
-          return {
-            statusCode: 400,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              success: false,
-              error: {
-                code: 'MISSING_SCHEDULE_ID',
-                message: 'Schedule ID is required for updates',
-              },
-            }),
-          };
+          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for updates');
         }
         return await updateScheduledReport(scheduleId, event, userId, userRole);
       
       case 'DELETE':
         if (!scheduleId) {
-          return {
-            statusCode: 400,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              success: false,
-              error: {
-                code: 'MISSING_SCHEDULE_ID',
-                message: 'Schedule ID is required for deletion',
-              },
-            }),
-          };
+          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for deletion');
         }
         return await deleteScheduledReport(scheduleId, userId, userRole);
       
       default:
-        return {
-          statusCode: 405,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: 'METHOD_NOT_ALLOWED',
-              message: `HTTP method ${httpMethod} not allowed`,
-            },
-          }),
-        };
+        return createErrorResponse(405, 'METHOD_NOT_ALLOWED', `HTTP method ${httpMethod} not allowed`);
     }
 
   } catch (error) {
     console.error('Error in report scheduling:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'SCHEDULE_FAILED',
-          message: 'Failed to manage report schedule',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'SCHEDULE_FAILED', 'Failed to manage report schedule');
   }
 };
 
@@ -176,77 +124,25 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
 
     // Validate required fields
     if (!scheduleRequest.reportConfigId || !scheduleRequest.schedule || !scheduleRequest.delivery) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_REQUIRED_FIELDS',
-            message: 'reportConfigId, schedule, and delivery are required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_REQUIRED_FIELDS', 'reportConfigId, schedule, and delivery are required');
     }
 
     // Validate schedule frequency
     const validFrequencies = ['daily', 'weekly', 'monthly', 'quarterly', 'custom'];
     if (!validFrequencies.includes(scheduleRequest.schedule.frequency)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_FREQUENCY',
-            message: `Frequency must be one of: ${validFrequencies.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_FREQUENCY', `Frequency must be one of: ${validFrequencies.join(', ')}`);
     }
 
     // Validate delivery format
     const validFormats = ['pdf', 'csv', 'excel'];
     if (!validFormats.includes(scheduleRequest.delivery.format)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_FORMAT',
-            message: `Format must be one of: ${validFormats.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_FORMAT', `Format must be one of: ${validFormats.join(', ')}`);
     }
 
     // Check if user has access to the report config
     const hasAccess = await validateReportConfigAccess(scheduleRequest.reportConfigId, userId, userRole);
     if (!hasAccess) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have access to this report configuration',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have access to this report configuration');
     }
 
     // Create scheduled report
@@ -282,17 +178,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
       message: 'Report schedule created successfully',
     };
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: response,
-      }),
-    };
+    return createSuccessResponse(response, 201);
 
   } catch (error) {
     console.error('Error creating scheduled report:', error);
@@ -305,51 +191,15 @@ async function getScheduledReport(scheduleId: string, userId: string, userRole: 
     const scheduledReport = await fetchScheduledReport(scheduleId);
     
     if (!scheduledReport) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'SCHEDULE_NOT_FOUND',
-            message: 'Scheduled report not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'SCHEDULE_NOT_FOUND', 'Scheduled report not found');
     }
 
     // Check access permissions
     if (!canAccessSchedule(scheduledReport, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to access this schedule',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to access this schedule');
     }
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: scheduledReport,
-      }),
-    };
+    return createSuccessResponse(scheduledReport);
 
   } catch (error) {
     console.error('Error getting scheduled report:', error);
@@ -366,20 +216,10 @@ async function listScheduledReports(event: APIGatewayProxyEvent, userId: string,
     // Get user's scheduled reports
     const scheduledReports = await fetchUserScheduledReports(userId, enabled, limit);
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: {
-          schedules: scheduledReports,
-          totalCount: scheduledReports.length,
-        },
-      }),
-    };
+    return createSuccessResponse({
+      schedules: scheduledReports,
+      totalCount: scheduledReports.length,
+    });
 
   } catch (error) {
     console.error('Error listing scheduled reports:', error);
@@ -393,38 +233,12 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
     const existingSchedule = await fetchScheduledReport(scheduleId);
     
     if (!existingSchedule) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'SCHEDULE_NOT_FOUND',
-            message: 'Scheduled report not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'SCHEDULE_NOT_FOUND', 'Scheduled report not found');
     }
 
     // Check permissions
     if (!canModifySchedule(existingSchedule, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to modify this schedule',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to modify this schedule');
     }
 
     // Parse request body
@@ -471,17 +285,7 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
       message: 'Report schedule updated successfully',
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: response,
-      }),
-    };
+    return createSuccessResponse(response);
 
   } catch (error) {
     console.error('Error updating scheduled report:', error);
@@ -495,38 +299,12 @@ async function deleteScheduledReport(scheduleId: string, userId: string, userRol
     const existingSchedule = await fetchScheduledReport(scheduleId);
     
     if (!existingSchedule) {
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'SCHEDULE_NOT_FOUND',
-            message: 'Scheduled report not found',
-          },
-        }),
-      };
+      return createErrorResponse(404, 'SCHEDULE_NOT_FOUND', 'Scheduled report not found');
     }
 
     // Check permissions
     if (!canModifySchedule(existingSchedule, userId, userRole)) {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'ACCESS_DENIED',
-            message: 'You do not have permission to delete this schedule',
-          },
-        }),
-      };
+      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to delete this schedule');
     }
 
     // Delete EventBridge rule
@@ -544,17 +322,7 @@ async function deleteScheduledReport(scheduleId: string, userId: string, userRol
       message: 'Report schedule deleted successfully',
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: response,
-      }),
-    };
+    return createSuccessResponse(response);
 
   } catch (error) {
     console.error('Error deleting scheduled report:', error);
