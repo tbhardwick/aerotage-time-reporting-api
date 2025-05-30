@@ -1,10 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { 
   ApproveTimeEntriesRequest, 
   TimeEntryErrorCodes, 
   SuccessResponse, 
-  ErrorResponse,
   BulkTimeEntryResponse
 } from '../shared/types';
 
@@ -12,85 +13,30 @@ const timeEntryRepo = new TimeEntryRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Approve time entries request:', JSON.stringify(event, null, 2));
-
-    // Extract user information from authorizer context
-    const authContext = event.requestContext.authorizer;
-    const userId = authContext?.userId || authContext?.claims?.sub;
-    const userRole = authContext?.role || authContext?.claims?.['custom:role'];
-
-    if (!userId) {
-      console.error('No user ID found in authorization context');
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'User not authenticated',
-          },
-        } as ErrorResponse),
-      };
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Check if user has approval permissions (manager or admin)
     if (userRole !== 'manager' && userRole !== 'admin') {
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS,
-            message: 'Only managers and admins can approve time entries',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(403, TimeEntryErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS, 'Only managers and admins can approve time entries');
     }
 
     // Parse request body
     if (!event.body) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Request body is required',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Request body is required');
     }
 
     let requestData: ApproveTimeEntriesRequest;
     try {
       requestData = JSON.parse(event.body);
     } catch (error) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Invalid JSON in request body',
-          },
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate request data
@@ -105,22 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     if (validationErrors.length > 0) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA,
-            message: 'Validation failed',
-            details: { errors: validationErrors },
-          },
-          timestamp: new Date().toISOString(),
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA, `Validation failed: ${validationErrors.join(', ')}`);
     }
 
     // Verify that all time entries can be approved
@@ -143,14 +74,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
         // Check self-approval rules
         // Managers and admins can approve their own entries (no higher authority)
-        // Employees cannot approve their own entries
-        if (timeEntry.userId === userId) {
-          if (userRole === 'employee') {
-            approvalErrors.push(`Employees cannot approve their own time entry (${timeEntryId})`);
-            continue;
-          }
-          // Managers and admins can approve their own entries
-          console.log(`Self-approval allowed for ${userRole}: ${timeEntryId}`);
+        if (timeEntry.userId === currentUserId) {
+          // Since only managers and admins can reach this point, self-approval is allowed
+          // (Employees are already blocked by the authorization check above)
         }
 
         // TODO: Add team-based authorization check
@@ -162,30 +88,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     if (approvalErrors.length > 0) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS,
-            message: 'Cannot approve time entries',
-            details: { errors: approvalErrors },
-          },
-          timestamp: new Date().toISOString(),
-        } as ErrorResponse),
-      };
+      return createErrorResponse(400, TimeEntryErrorCodes.INSUFFICIENT_APPROVAL_PERMISSIONS, `Cannot approve time entries: ${approvalErrors.join(', ')}`);
     }
 
-    // Approve the time entries
+    // Approve the time entries using repository pattern
     // Allow self-approval for managers and admins (no higher authority)
     const allowSelfApproval = userRole === 'manager' || userRole === 'admin';
-    const result = await timeEntryRepo.approveTimeEntries(requestData.timeEntryIds, userId, allowSelfApproval);
-
-    console.log(`Approved ${result.successful.length} time entries, ${result.failed.length} failed`);
+    const result = await timeEntryRepo.approveTimeEntries(requestData.timeEntryIds, currentUserId, allowSelfApproval);
 
     // Determine response status based on results
     let statusCode = 200;
@@ -218,20 +127,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error approving time entries:', error);
-
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      } as ErrorResponse),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };

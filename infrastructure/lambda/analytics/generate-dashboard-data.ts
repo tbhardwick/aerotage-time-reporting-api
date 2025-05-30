@@ -58,16 +58,14 @@ interface DashboardRequest {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Generate dashboard data request:', JSON.stringify(event, null, 2));
-
-    // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-    
-    if (!userId) {
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
@@ -80,24 +78,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Validate period
     const validPeriods = ['day', 'week', 'month', 'quarter', 'year'];
     if (!validPeriods.includes(dashboardRequest.period)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_PERIOD',
-            message: `Invalid period. Must be one of: ${validPeriods.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_PERIOD', `Invalid period. Must be one of: ${validPeriods.join(', ')}`);
     }
 
     // Generate dashboard data
-    const dashboardData = await generateDashboardData(dashboardRequest, userId, userRole);
+    const dashboardData = await generateDashboardData(dashboardRequest, currentUserId, userRole);
 
     return {
       statusCode: 200,
@@ -113,8 +98,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error generating dashboard data:', error);
-    
-    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate dashboard data');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
 

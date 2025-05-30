@@ -57,17 +57,15 @@ interface ExportResponse {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Export report request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
 
-    // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
     const userEmail = user?.email;
-    
-    if (!userId) {
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
-    }
 
     // Parse request body
     let exportRequest: ExportRequest;
@@ -79,78 +77,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Validate required fields
     if (!exportRequest.format) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_FORMAT',
-            message: 'Export format is required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_FORMAT', 'Export format is required');
     }
 
     // Validate format
     const validFormats = ['pdf', 'csv', 'excel'];
     if (!validFormats.includes(exportRequest.format)) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_FORMAT',
-            message: `Format must be one of: ${validFormats.join(', ')}`,
-          },
-        }),
-      };
+      return createErrorResponse(400, 'INVALID_FORMAT', `Format must be one of: ${validFormats.join(', ')}`);
     }
 
     // Get report data
     let reportData;
     if (exportRequest.reportId) {
-      reportData = await getReportData(exportRequest.reportId, userId, userRole);
+      reportData = await getReportData(exportRequest.reportId, currentUserId, userRole);
       if (!reportData) {
-        return {
-          statusCode: 404,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: JSON.stringify({
-            success: false,
-            error: {
-              code: 'REPORT_NOT_FOUND',
-              message: 'Report not found or access denied',
-            },
-          }),
-        };
+        return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report not found or access denied');
       }
     } else if (exportRequest.reportData) {
       reportData = exportRequest.reportData;
     } else {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: 'MISSING_DATA',
-            message: 'Either reportId or reportData is required',
-          },
-        }),
-      };
+      return createErrorResponse(400, 'MISSING_DATA', 'Either reportId or reportData is required');
     }
 
     // Generate export
@@ -158,7 +104,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       reportData,
       exportRequest.format,
       exportRequest.options || {},
-      userId,
+      currentUserId,
       userEmail
     );
 
@@ -181,21 +127,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error exporting report:', error);
-    
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'EXPORT_FAILED',
-          message: 'Failed to export report',
-        },
-      }),
-    };
+    return createErrorResponse(500, 'EXPORT_FAILED', 'An internal server error occurred');
   }
 };
 
@@ -265,7 +197,7 @@ async function generateExport(
 
   // Upload to S3
   const fileName = `exports/${userId}/${exportId}.${fileExtension}`;
-  const uploadResult = await uploadToS3(fileName, fileContent, contentType);
+  await uploadToS3(fileName, fileContent, contentType);
   
   // Generate signed URL for download
   const downloadUrl = await generateDownloadUrl(fileName, options.expiresIn || 24);
@@ -424,7 +356,7 @@ async function generatePDF(reportData: Record<string, unknown>, options: ExportO
   }
 }
 
-async function uploadToS3(fileName: string, content: Buffer, contentType: string): Promise<Record<string, unknown>> {
+async function uploadToS3(fileName: string, content: Buffer, contentType: string): Promise<void> {
   const bucketName = process.env.EXPORTS_BUCKET_NAME;
   
   if (!bucketName) {
@@ -442,7 +374,7 @@ async function uploadToS3(fileName: string, content: Buffer, contentType: string
     },
   });
 
-  return await s3Client.send(command) as Record<string, unknown>;
+  await s3Client.send(command);
 }
 
 async function generateDownloadUrl(fileName: string, expiresInHours: number): Promise<string> {
