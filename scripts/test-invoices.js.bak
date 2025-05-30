@@ -1,15 +1,26 @@
 #!/usr/bin/env node
 
-const { getCognitoToken } = require("./get-cognito-token");
-const https = require("https");
+const https = require('https');
+const { URL } = require('url');
 
-// Configuration using MANDATORY patterns
+// Configuration
 const CONFIG = {
-  API_BASE_URL: "https://time-api-dev.aerotage.com",
+  API_BASE_URL: 'https://time-api-dev.aerotage.com',
+  COGNITO_CLIENT_ID: '148r35u6uultp1rmfdu22i8amb',
+  COGNITO_USER_POOL_ID: 'us-east-1_EsdlgX9Qg',
   TEST_USER: {
-    email: "bhardwick@aerotage.com",
-    password: "Aerotage*2025"
+    email: 'bhardwick@aerotage.com',
+    password: 'Aerotage*2025'
   }
+};
+
+// Test data storage
+const TEST_DATA = {
+  clientId: 'test-client-123',
+  projectId: 'test-project-123',
+  timeEntryIds: [],
+  invoiceIds: [],
+  paymentIds: []
 };
 
 // Utility functions
@@ -20,17 +31,17 @@ function makeRequest(url, options = {}) {
       hostname: urlObj.hostname,
       port: urlObj.port || 443,
       path: urlObj.pathname + urlObj.search,
-      method: options.method || "GET",
+      method: options.method || 'GET',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers
       }
     };
 
     const req = https.request(requestOptions, (res) => {
-      let data = "";
-      res.on("data", (chunk) => data += chunk);
-      res.on("end", () => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
         try {
           const response = {
             statusCode: res.statusCode,
@@ -48,7 +59,7 @@ function makeRequest(url, options = {}) {
       });
     });
 
-    req.on("error", reject);
+    req.on('error', reject);
 
     if (options.body) {
       req.write(JSON.stringify(options.body));
@@ -58,31 +69,55 @@ function makeRequest(url, options = {}) {
   });
 }
 
-// MANDATORY authentication function
 async function authenticateUser() {
-  console.log("🔐 Authenticating user with MANDATORY pattern...");
+  console.log('🔐 Authenticating user...');
+  
+  const authUrl = `https://cognito-idp.us-east-1.amazonaws.com/`;
   
   try {
-    const authResult = await getCognitoToken(CONFIG.TEST_USER.email, CONFIG.TEST_USER.password);
-    const accessToken = authResult.AccessToken; // MANDATORY: Use AccessToken only
+    const authResponse = await makeRequest(authUrl, {
+      method: 'POST',
+      headers: {
+        'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+        'Content-Type': 'application/x-amz-json-1.1'
+      },
+      body: {
+        AuthFlow: 'USER_PASSWORD_AUTH',
+        ClientId: CONFIG.COGNITO_CLIENT_ID,
+        AuthParameters: {
+          USERNAME: CONFIG.TEST_USER.email,
+          PASSWORD: CONFIG.TEST_USER.password
+        }
+      }
+    });
+
+    if (authResponse.statusCode !== 200) {
+      throw new Error(`Authentication failed: ${JSON.stringify(authResponse.body)}`);
+    }
+
+    const idToken = authResponse.body.AuthenticationResult.IdToken;
+    const accessToken = authResponse.body.AuthenticationResult.AccessToken;
     
-    console.log("✅ Authentication successful with standardized pattern");
-    return { accessToken };
+    console.log('✅ Authentication successful');
+    return { idToken, accessToken };
   } catch (error) {
-    console.error("❌ Authentication failed:", error.message);
+    console.error('❌ Authentication failed:', error.message);
     throw error;
   }
 }
+
+async function createSession(idToken) {
+  console.log('🔄 Creating user session...');
   
   try {
-    const tokenParts = accessToken.split('.');
+    const tokenParts = idToken.split('.');
     const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
     const userId = payload.sub;
     
     const response = await makeRequest(`${CONFIG.API_BASE_URL}/users/${userId}/sessions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`
+        'Authorization': `Bearer ${idToken}`
       },
       body: {
         userAgent: 'Invoice Test Script',
@@ -92,10 +127,10 @@ async function authenticateUser() {
 
     if (response.statusCode === 201) {
       console.log('✅ Session created successfully');
-      return { userId, sessionToken: accessToken };
+      return { userId, sessionToken: idToken };
     } else {
       console.log('⚠️ Session creation response:', response.statusCode, response.body);
-      return { userId, sessionToken: accessToken };
+      return { userId, sessionToken: idToken };
     }
   } catch (error) {
     console.error('❌ Session creation failed:', error.message);
@@ -736,8 +771,8 @@ async function runAllTests() {
 
   try {
     // Step 1: Authenticate
-    const { accessToken } = await authenticateUser();
-    const { sessionToken } = await createSession(accessToken);
+    const { idToken } = await authenticateUser();
+    const { sessionToken } = await createSession(idToken);
     results.authentication = true;
 
     // Step 2: List existing invoices

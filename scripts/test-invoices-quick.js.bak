@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 
-const { getCognitoToken } = require("./get-cognito-token");
-const https = require("https");
+const https = require('https');
+const { URL } = require('url');
 
-// Configuration using MANDATORY patterns
+// Configuration - Update these values for your environment
 const CONFIG = {
-  API_BASE_URL: "https://time-api-dev.aerotage.com",
+  API_BASE_URL: 'https://time-api-dev.aerotage.com',
+  COGNITO_CLIENT_ID: '148r35u6uultp1rmfdu22i8amb',
   TEST_USER: {
-    email: "bhardwick@aerotage.com",
-    password: "Aerotage*2025"
+    email: 'bhardwick@aerotage.com',
+    password: 'Aerotage*2025'
   }
 };
 
+// Utility function for HTTP requests
 function makeRequest(url, options = {}) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
@@ -19,34 +21,32 @@ function makeRequest(url, options = {}) {
       hostname: urlObj.hostname,
       port: urlObj.port || 443,
       path: urlObj.pathname + urlObj.search,
-      method: options.method || "GET",
+      method: options.method || 'GET',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers
       }
     };
 
     const req = https.request(requestOptions, (res) => {
-      let data = "";
-      res.on("data", (chunk) => data += chunk);
-      res.on("end", () => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
         try {
           resolve({
             statusCode: res.statusCode,
-            headers: res.headers,
-            body: JSON.parse(data)
+            body: data ? JSON.parse(data) : null
           });
-        } catch (e) {
+        } catch (error) {
           resolve({
             statusCode: res.statusCode,
-            headers: res.headers,
             body: data
           });
         }
       });
     });
 
-    req.on("error", reject);
+    req.on('error', reject);
     if (options.body) {
       req.write(JSON.stringify(options.body));
     }
@@ -54,21 +54,40 @@ function makeRequest(url, options = {}) {
   });
 }
 
-// MANDATORY authentication function
 async function authenticate() {
-  console.log("🔐 Authenticating with MANDATORY pattern...");
+  console.log('🔐 Authenticating...');
   
-  try {
-    const authResult = await getCognitoToken(CONFIG.TEST_USER.email, CONFIG.TEST_USER.password);
-    const accessToken = authResult.AccessToken; // MANDATORY: Use AccessToken only
-    
-    console.log("✅ Authentication successful with standardized pattern");
-    return accessToken;
-  } catch (error) {
-    console.error("❌ Authentication failed:", error.message);
-    throw error;
+  const response = await makeRequest('https://cognito-idp.us-east-1.amazonaws.com/', {
+    method: 'POST',
+    headers: {
+      'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+      'Content-Type': 'application/x-amz-json-1.1'
+    },
+    body: {
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: CONFIG.COGNITO_CLIENT_ID,
+      AuthParameters: {
+        USERNAME: CONFIG.TEST_USER.email,
+        PASSWORD: CONFIG.TEST_USER.password
+      }
+    }
+  });
+
+  if (response.statusCode !== 200) {
+    throw new Error(`Authentication failed: ${response.statusCode}`);
   }
+
+  console.log('✅ Authentication successful');
+  return response.body.AuthenticationResult.IdToken;
 }
+
+async function quickTest() {
+  console.log('🚀 Quick Invoice API Test');
+  console.log('=========================\n');
+
+  try {
+    // Step 1: Authenticate
+    const token = await authenticate();
 
     // Step 2: List existing invoices
     console.log('📋 Listing invoices...');

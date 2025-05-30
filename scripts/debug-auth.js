@@ -73,27 +73,27 @@ async function debugAuth() {
     
     // Get authentication token
     const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const accessToken = authResult.AccessToken;
-    const idToken = authResult.IdToken;
+    const accessToken = authResult.AccessToken; // MANDATORY: Use AccessToken
+    const idToken = authResult.IdToken; // DEBUG ONLY: For comparison purposes
     
     console.log('✅ Tokens obtained successfully');
     console.log('📋 Access Token length:', accessToken.length);
     console.log('📋 ID Token length:', idToken.length);
     
     // Decode tokens to inspect claims
-    console.log('\n🔍 Access Token Claims:');
+    console.log('\n🔍 Access Token Claims (MANDATORY for API calls):');
     const accessClaims = decodeJWT(accessToken);
     console.log(JSON.stringify(accessClaims, null, 2));
     
-    console.log('\n🔍 ID Token Claims:');
+    console.log('\n🔍 ID Token Claims (DEBUG ONLY - DO NOT USE for API calls):');
     const idClaims = decodeJWT(idToken);
     console.log(JSON.stringify(idClaims, null, 2));
     
     // Test API endpoints with different tokens
     console.log('\n🧪 Testing API endpoints...');
     
-    // Test with Access Token (what frontend is using)
-    console.log('\n1. Testing with Access Token:');
+    // Test with Access Token (MANDATORY pattern)
+    console.log('\n1. Testing with Access Token (MANDATORY PATTERN):');
     const testWithAccess = await makeRequest(`${API_BASE_URL}/users/${accessClaims.sub}`, {
       method: 'GET',
       headers: {
@@ -103,8 +103,8 @@ async function debugAuth() {
     console.log('Status:', testWithAccess.status);
     console.log('Response:', testWithAccess.data);
     
-    // Test with ID Token (alternative)
-    console.log('\n2. Testing with ID Token:');
+    // Test with ID Token (DEBUGGING ONLY - should NOT be used)
+    console.log('\n2. Testing with ID Token (DEBUG ONLY - FORBIDDEN in production):');
     const testWithId = await makeRequest(`${API_BASE_URL}/users/${idClaims.sub}`, {
       method: 'GET',
       headers: {
@@ -113,6 +113,9 @@ async function debugAuth() {
     });
     console.log('Status:', testWithId.status);
     console.log('Response:', testWithId.data);
+    
+    console.log('\n⚠️  REMEMBER: Always use AccessToken for production API calls!');
+    console.log('✅ MANDATORY: const token = authResult.AccessToken;');
     
     // Test health endpoint (should not require auth)
     console.log('\n3. Testing health endpoint (no auth):');
