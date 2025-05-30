@@ -3,363 +3,80 @@ description:
 globs: 
 alwaysApply: false
 ---
-# Frontend Integration Support - Specialized Rules
+# Frontend Integration Support Rules
 
-## 🎯 Context: Frontend Integration Support
+## API Integration Patterns
 
-**Use this rule when**: Working on frontend integration issues, API client implementation, authentication flows, or debugging frontend-backend communication.
+### Authentication Flow
+- **ALWAYS use**: `getCognitoToken()` from `scripts/get-cognito-token.js` for test scripts
+- **NEVER use**: Direct AWS SDK calls in frontend integration code
+- **Token format**: Use `AccessToken` (NOT `IdToken`) from Cognito response
+- **Headers**: `Authorization: Bearer ${accessToken}`
 
-## 🔗 Current Integration Status
-
-### ✅ **Backend Ready for Integration**
-- **API Base URL**: `https://time-api-dev.aerotage.com//`
-- **15+ Live Endpoints**: All user management and security features operational
-- **Authentication**: Cognito fully configured with JWT tokens
-- **CORS**: Enabled for frontend integration
-- **Documentation**: Complete API reference available
-
-### 🔄 **Frontend Integration Phase**
-- **Repository**: `aerotage_time_reporting_app` (separate repo)
-- **Technology**: Electron + React + TypeScript
-- **Authentication**: AWS Amplify integration
-- **API Client**: Fetch-based with error handling
-- **State Management**: React Context
-
-## 📡 Available API Endpoints
-
-### **User Management**
+### Base API Client Pattern
 ```typescript
-// Live endpoints ready for integration
-GET    /users                           // List users (admin/manager)
-GET    /users/{id}/profile              // Get user profile
-PUT    /users/{id}/profile              // Update user profile
-GET    /users/{id}/preferences          // Get user preferences
-PUT    /users/{id}/preferences          // Update user preferences
+class ApiClient {
+  private baseUrl = 'https://time-api-dev.aerotage.com/';
+  
+  private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
+    // Handle response format: { success: boolean, data: T, error?: object }
+  }
+}
 ```
 
-### **Security & Authentication**
-```typescript
-PUT    /users/{id}/password             // Change password
-GET    /users/{id}/security-settings    // Get security settings
-PUT    /users/{id}/security-settings    // Update security settings
-```
+### Error Handling Standards
+- **Check**: `response.success` before accessing `response.data`
+- **Display**: `error.message` to users for failed requests
+- **Handle**: 401 → redirect to login, 403 → show permissions error
 
-### **Session Management**
+## AWS Cognito Configuration
 ```typescript
-GET    /users/{id}/sessions             // List user sessions
-POST   /users/{id}/sessions             // Create session record
-DELETE /users/{id}/sessions/{sessionId} // Terminate session
-```
-
-### **User Invitations**
-```typescript
-GET    /user-invitations                // List invitations
-POST   /user-invitations                // Create invitation
-POST   /user-invitations/{id}/resend    // Resend invitation
-DELETE /user-invitations/{id}           // Cancel invitation
-GET    /user-invitations/validate/{token} // Validate token (public)
-POST   /user-invitations/accept         // Accept invitation (public)
-```
-
-## 🔐 Authentication Integration
-
-### **AWS Cognito Configuration**
-```typescript
-// Frontend configuration values
 const awsConfig = {
   Auth: {
     region: 'us-east-1',
     userPoolId: 'us-east-1_EsdlgX9Qg',
     userPoolWebClientId: '148r35u6uultp1rmfdu22i8amb',
-    identityPoolId: 'us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787',
-    authenticationFlowType: 'USER_SRP_AUTH'
+    identityPoolId: 'us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787'
   }
 };
 ```
 
-### **Authentication Flow**
-```typescript
-// Login process with session creation
-1. User authenticates with Cognito (AWS Amplify)
-2. Cognito returns JWT token
-3. Frontend creates backend session record
-4. Store token and session info locally
-5. Include token in all API requests
+## Session Management
+- **Login**: Create backend session record after Cognito auth
+- **Logout**: Terminate backend session before Cognito signout
+- **Storage**: Store JWT token and session info in localStorage
 
-// Logout process with session cleanup
-1. Terminate backend session (DELETE /users/{id}/sessions/{sessionId})
-2. Sign out from Cognito (AWS Amplify)
-3. Clear local storage
-```
+## Common Integration Issues
 
-### **JWT Token Handling**
-```typescript
-// All API requests must include:
-headers: {
-  'Authorization': `Bearer ${jwtToken}`,
-  'Content-Type': 'application/json'
-}
+### CORS Problems
+- Backend CORS already configured for frontend integration
+- If errors persist: verify API base URL and request headers
 
-// Token validation happens automatically in API Gateway
-// Invalid tokens return 401 Unauthorized
-```
+### Authentication Failures  
+- **401 errors**: Check token exists, format (should contain dots), expiration
+- **403 errors**: Verify user permissions and role-based access
 
-## 📱 API Client Implementation
+### Session Migration
+- **Response code**: `SESSION_MIGRATION_REQUIRED`
+- **Action**: Clear localStorage and force re-login
 
-### **Base API Client Pattern**
-```typescript
-class ApiClient {
-  private baseUrl = 'https://time-api-dev.aerotage.com//';
+## Verification Steps
+When implementing frontend integration:
+1. Verify JWT token is stored correctly after login
+2. Confirm Authorization header is included in all API requests  
+3. Test error handling for 401, 403, and 500 responses
+4. Validate session cleanup on logout
+5. Check API response format matches: `{ success: boolean, data: any }`
 
-  private async request<T>(method: string, endpoint: string, options: {
-    body?: any;
-    requireAuth?: boolean;
-  } = {}): Promise<T> {
-    const { body, requireAuth = true } = options;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
+## Live Environment
+- **API URL**: `https://time-api-dev.aerotage.com/`
+- **Endpoints**: 46+ live endpoints across all business functions
+- **Status**: Production-ready backend, ready for complete frontend integration
 
-    // Add authentication header
-    if (requireAuth) {
-      const token = localStorage.getItem('accessToken');
-      if (!token) throw new Error('No authentication token');
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error?.message || `HTTP ${response.status}`);
-    }
-
-    return data.data;
-  }
-
-  // HTTP method helpers
-  async get<T>(endpoint: string, requireAuth = true): Promise<T> {
-    return this.request<T>('GET', endpoint, { requireAuth });
-  }
-
-  async post<T>(endpoint: string, body?: any, requireAuth = true): Promise<T> {
-    return this.request<T>('POST', endpoint, { body, requireAuth });
-  }
-
-  async put<T>(endpoint: string, body?: any, requireAuth = true): Promise<T> {
-    return this.request<T>('PUT', endpoint, { body, requireAuth });
-  }
-
-  async delete<T>(endpoint: string, requireAuth = true): Promise<T> {
-    return this.request<T>('DELETE', endpoint, { requireAuth });
-  }
-}
-```
-
-### **Response Format**
-```typescript
-// All API responses follow this format:
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-}
-
-// Success response
-{
-  "success": true,
-  "data": { /* actual response data */ }
-}
-
-// Error response
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid input data",
-    "details": { "field": "email", "reason": "Invalid format" }
-  }
-}
-```
-
-## 🔧 Common Integration Issues
-
-### **Authentication Issues**
-```typescript
-// Issue: 401 Unauthorized
-// Causes:
-1. Missing Authorization header
-2. Invalid JWT token
-3. Expired token
-4. Token format incorrect
-
-// Debug steps:
-1. Check token exists in localStorage
-2. Verify token format (should be JWT)
-3. Check token expiration
-4. Test with fresh login
-
-// Solution:
-const token = localStorage.getItem('accessToken');
-if (!token) {
-  // Redirect to login
-  return;
-}
-
-// Verify token format
-if (!token.includes('.')) {
-  // Invalid JWT format, clear and redirect
-  localStorage.clear();
-  return;
-}
-```
-
-### **CORS Issues**
-```typescript
-// Issue: CORS errors in browser
-// Backend CORS is configured for:
-{
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
-}
-
-// If CORS errors persist:
-1. Check if using correct API base URL
-2. Verify request headers match allowed headers
-3. Check for preflight OPTIONS requests
-```
-
-### **Session Management Issues**
-```typescript
-// Issue: Session migration required
-// Response: { "code": "SESSION_MIGRATION_REQUIRED" }
-// Solution: Clear local storage and force re-login
-
-if (error.response?.data?.code === 'SESSION_MIGRATION_REQUIRED') {
-  localStorage.clear();
-  // Redirect to login
-  window.location.href = '/login';
-}
-```
-
-### **API Response Issues**
-```typescript
-// Issue: Unexpected response format
-// Expected: { success: true, data: {...} }
-// Check:
-1. Endpoint URL is correct
-2. HTTP method is correct
-3. Request body format is correct
-4. Authentication headers are included
-
-// Debug API calls:
-console.log('Request URL:', url);
-console.log('Request headers:', headers);
-console.log('Request body:', body);
-console.log('Response status:', response.status);
-console.log('Response data:', data);
-```
-
-## 🧪 Testing Integration
-
-### **Manual Testing Checklist**
-```typescript
-// Authentication Flow
-[ ] User can login with valid credentials
-[ ] Invalid credentials show appropriate error
-[ ] JWT token is stored correctly
-[ ] Token is included in API requests
-[ ] User can logout successfully
-[ ] Session is terminated on logout
-
-// API Endpoints
-[ ] All GET endpoints return data
-[ ] POST endpoints create resources
-[ ] PUT endpoints update resources
-[ ] DELETE endpoints remove resources
-[ ] Error responses are handled correctly
-
-// Session Management
-[ ] Multiple sessions are tracked
-[ ] Current session is identified correctly
-[ ] Sessions can be terminated
-[ ] Session cleanup works on logout
-```
-
-### **Error Handling Testing**
-```typescript
-// Test scenarios:
-1. Invalid token (401 response)
-2. Missing permissions (403 response)
-3. Resource not found (404 response)
-4. Validation errors (400 response)
-5. Server errors (500 response)
-6. Network errors (connection issues)
-
-// Each should show appropriate user message
-```
-
-## 📚 Integration Resources
-
-### **Documentation References**
-- **API Reference**: `/docs/API_REFERENCE.md` - Complete endpoint documentation
-- **Frontend Integration Guide**: `/docs/FRONTEND_INTEGRATION_GUIDE.md` - Detailed integration instructions
-- **Security Guide**: `/docs/SECURITY_GUIDE.md` - Authentication and security details
-- **Troubleshooting**: `/docs/TROUBLESHOOTING.md` - Common issues and solutions
-
-### **Live Environment Details**
-- **API Base URL**: `https://time-api-dev.aerotage.com//`
-- **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
-- **App Client**: `148r35u6uultp1rmfdu22i8amb`
-- **Identity Pool**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
-
-### **Testing Tools**
-```bash
-# Test API endpoints with curl
-curl -X GET "https://time-api-dev.aerotage.com//users" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-
-# Test authentication
-curl -X POST "https://time-api-dev.aerotage.com//users/USER_ID/sessions" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"userAgent": "Test Client", "loginTime": "2024-01-01T00:00:00Z"}'
-```
-
-## 🎯 Integration Support Focus
-
-### **When Helping with Frontend Integration**
-1. **Verify API endpoints are working** with curl/Postman first
-2. **Check authentication flow** step by step
-3. **Review request/response formats** for consistency
-4. **Debug CORS and network issues** systematically
-5. **Test error handling** for all scenarios
-6. **Validate session management** implementation
-
-### **Common Frontend Questions**
-- "How do I authenticate with the API?" → Use AWS Amplify with provided Cognito config
-- "What's the API base URL?" → `https://time-api-dev.aerotage.com//`
-- "How do I handle JWT tokens?" → Store in localStorage, include in Authorization header
-- "What's the response format?" → `{ success: boolean, data: any, error?: object }`
-- "How do I manage sessions?" → Create session on login, terminate on logout
-- "How do I handle errors?" → Check response.success, display error.message to user
-
-### **Integration Success Criteria**
-- ✅ User can login and logout successfully
-- ✅ All API endpoints work with proper authentication
-- ✅ Session management tracks multiple sessions
-- ✅ Error handling provides meaningful user feedback
-- ✅ User preferences and profiles can be managed
-- ✅ User invitations work end-to-end
-
-Remember: The backend is **production-ready** with **15+ live endpoints**. Focus on helping the frontend team integrate successfully with the existing, tested API infrastructure.
+@api-response-types.ts
+@auth-config.ts

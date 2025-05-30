@@ -3,772 +3,202 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Aerotage Time Reporting API - Backend Repository - Cursor Rules
+# Aerotage Time Reporting API - Core Development Rules
 
-## 🏗️ Repository Architecture Overview
+## 🏗️ Project Context
+AWS serverless time reporting API with 46+ live endpoints across 10 functional domains (users, time-entries, projects, clients, reports, invoices, analytics, email-change, user-invitations, health).
 
-This project uses a **two-repository architecture** to separate concerns:
+**Environments**:
+- **Development**: `https://time-api-dev.aerotage.com/`
+- **Staging**: `https://time-api-staging.aerotage.com/` (if applicable)
+- **Production**: `https://time-api.aerotage.com/`
 
-### 🚀 **aerotage-time-reporting-api** (THIS REPOSITORY)
-**Purpose**: Backend AWS serverless infrastructure and API
-**Current Status**: ✅ **Phase 1-7 Complete, Full Business Solution Deployed**
-**Contains**:
-- AWS CDK infrastructure code (TypeScript) - ✅ **DEPLOYED**
-- AWS Lambda function implementations - ✅ **52+ FUNCTIONS OPERATIONAL**
-- DynamoDB table definitions and schema - ✅ **10 TABLES WITH GSIs**
-- API Gateway REST API configurations - ✅ **46+ ENDPOINTS LIVE**
-- AWS Cognito authentication infrastructure - ✅ **FULLY CONFIGURED**
-- CloudWatch monitoring and logging setup - ✅ **ACTIVE MONITORING**
-- S3 storage bucket configurations - ✅ **DEPLOYED**
-- IAM roles and security policies - ✅ **LEAST PRIVILEGE**
-- Comprehensive documentation - ✅ **COMPLETE & ORGANIZED**
+**Stack**: AWS CDK + TypeScript + DynamoDB + API Gateway + Cognito + Lambda
 
-### 📱 **aerotage_time_reporting_app** (SEPARATE REPOSITORY)
-**Purpose**: Frontend Electron desktop application
-**Current Status**: 🔄 **Ready for Complete Integration**
-**Contains**: 
-- Electron main process, renderer, and preload scripts
-- React/TypeScript frontend code
-- UI components, pages, and styling
-- State management (React Context)
-- Frontend configuration and build tools
-- Documentation specific to frontend development
+## 📚 DOCUMENTATION AUTHORITY
 
-### 🔄 **Repository Interaction Rules**
-1. **Backend NEVER contains**: Electron code, React components, frontend styling, UI logic
-2. **Frontend NEVER contains**: AWS CDK code, Lambda functions, infrastructure definitions
-3. **API Endpoints**: ✅ **46+ endpoints implemented and documented**
-4. **Authentication**: ✅ **Cognito fully configured, frontend integration ready**
-5. **Deployment**: ✅ **Backend infrastructure deployed and operational**
+**This cursor rules file is the SINGLE SOURCE OF TRUTH for development patterns.**
 
-## 📊 Current Project Status
+- ✅ **Follow ONLY these patterns** - Ignore conflicting guidance in other .md files
+- ❌ **Other .md files may be outdated** - Many contain deprecated patterns being standardized
+- 🔄 **Documentation cleanup in progress** - 52 files being reduced to 12 essential guides
+- 📋 **When in doubt**: These cursor rules take precedence over any other documentation
 
-### ✅ **Completed Features (Production Ready)**
-- **User Management**: Profile CRUD, preferences, role-based access ✅ **COMPLETE**
-- **Authentication & Security**: JWT tokens, password reset, MFA support ✅ **COMPLETE**
-- **Session Management**: Multi-session tracking, device management ✅ **COMPLETE**
-- **User Invitations**: Email-based invitation system with role assignment ✅ **COMPLETE**
-- **Email Service**: SES integration with professional templates ✅ **COMPLETE**
-- **Time Entry Management**: Complete CRUD, timer functionality, approval workflow ✅ **COMPLETE**
-- **Project Management**: Project lifecycle, budget tracking, team assignment ✅ **COMPLETE**
-- **Client Management**: Customer relationships, billing rates, soft delete ✅ **COMPLETE**
-- **Reporting & Analytics**: Business intelligence, real-time analytics, export ✅ **COMPLETE**
-- **Invoicing & Billing**: Complete billing cycle, payment tracking, recurring invoices ✅ **COMPLETE**
-- **Infrastructure**: Complete AWS CDK deployment with monitoring ✅ **COMPLETE**
+## 🔐 CRITICAL: Authentication Standardization
 
-### 🔄 **Current Focus**
-- **Frontend Integration**: Complete business solution API integration
-- **Performance Optimization**: Load testing and optimization
-- **Production Deployment**: Staging and production environment setup
-
-### 📋 **Next Development Phases**
-- **Phase 8**: Advanced Features & Integrations (payment gateways, multi-currency)
-- **Production Readiness**: Staging deployment and performance optimization
-- **Long-term**: Mobile app, AI features, white-label solution
-
-## 🌐 Current Infrastructure
-
-### **Live Environment Details**
-- **API Base URL**: `https://time-api-dev.aerotage.com/`
-- **API Documentation**: Interactive Swagger UI (deployed via CloudFront)
-- **Cognito User Pool**: `us-east-1_EsdlgX9Qg`
-- **App Client**: `148r35u6uultp1rmfdu22i8amb`
-- **Identity Pool**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`
-- **Environment**: Development (staging/production ready for deployment)
-
-### **Deployed AWS Resources**
-- ✅ **6 CDK Stacks**: Auth, Database, API, Storage, Documentation, Monitoring
-- ✅ **10 DynamoDB Tables**: Users, profiles, projects, clients, time entries, invoices, etc.
-- ✅ **52+ Lambda Functions**: Complete business functionality across all phases
-- ✅ **S3 Buckets**: File storage with lifecycle policies + documentation hosting
-- ✅ **CloudFront**: CDN for OpenAPI documentation hosting
-- ✅ **CloudWatch**: Comprehensive monitoring and alerting
-- ✅ **SES**: Email service with professional templates
-- ✅ **OpenAPI Documentation**: Interactive Swagger UI with live API testing
-
-## Core Technology Stack
-
-### Infrastructure & Deployment
-- **Infrastructure as Code**: AWS CDK v2 with TypeScript ✅ **DEPLOYED**
-- **Compute**: AWS Lambda functions (Node.js 20.x) ✅ **52+ FUNCTIONS**
-- **API**: Amazon API Gateway (REST API) ✅ **OPERATIONAL**
-- **Database**: Amazon DynamoDB (optimized table design) ✅ **10 TABLES**
-- **Authentication**: Amazon Cognito (User Pools + Identity Pools) ✅ **CONFIGURED**
-- **Storage**: Amazon S3 (file uploads, exports) ✅ **DEPLOYED**
-- **Email**: Amazon SES (templates, delivery tracking) ✅ **ACTIVE**
-- **Monitoring**: Amazon CloudWatch (logs, metrics, alarms) ✅ **MONITORING**
-- **Security**: AWS IAM (least privilege access) ✅ **IMPLEMENTED**
-
-### Development Tools
-- **Language**: TypeScript (strict mode)
-- **Package Manager**: npm
-- **Linting**: ESLint with AWS CDK recommended rules
-- **Testing**: Jest for unit tests, AWS CDK testing constructs
-- **Deployment**: AWS CDK CLI with multiple environments
-
-## 📡 Implemented API Endpoints
-
-### ✅ **Live Endpoints (Production Ready)**
-
-#### **User Management (Phase 1-3)**
-- `GET /users` - List all users (admin/manager)
-- `GET /users/{id}/profile` - Get user profile
-- `PUT /users/{id}/profile` - Update user profile
-- `GET /users/{id}/preferences` - Get user preferences
-- `PUT /users/{id}/preferences` - Update user preferences
-
-#### **Security & Authentication (Phase 1-3)**
-- `PUT /users/{id}/password` - Change password
-- `GET /users/{id}/security-settings` - Get security settings
-- `PUT /users/{id}/security-settings` - Update security settings
-
-#### **Session Management (Phase 1-3)**
-- `GET /users/{id}/sessions` - List user sessions
-- `POST /users/{id}/sessions` - Create session record
-- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session
-
-#### **User Invitations (Phase 1-3)**
-- `GET /user-invitations` - List invitations
-- `POST /user-invitations` - Create invitation
-- `POST /user-invitations/{id}/resend` - Resend invitation
-- `DELETE /user-invitations/{id}` - Cancel invitation
-- `GET /user-invitations/validate/{token}` - Validate token (public)
-- `POST /user-invitations/accept` - Accept invitation (public)
-
-#### **Time Entry Management (Phase 4)** ✅ **COMPLETE**
-- `GET/POST /time-entries` - Time entry management
-- `PUT/DELETE /time-entries/{id}` - Time entry operations
-- `POST /time-entries/submit` - Submit for approval
-- `POST /time-entries/approve` - Approve entries (managers)
-- `POST /time-entries/reject` - Reject entries (managers)
-
-#### **Project & Client Management (Phase 5)** ✅ **COMPLETE**
-- `GET/POST /projects` - Project management
-- `PUT/DELETE /projects/{id}` - Project operations
-- `GET/POST /clients` - Client management
-- `PUT/DELETE /clients/{id}` - Client operations
-
-#### **Reporting & Analytics (Phase 6)** ✅ **COMPLETE**
-- `POST /reports/time` - Time tracking reports
-- `POST /reports/projects` - Project performance reports
-- `POST /reports/clients` - Client activity and billing reports
-- `POST /reports/export` - Report export functionality
-- `GET/POST /reports/schedule` - Scheduled report management
-- `POST /analytics/dashboard/enhanced` - Enhanced dashboard generation
-- `POST /analytics/real-time` - Real-time analytics
-- `POST /analytics/performance` - Performance monitoring
-- `POST /analytics/events` - Event tracking
-- `POST /analytics/filter` - Advanced data filtering
-
-#### **Invoicing & Billing (Phase 7)** ✅ **COMPLETE**
-- `GET/POST /invoices` - Invoice listing and generation
-- `PUT /invoices/{id}` - Invoice updates (draft only)
-- `POST /invoices/{id}/send` - Send invoice via email
-- `PUT /invoices/{id}/status` - Status updates and payment recording
-- `GET /invoices/{id}/pdf` - PDF generation
-- `GET /invoices/{id}/payments` - Payment history
-- `GET/POST /invoice-templates` - Template management
-- `GET/POST /invoices/recurring` - Recurring invoice management
-
-### 📋 **Future Endpoints (Phase 8+)**
-- **Payment Gateway Integration**: Stripe, PayPal, and other processors
-- **Advanced Features**: Multi-currency, advanced tax management
-- **API Integrations**: Third-party accounting system connections
-
-## File Structure Rules
-
-```
-infrastructure/
-├── bin/
-│   └── aerotage-time-api.ts          # ✅ CDK app entry point
-├── lib/
-│   ├── cognito-stack.ts              # ✅ Authentication infrastructure
-│   ├── database-stack.ts             # ✅ DynamoDB tables and indexes
-│   ├── api-stack.ts                  # ✅ API Gateway and Lambda integrations
-│   ├── storage-stack.ts              # ✅ S3 buckets and policies
-│   ├── ses-stack.ts                  # ✅ Email service configuration
-│   ├── documentation-stack.ts        # ✅ OpenAPI/Swagger UI hosting
-│   └── monitoring-stack.ts           # ✅ CloudWatch logs, metrics, alarms
-├── lambda/
-│   ├── users/                        # ✅ User management functions (6 endpoints)
-│   ├── security/                     # ✅ Security and auth functions (3 endpoints)
-│   ├── sessions/                     # ✅ Session management functions (3 endpoints)
-│   ├── invitations/                  # ✅ User invitation functions (6 endpoints)
-│   ├── time-entries/                 # ✅ Time tracking functions (5 endpoints)
-│   ├── projects/                     # ✅ Project management functions (4 endpoints)
-│   ├── clients/                      # ✅ Client management functions (4 endpoints)
-│   ├── reports/                      # ✅ Reporting functions (10+ endpoints)
-│   ├── analytics/                    # ✅ Analytics functions (5 endpoints)
-│   └── invoices/                     # ✅ Invoice management functions (8+ endpoints)
-├── test/                             # ✅ CDK and Lambda unit tests
-├── scripts/                          # ✅ Build and utility scripts
-│   └── build-openapi.js              # ✅ OpenAPI specification builder
-├── docs/                             # ✅ Comprehensive API documentation (ORGANIZED)
-│   ├── README.md                     # Documentation navigation
-│   ├── API_REFERENCE.md              # Complete API documentation
-│   ├── FRONTEND_INTEGRATION_GUIDE.md # Complete integration guide (all phases)
-│   ├── PROJECT_STATUS.md             # Current implementation status
-│   ├── PHASE_COMPLETION_ARCHIVE.md   # ✅ Consolidated phase documentation
-│   ├── openapi.yaml                  # ✅ OpenAPI 3.0 specification
-│   ├── OPENAPI_DOCUMENTATION.md      # ✅ OpenAPI system documentation
-│   ├── swagger-ui/                   # ✅ Swagger UI hosting files
-│   ├── SECURITY_GUIDE.md             # Security implementation
-│   ├── DEPLOYMENT_GUIDE.md           # Infrastructure deployment
-│   ├── DEVELOPMENT.md                # Development setup
-│   ├── LINTING_GUIDE.md              # Code quality standards
-│   ├── TROUBLESHOOTING.md            # Issue resolution
-│   └── AEROTAGE_TIME_APP_PLAN.md     # Original project plan
-├── cdk.json                          # ✅ CDK configuration
-├── package.json                      # ✅ Dependencies and scripts
-└── tsconfig.json                     # ✅ TypeScript configuration
-
-# IMPORTANT: NO src/renderer/, public/, or Electron-related files
-# Frontend code is maintained in aerotage_time_reporting_app repo
-```
-
-## Development Priorities
-
-### **Current Sprint Focus**
-1. **Frontend Integration Support**: Complete business solution API integration
-2. **Performance Optimization**: Monitor and optimize all 46+ endpoints
-3. **Testing Enhancement**: Comprehensive integration testing across all phases
-4. **Documentation Maintenance**: Keep consolidated documentation current
-
-### **Next Sprint Preparation**
-1. **Phase 8 Planning**: Advanced features and payment gateway integration
-2. **Staging Environment**: Deploy complete solution for QA testing
-3. **Performance Testing**: Load testing across all business functions
-4. **Production Readiness**: Final security audit and monitoring enhancement
-
-### **Production Readiness**
-1. **Staging Environment**: Deploy complete business solution for QA testing
-2. **Performance Testing**: Load testing and optimization across all phases
-3. **Security Review**: Final security audit and penetration testing
-4. **Monitoring Enhancement**: Production-grade monitoring and alerting
-
-## AWS CDK Development Rules
-
-### Stack Organization (✅ **IMPLEMENTED**)
-1. **Single Responsibility**: Each stack has one clear purpose
-2. **Environment Isolation**: Separate stacks for dev/staging/prod
-3. **Resource Naming**: Consistent naming with environment prefixes
-4. **Cross-Stack References**: CloudFormation exports for shared resources
-5. **Stack Dependencies**: Explicit dependencies defined
-
-### Current Stack Status
-- ✅ **CognitoStack**: Authentication and user management
-- ✅ **DatabaseStack**: DynamoDB tables with optimized GSIs (10 tables)
-- ✅ **ApiStack**: API Gateway with 52+ Lambda functions
-- ✅ **StorageStack**: S3 buckets with lifecycle policies
-- ✅ **SESStack**: Email service with professional templates
-- ✅ **DocumentationStack**: OpenAPI/Swagger UI hosting with CloudFront
-- ✅ **MonitoringStack**: CloudWatch monitoring and alerting
-
-## Lambda Function Development Rules
-
-### Function Structure (✅ **IMPLEMENTED**)
-1. **Single Purpose**: Each function has one specific responsibility
-2. **Handler Pattern**: Consistent handler pattern across all functions
-3. **Error Handling**: Comprehensive error handling and logging
-4. **Input Validation**: All inputs validated using TypeScript types
-5. **Response Format**: Consistent API response format
-
-### Current Function Status
-- ✅ **52+ Functions Deployed**: Complete business functionality across all phases
-- ✅ **Standardized Response Format**: Consistent JSON responses
-- ✅ **Error Handling**: Comprehensive error handling implemented
-- ✅ **Input Validation**: All inputs validated and sanitized
-- ✅ **Monitoring**: CloudWatch logging and metrics active
-
-### Function Template (✅ **STANDARDIZED**)
+### MANDATORY Lambda Pattern
 ```typescript
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    // Input validation
-    // Business logic
-    // Return success response
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({ success: true, data: result })
-    };
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    // Business logic here...
+    
   } catch (error) {
     console.error('Function error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: 'Internal server error' })
-    };
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
 ```
 
-## Database Design Rules (✅ **IMPLEMENTED**)
-
-### Current Database Status
-- ✅ **10 DynamoDB Tables**: Optimized for all business access patterns
-- ✅ **Global Secondary Indexes**: Efficient querying for all endpoints
-- ✅ **Data Encryption**: All tables encrypted at rest
-- ✅ **Backup Strategy**: Point-in-time recovery enabled
-- ✅ **Performance**: <200ms average response time
-
-### Implemented Tables
-1. **aerotage-main-table-dev**: Primary data table
-2. **aerotage-user-profiles-dev**: User profile information
-3. **aerotage-user-preferences-dev**: User preferences and settings
-4. **aerotage-user-security-settings-dev**: Security configuration
-5. **aerotage-password-history-dev**: Password history tracking
-6. **aerotage-user-sessions-dev**: Session management
-7. **aerotage-user-invitations-dev**: Invitation system
-8. **aerotage-user-activity-dev**: Activity logging
-9. **aerotage-projects-dev**: Project management
-10. **aerotage-clients-dev**: Client management
-11. **aerotage-time-entries-dev**: Time tracking
-12. **aerotage-invoices-dev**: Invoice management
-13. **aerotage-invoice-templates-dev**: Invoice templates
-14. **aerotage-payments-dev**: Payment tracking
-
-## Security Implementation (✅ **ENTERPRISE-GRADE**)
-
-### Authentication & Authorization (✅ **IMPLEMENTED**)
-- ✅ **JWT Tokens**: Cognito JWT tokens for API authentication
-- ✅ **Role-Based Access**: Admin, Manager, Employee roles implemented
-- ✅ **Password Security**: Strong policies, reset flow, history tracking
-- ✅ **Session Management**: Multi-session tracking and control
-- ✅ **Account Security**: Lockout protection, MFA support
-
-### Security Features Status
-- ✅ **Password Reset**: Email-based reset with secure codes
-- ✅ **Security Settings**: User-configurable security options
-- ✅ **Session Tracking**: IP, device, location tracking
-- ✅ **Audit Logging**: Comprehensive security event logging
-- ✅ **Rate Limiting**: Built-in protection against abuse
-- ✅ **Financial Data Security**: Invoice and payment data encryption
-
-## API Design Rules (✅ **IMPLEMENTED**)
-
-### REST API Status
-- ✅ **46+ Endpoints**: Complete business functionality across all phases
-- ✅ **Consistent Format**: Standardized request/response format
-- ✅ **Error Handling**: Comprehensive error responses
-- ✅ **Authentication**: Cognito JWT validation on all endpoints
-- ✅ **CORS**: Configured for frontend integration
-- ✅ **Rate Limiting**: Per-endpoint throttling implemented
-
-### Response Format (✅ **STANDARDIZED**)
+### MANDATORY Database Access
 ```typescript
-// Success Response
-{
-  "success": true,
-  "data": { /* response data */ }
-}
+// ✅ CORRECT
+import { UserRepository } from '../shared/user-repository';
+const userRepo = new UserRepository();
+const result = await userRepo.getUserById(userId);
 
-// Error Response
-{
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable message",
-    "details": { /* additional context */ }
-  }
-}
+// ❌ FORBIDDEN
+const client = new DynamoDBClient({});
 ```
 
-## 🔐 API Testing & Authentication (✅ **CRITICAL INSTRUCTIONS**)
-
-### **MANDATORY Authentication Pattern for All Test Scripts**
-
-**⚠️ IMPORTANT**: Always use this exact authentication pattern when creating test scripts. This is the ONLY method that works correctly with our API.
-
-#### **Required Files for Authentication**
-1. **`scripts/get-cognito-token.js`** - ✅ **ALREADY EXISTS** - Authentication helper module
-2. **Test scripts must import and use this module** - ✅ **VERIFIED WORKING**
-
-#### **Working Authentication Pattern** (✅ **USE THIS ALWAYS**)
+### MANDATORY Test Authentication
 ```javascript
-#!/usr/bin/env node
-
 const { getCognitoToken } = require('./scripts/get-cognito-token');
-const https = require('https');
 
-// Configuration
-const API_BASE_URL = 'https://time-api-dev.aerotage.com';
-const TEST_USER = {
-  email: 'bhardwick@aerotage.com',
-  password: 'Aerotage*2025'
-};
-
-/**
- * Make HTTP request with proper authentication
- */
-function makeRequest(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || 443,
-      path: urlObj.pathname + urlObj.search,
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    };
-
-    const req = https.request(requestOptions, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        try {
-          const jsonData = JSON.parse(data);
-          resolve({ status: res.statusCode, data: jsonData });
-        } catch (e) {
-          resolve({ status: res.statusCode, data: data });
-        }
-      });
-    });
-
-    req.on('error', reject);
-    
-    if (options.body) {
-      req.write(JSON.stringify(options.body));
-    }
-    
-    req.end();
+async function testEndpoints() {
+  const authResult = await getCognitoToken('bhardwick@aerotage.com', 'Aerotage*2025');
+  const token = authResult.AccessToken; // USE AccessToken, NOT IdToken
+  
+  const response = await makeRequest(`${API_BASE_URL}/endpoint`, {
+    headers: { 'Authorization': `Bearer ${token}` }
   });
 }
-
-/**
- * Main test function
- */
-async function testEndpoints() {
-  try {
-    console.log('🔐 Getting JWT token...');
-    
-    // Get authentication token using the working method
-    const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const token = authResult.AccessToken; // Use AccessToken, not IdToken
-    
-    console.log('✅ JWT token obtained successfully');
-
-    // Test your endpoints here
-    const response = await makeRequest(`${API_BASE_URL}/your-endpoint`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    console.log('Response:', response);
-    
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-  }
-}
-
-// Run tests
-testEndpoints();
 ```
 
-#### **Authentication Module Details** (✅ **IMPLEMENTED**)
+## 🏗️ AWS CDK Infrastructure Patterns
 
-The `scripts/get-cognito-token.js` module provides:
-- **`getCognitoToken(email, password)`** function
-- **Returns**: `{ AccessToken, IdToken, RefreshToken }` object
-- **Use**: `AccessToken` for API authentication (NOT IdToken)
-- **Handles**: Cognito authentication flow correctly
+### 8-Stack Architecture Organization
+```
+Foundation Layer (Parallel Deployment):
+├── CognitoStack      # Authentication & User Management
+├── DatabaseStack     # DynamoDB Tables & Indexes  
+├── StorageStack      # S3 Buckets (storage, invoices, exports)
+└── SesStack          # Email Service & Templates
 
-#### **Critical Authentication Rules** (✅ **FOLLOW ALWAYS**)
+API Layer (Depends on Foundation):
+└── ApiStack          # API Gateway + 46+ Lambda Functions
 
-1. **ALWAYS import from `'./scripts/get-cognito-token'`** - ✅ **REQUIRED**
-2. **ALWAYS use `AccessToken`** from the result - ✅ **CRITICAL**
-3. **NEVER use AWS SDK directly** for authentication in test scripts - ❌ **CAUSES 403 ERRORS**
-4. **ALWAYS use `Authorization: Bearer ${token}`** header format - ✅ **REQUIRED**
-5. **ALWAYS use HTTPS requests** with proper error handling - ✅ **REQUIRED**
+Supporting Services (Depends on API + Foundation):
+├── DomainStack       # Route 53 + SSL + Custom Domains
+├── DocumentationStack # S3 + CloudFront for Swagger UI
+└── MonitoringStack   # CloudWatch Logs, Metrics & Alarms
+```
 
-#### **Test Credentials** (✅ **VERIFIED WORKING**)
-```javascript
-const TEST_USER = {
-  email: 'bhardwick@aerotage.com',
-  password: 'Aerotage*2025'
+### Stack Dependencies Pattern
+```typescript
+// Foundation stacks (independent)
+const cognitoStack = new CognitoStack(app, `AerotageAuth-${stage}`, { stage, env, tags });
+const databaseStack = new DatabaseStack(app, `AerotageDB-${stage}`, { stage, env, tags });
+const storageStack = new StorageStack(app, `AerotageStorage-${stage}`, { stage, env, tags });
+const sesStack = new SesStack(app, `AerotageSES-${stage}`, { stage, env, tags });
+
+// API layer (depends on all foundation)
+const apiStack = new ApiStack(app, `AerotageAPI-${stage}`, {
+  stage, userPool: cognitoStack.userPool, tables: databaseStack.tables,
+  storageBucket: storageStack.storageBucket, sesStack, env, tags
+});
+
+// Supporting services (depends on API + foundation)
+const domainStack = new DomainStack(app, `AerotageDomain-${stage}`, {
+  stage, restApi: apiStack.api, env, tags
+});
+
+// Explicit dependencies
+apiStack.addDependency(cognitoStack);
+apiStack.addDependency(databaseStack);
+apiStack.addDependency(storageStack);
+apiStack.addDependency(sesStack);
+domainStack.addDependency(apiStack);
+```
+
+### Standard Lambda Function Creation
+```typescript
+const createLambdaFunction = (name: string, handler: string, description: string): lambdaNodejs.NodejsFunction => {
+  return new lambdaNodejs.NodejsFunction(this, name, {
+    functionName: `aerotage-${name.toLowerCase()}-${stage}`,
+    entry: `lambda/${handler}.ts`,
+    handler: 'handler',
+    runtime: lambda.Runtime.NODEJS_20_X,
+    timeout: cdk.Duration.seconds(30),
+    memorySize: 256,
+    environment: lambdaEnvironment,
+    role: lambdaRole,
+    bundling: {
+      minify: false,
+      sourceMap: false,
+      target: 'es2020',
+      externalModules: ['aws-sdk'],
+    },
+  });
 };
 ```
 
-#### **Common Authentication Mistakes to AVOID** (❌ **THESE CAUSE 403 ERRORS**)
+## 🚫 FORBIDDEN Practices
 
-1. **Using AWS SDK directly**:
-   ```javascript
-   // ❌ DON'T DO THIS - CAUSES 403 FORBIDDEN
-   const { CognitoIdentityProviderClient, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
-   ```
+### NO Dual Implementations
+- ❌ NEVER create both `.ts` and `.js` versions of the same file
+- ❌ If found, DELETE all `.js` files (they are compiled outputs)
 
-2. **Using IdToken instead of AccessToken**:
-   ```javascript
-   // ❌ DON'T DO THIS - CAUSES AUTHORIZATION ISSUES
-   const token = authResult.IdToken; // WRONG!
-   ```
+### NO Direct AWS SDK Usage
+- ❌ Direct DynamoDB client creation in Lambda functions
+- ❌ Direct Cognito calls outside shared helpers
+- ❌ Manual JWT validation
 
-3. **Not using the get-cognito-token module**:
-   ```javascript
-   // ❌ DON'T DO THIS - CAUSES AUTHENTICATION FAILURES
-   // Custom authentication implementation
-   ```
+## 📂 Functional Domain Structure
+```
+infrastructure/lambda/
+├── shared/           # auth-helper, response-helper, repositories
+├── users/           # create, update, delete, list
+├── time-entries/    # create, update, delete, list, bulk-operations
+├── projects/        # create, update, delete, list, assignments
+├── clients/         # create, update, delete, list
+├── reports/         # generate, export, scheduled
+├── invoices/        # generate, export, templates
+├── analytics/       # dashboard, metrics, insights
+├── email-change/    # request, confirm, validate
+├── user-invitations/ # send, accept, resend
+└── health/          # health-check (public endpoint)
+```
 
-#### **Working Examples** (✅ **REFERENCE THESE**)
+## 🎯 Response Format Standard
+```typescript
+// Success: { "success": true, "data": {...} }
+// Error: { "success": false, "error": { "code": "ERROR_CODE", "message": "Description" } }
+```
 
-- **`test-user-management-working.js`** - ✅ **WORKING USER MANAGEMENT TESTS**
-- **`scripts/test-phase5-endpoints.js`** - ✅ **WORKING PROJECT/CLIENT TESTS**
-- **`scripts/test-phase6-core.js`** - ✅ **WORKING REPORTING TESTS**
-
-#### **Authentication Troubleshooting** (✅ **DEBUG GUIDE**)
-
-If you get **403 Forbidden** errors:
-1. **Check**: Are you using `getCognitoToken` from `scripts/get-cognito-token.js`?
-2. **Check**: Are you using `AccessToken` (not `IdToken`)?
-3. **Check**: Is the Authorization header format correct: `Bearer ${token}`?
-4. **Check**: Are you importing the module correctly: `require('./scripts/get-cognito-token')`?
-
-If you get **500 Internal Server Error**:
-1. **Check**: CloudWatch logs for the specific Lambda function
-2. **Check**: Input validation and request format
-3. **Check**: DynamoDB data format issues
-
-#### **Test Script Template** (✅ **COPY THIS FOR NEW SCRIPTS**)
-
-```javascript
-#!/usr/bin/env node
-
-const { getCognitoToken } = require('./scripts/get-cognito-token');
-const https = require('https');
-
-// Configuration
-const API_BASE_URL = 'https://time-api-dev.aerotage.com';
-const TEST_USER = {
-  email: 'bhardwick@aerotage.com',
-  password: 'Aerotage*2025'
+## 🔧 Environment Variables Standard
+```typescript
+const lambdaEnvironment = {
+  STAGE: stage,
+  USER_POOL_ID: userPool.userPoolId,
+  USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
+  USERS_TABLE: tables.usersTable.tableName,
+  AWS_REGION: process.env.AWS_REGION || 'us-east-1',
+  // ... other domain-specific tables
 };
-
-// [Include makeRequest function from above]
-
-async function testYourEndpoints() {
-  try {
-    console.log('🔐 Getting JWT token...');
-    const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const token = authResult.AccessToken;
-    console.log('✅ JWT token obtained successfully');
-
-    // Add your specific endpoint tests here
-    // Always use: Authorization: `Bearer ${token}`
-    
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-  }
-}
-
-testYourEndpoints();
 ```
 
-### **Why This Authentication Pattern Works** (✅ **TECHNICAL EXPLANATION**)
+## ✅ Verification Checklist
+When implementing new functionality:
+1. Uses `getCurrentUserId()` and `getAuthenticatedUser()` from shared helpers
+2. Implements repository pattern for database access
+3. Returns standardized response format
+4. Includes comprehensive error handling
+5. Test scripts use `getCognitoToken()` authentication
+6. No dual TypeScript/JavaScript implementations exist
+7. Follows domain-specific folder structure
+8. IAM permissions properly scoped to function needs
 
-1. **Cognito Groups**: The `AccessToken` contains `cognito:groups: ["admin"]` which our custom authorizer reads
-2. **Custom Authorizer**: Extracts role from `cognito:groups` when `custom:role` is not available
-3. **Session Validation**: The working pattern creates proper session records in DynamoDB
-4. **Token Format**: Uses the correct JWT token format that API Gateway expects
+---
 
-**Remember**: This authentication pattern is the result of extensive debugging and is the ONLY method that works reliably with our current infrastructure. Always use it for new test scripts.
-
-## Deployment & Environment Management (✅ **OPERATIONAL**)
-
-### Environment Status
-- ✅ **Development**: Fully operational with complete business functionality
-- 📋 **Staging**: Ready for complete solution deployment
-- 📋 **Production**: Infrastructure ready, pending final testing
-
-### Deployment Commands (✅ **WORKING**)
-```bash
-# Development environment (✅ DEPLOYED)
-npm run deploy:dev
-
-# Staging environment (📋 READY)
-npm run deploy:staging
-
-# Production environment (📋 READY)
-npm run deploy:prod
-
-# Destroy environment (dev/staging only)
-npm run destroy:dev
-```
-
-## Monitoring & Observability (✅ **ACTIVE**)
-
-### CloudWatch Status
-- ✅ **Structured Logging**: JSON format for all log messages
-- ✅ **Custom Metrics**: Business KPIs tracking across all phases
-- ✅ **Alarms**: Error rates, latency, and cost monitoring
-- ✅ **Dashboards**: Real-time system health monitoring
-- ✅ **SNS Alerts**: Production alert notifications
-
-### Performance Metrics (✅ **MONITORED**)
-- **API Response Time**: <200ms average across all endpoints
-- **Error Rate**: <1% in development
-- **Lambda Duration**: Optimized memory allocation
-- **DynamoDB Performance**: Efficient query patterns
-- **Cost Monitoring**: Billing alerts and anomaly detection
-
-## Testing Requirements (✅ **IMPLEMENTED**)
-
-### Test Coverage Status
-- ✅ **Unit Tests**: 80%+ coverage for critical functions across all phases
-- ✅ **Integration Tests**: End-to-end API workflows for complete business solution
-- ✅ **Authentication Tests**: Cognito integration scenarios
-- ✅ **Security Tests**: Password policies and validation
-- ✅ **Business Logic Tests**: Invoice calculations, approval workflows, reporting accuracy
-- ✅ **Manual Testing**: All 46+ endpoints verified
-
-## Documentation Status (✅ **COMPREHENSIVE & ORGANIZED**)
-
-### Available Documentation
-- ✅ **Interactive API Documentation**: Live Swagger UI with testing capabilities
-- ✅ **OpenAPI Specification**: Complete OpenAPI 3.0 YAML specification (46+ endpoints)
-- ✅ **API Reference**: Complete endpoint documentation for all phases
-- ✅ **Frontend Integration Guide**: Complete integration guide with all phases
-- ✅ **Phase Completion Archive**: Consolidated phase documentation
-- ✅ **Project Status**: Current implementation status
-- ✅ **Security Guide**: Security features and implementation
-- ✅ **Deployment Guide**: Infrastructure deployment instructions
-- ✅ **Troubleshooting**: Common issues and solutions
-- ✅ **Development Guide**: Local development setup
-
-### Documentation Organization
-- **8 Core Documents**: Streamlined, comprehensive coverage
-- **300+ Pages**: Complete documentation for all phases
-- **100+ Code Examples**: Integration patterns and best practices
-- **Consolidated Structure**: Organized for easy navigation and reference
-
-## Development Workflow (✅ **ESTABLISHED**)
-
-### Git Practices
-1. **Conventional Commits**: Use conventional commit format
-2. **Feature Branches**: Create branches for each feature/fix
-3. **Pull Requests**: Require code review for all changes
-4. **Deployment Tags**: Tag deployments with version numbers
-5. **Documentation Updates**: Update docs with all changes
-
-### **📚 Documentation Update Process** (✅ **AUTOMATED**)
-
-**REQUIRED**: After implementing new API endpoints, always update documentation:
-
-#### **Automated Process** (Recommended)
-```bash
-# After implementing new endpoints, run:
-npm run update:docs
-```
-
-This script automatically:
-- ✅ Detects new API endpoints from git changes
-- ✅ Validates OpenAPI specification syntax
-- ✅ Builds JSON specification from YAML
-- ✅ Deploys updated documentation to CloudFront
-- ✅ Updates project rules with current URLs
-- ✅ Commits documentation changes
-
-#### **Manual Process** (If needed)
-1. **Update OpenAPI Spec**: Edit `docs/openapi.yaml` with new endpoints
-2. **Validate Spec**: `npm run validate:docs`
-3. **Build Documentation**: `npm run build:docs`
-4. **Deploy**: `cd infrastructure && cdk deploy AerotageDocumentation-dev`
-5. **Commit Changes**: `git add docs/ && git commit -m "docs: update API documentation"`
-
-#### **Available Commands**
-- `npm run update:docs` - Full automated update process
-- `npm run validate:docs` - Only validate OpenAPI specification
-- `npm run build:docs` - Build JSON from YAML specification
-
-#### **Documentation Requirements for New Phases**
-When implementing new API phases:
-1. **Add endpoints to OpenAPI spec** (`docs/openapi.yaml`)
-2. **Include comprehensive schemas** for request/response objects
-3. **Add detailed descriptions** and examples
-4. **Tag endpoints appropriately** for organization
-5. **Run automated update process** (`npm run update:docs`)
-6. **Test documentation** in live Swagger UI
-7. **Update integration guides** if needed
-
-### Code Quality (✅ **ENFORCED**)
-- ✅ **TypeScript**: Strict mode enabled
-- ✅ **ESLint**: AWS CDK recommended rules
-- ✅ **Testing**: Comprehensive test coverage across all phases
-- ✅ **Documentation**: All APIs documented with examples
-
-## Prohibited Practices
-
-### Never Do
-- Store secrets or credentials in code or environment variables
-- Use deprecated AWS services or APIs
-- Implement custom authentication instead of using Cognito
-- Create overly broad IAM permissions
-- Deploy directly to production without testing
-- Use console.log in production (use proper logging)
-- Hardcode environment-specific values
-- Skip input validation for Lambda functions
-- Create circular dependencies between stacks
-- Use deprecated CDK constructs
-- **Add frontend code (React, Electron, UI) to this repository** ❌
-- **Store frontend dependencies in package.json** ❌
-- **Implement UI logic in Lambda functions** ❌
-- **Include build tools for frontend applications** ❌
-
-### Always Do
-- Follow AWS Well-Architected Framework principles
-- Use CDK best practices and design patterns
-- Implement proper error handling and logging
-- Test infrastructure changes in non-production environments
-- Use least privilege access for all IAM roles
-- Monitor resource costs and optimize regularly
-- Document API changes and breaking changes
-- Version APIs and maintain backward compatibility
-- **Keep infrastructure and API logic separate from frontend** ✅
-- **Coordinate API changes with frontend team** ✅
-- **Deploy backend infrastructure before frontend testing** ✅
-- **Maintain API documentation for frontend consumption** ✅
-
-## Current Development Context
-
-### **When Working on This Project**
-1. **Complete Business Solution DEPLOYED**: All phases (1-7) operational
-2. **46+ APIs are LIVE**: Test against actual deployed endpoints
-3. **Documentation is ORGANIZED**: Refer to consolidated `/docs` for accurate information
-4. **Frontend Integration Ready**: Support frontend team with complete API integration
-5. **Phase 8 Planning**: Prepare for advanced features and payment gateway integration
-
-### **Key Resources**
-- **API Base URL**: `https://time-api-dev.aerotage.com/`
-- **Interactive API Docs**: Live Swagger UI (deployed via CloudFront)
-- **OpenAPI Specification**: `/docs/openapi.yaml` for complete API specification
-- **Documentation**: `/docs` directory with organized, comprehensive guides
-- **Project Status**: `/docs/PROJECT_STATUS.md` for current state
-- **API Reference**: `/docs/API_REFERENCE.md` for complete endpoint details
-- **Frontend Integration**: `/docs/FRONTEND_INTEGRATION_GUIDE.md` for all phases
-- **Phase Archive**: `/docs/PHASE_COMPLETION_ARCHIVE.md` for consolidated phase documentation
-
-### **Development Priorities**
-1. **Support complete frontend integration** with all business APIs
-2. **Optimize performance** across all 46+ deployed endpoints
-3. **Plan Phase 8** advanced features and payment gateway integration
-4. **Maintain organized documentation** accuracy
-5. **Prepare for production** deployment of complete business solution
-
-### **Business Solution Status**
-The Aerotage Time Reporting API now provides a **complete, enterprise-grade business management solution** with:
-- **Time Tracking**: Timer functionality and approval workflows
-- **Project Management**: Complete project lifecycle management
-- **Client Management**: Customer relationship and billing management
-- **Reporting & Analytics**: Business intelligence and performance monitoring
-- **Invoicing & Billing**: Complete financial management and payment tracking
-
-Remember: This repository contains a **production-ready, complete business management solution** with **46+ live API endpoints** across **7 completed phases**. The focus is now on **complete frontend integration support**, **performance optimization**, and **planning advanced features** for Phase 8 and beyond. 
+**Focus**: This is a production system with 52+ Lambda functions. Follow these core patterns to maintain consistency and prevent authentication issues. 
