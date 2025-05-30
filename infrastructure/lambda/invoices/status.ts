@@ -1,24 +1,26 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   Invoice,
   Payment,
   RecordPaymentRequest,
   SuccessResponse,
-  ErrorResponse,
   InvoiceErrorCodes
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { InvoiceRepository } from '../shared/invoice-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Update invoice status request:', JSON.stringify(event, null, 2));
-
   try {
-    // Get current user from authorization context
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Get invoice ID from path parameters
     const invoiceId = event.pathParameters?.id;
@@ -40,12 +42,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(404, InvoiceErrorCodes.INVOICE_NOT_FOUND, 'Invoice not found');
     }
 
-    // TODO: Implement role-based access control
-    // For now, allow any authenticated user to update invoice status
-    // In the future, we should check:
-    // - Admins: can update any invoice status
-    // - Managers: can update status for their managed projects/clients
-    // - Employees: limited status update permissions
+    // Role-based access control
+    if (userRole === 'employee') {
+      // Employees have limited status update permissions - only for invoices they created
+      if (existingInvoice.createdBy !== currentUserId) {
+        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update status for invoices you created');
+      }
+      // Employees can only update to specific statuses (cannot record payments)
+      if (operation === 'recordPayment') {
+        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to record payments');
+      }
+      const allowedEmployeeStatuses = ['draft', 'sent'];
+      if (requestBody.status && !allowedEmployeeStatuses.includes(requestBody.status)) {
+        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', `You can only set status to: ${allowedEmployeeStatuses.join(', ')}`);
+      }
+    } else if (userRole === 'manager') {
+      // Managers can update status for their managed projects/clients
+      // TODO: Implement team/project association check when user teams are implemented
+      // For now, allow managers to update any invoice status and record payments
+    }
+    // Admins can update any invoice status and record payments (no additional restrictions)
 
     let updatedInvoice: Invoice;
     let payment: Payment | null = null;
@@ -73,11 +89,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return createErrorResponse(400, 'VALIDATION_ERROR', `Status must be one of: ${allowedStatuses.join(', ')}`);
       }
 
-             // Check business rules for status transitions
-       const canTransition = validateStatusTransition(existingInvoice.status, requestBody.status);
-       if (!canTransition.allowed) {
-         return createErrorResponse(400, 'INVALID_STATUS_TRANSITION', canTransition.reason || 'Invalid status transition');
-       }
+      // Check business rules for status transitions
+      const canTransition = validateStatusTransition(existingInvoice.status, requestBody.status);
+      if (!canTransition.allowed) {
+        return createErrorResponse(400, 'INVALID_STATUS_TRANSITION', canTransition.reason || 'Invalid status transition');
+      }
 
       // Update the invoice status
       updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, {
@@ -124,21 +140,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -171,50 +173,4 @@ function validateStatusTransition(currentStatus: string, newStatus: string): { a
   }
 
   return { allowed: true };
-}
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
 }

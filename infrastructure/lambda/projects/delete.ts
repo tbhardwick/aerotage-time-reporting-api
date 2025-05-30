@@ -1,19 +1,28 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
-  SuccessResponse,
-  ErrorResponse
+  SuccessResponse
 } from '../shared/types';
 import { ProjectRepository } from '../shared/project-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Delete project request:', JSON.stringify(event, null, 2));
-
   try {
-    // Get current user from authorization context
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    // Role-based access control
+    if (userRole === 'employee') {
+      // Employees cannot delete projects
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to delete projects');
+    }
+    // Managers and admins can delete projects
 
     // Get project ID from path parameters
     const projectId = event.pathParameters?.id;
@@ -28,13 +37,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!existingProject) {
       return createErrorResponse(404, 'PROJECT_NOT_FOUND', 'Project not found');
     }
-
-    // TODO: Implement role-based access control
-    // For now, allow all authenticated users to delete projects
-    // In the future, we should check:
-    // - Admins: can delete any project
-    // - Managers: can delete projects they manage
-    // - Employees: cannot delete projects
 
     // TODO: Check for dependencies before deletion
     // In the future, we should check:
@@ -70,66 +72,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     }
 
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-}
