@@ -1,12 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { 
   QuickTimeEntryRequest,
   TimeEntry,
   TimeTrackingErrorCodes,
-  SuccessResponse
 } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -56,20 +55,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       notes: request.fillGap ? 'Created via quick entry to fill time gap' : undefined,
     });
 
-    // MANDATORY: Standardized success response format
-    const response: SuccessResponse<TimeEntry> = {
-      success: true,
-      data: timeEntry,
-    };
-
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(timeEntry, 201, 'Quick time entry created successfully');
 
   } catch (error) {
     console.error('Function error:', error);

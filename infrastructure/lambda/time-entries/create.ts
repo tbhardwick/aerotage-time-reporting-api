@@ -104,21 +104,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     if (validationErrors.length > 0) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({
-          success: false,
-          error: {
-            code: TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA,
-            message: `Validation failed: ${validationErrors.join(', ')}`,
-          },
-          timestamp: new Date().toISOString(),
-        } as ErrorResponse),
-      };
+      return createErrorResponse(
+        400, 
+        TimeEntryErrorCodes.INVALID_TIME_ENTRY_DATA, 
+        `Validation failed: ${validationErrors.join(', ')}`
+      );
     }
 
     // TODO: Validate project access (check if user has access to the project)

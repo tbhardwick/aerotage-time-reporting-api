@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { 
-  TimeEntryErrorCodes, 
-  SuccessResponse
+  TimeEntryErrorCodes
 } from '../shared/types';
 
 const timeEntryRepo = new TimeEntryRepository();
@@ -46,20 +45,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Delete the time entry
     await timeEntryRepo.deleteTimeEntry(timeEntryId);
 
-    const response: SuccessResponse<null> = {
-      success: true,
-      data: null,
-      message: 'Time entry deleted successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(null, 200, 'Time entry deleted successfully');
 
   } catch (error) {
     console.error('Error deleting time entry:', error);

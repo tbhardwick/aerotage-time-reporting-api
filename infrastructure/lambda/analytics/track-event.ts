@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { AnalyticsRepository, AnalyticsEvent } from '../shared/analytics-repository';
 
 interface TrackEventRequest {
@@ -132,21 +132,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update rate limiting counter using repository
     await analyticsRepo.updateRateLimit(currentUserId);
 
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: true,
-        data: {
-          eventId: analyticsEvent.eventId,
-          timestamp: analyticsEvent.timestamp,
-          message: 'Event tracked successfully',
-        },
-      }),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse({
+      eventId: analyticsEvent.eventId,
+      timestamp: analyticsEvent.timestamp,
+      message: 'Event tracked successfully',
+    }, 201);
 
   } catch (error) {
     console.error('Error tracking analytics event:', error);
