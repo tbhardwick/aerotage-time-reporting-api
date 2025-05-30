@@ -131,15 +131,6 @@ export class InvoiceRepository {
     newInvoice.clientName = clientName;
 
     const dynamoItem: InvoiceDynamoItem = {
-      PK: `INVOICE#${invoiceId}`,
-      SK: `INVOICE#${invoiceId}`,
-      GSI1PK: `CLIENT#${invoiceData.clientId}`,
-      GSI1SK: `INVOICE#${issueDate}#${invoiceNumber}`,
-      GSI2PK: `STATUS#draft`,
-      GSI2SK: `INVOICE#${dueDate}#${invoiceId}`,
-      GSI3PK: `INVOICE_NUMBER#${invoiceNumber}`,
-      GSI3SK: `INVOICE#${invoiceId}`,
-      
       id: invoiceId,
       invoiceNumber,
       clientId: invoiceData.clientId,
@@ -209,18 +200,18 @@ export class InvoiceRepository {
   async getInvoiceByNumber(invoiceNumber: string): Promise<Invoice | null> {
     const result = await this.dynamoClient.send(new QueryCommand({
       TableName: this.invoicesTableName,
-      IndexName: 'InvoiceNumberIndex',
+      IndexName: 'GSI3', // invoiceNumber GSI
       KeyConditionExpression: 'invoiceNumber = :invoiceNumber',
       ExpressionAttributeValues: {
         ':invoiceNumber': invoiceNumber,
       },
     }));
 
-    if (!(result as any).Items || (result as any).Items.length === 0) {
+    if (!result.Items || result.Items.length === 0) {
       return null;
     }
 
-    return this.mapDynamoItemToInvoice((result as any).Items[0] as InvoiceDynamoItem);
+    return this.mapDynamoItemToInvoice(result.Items[0] as InvoiceDynamoItem);
   }
 
   /**
@@ -337,25 +328,25 @@ export class InvoiceRepository {
     const limit = Math.min(filters.limit || 50, 100);
     const offset = filters.offset || 0;
 
-    let queryCommand;
+    let result: any;
 
     if (filters.clientId) {
-      // Query by client using GSI1
-      queryCommand = new QueryCommand({
+      // Query by client using GSI1 (clientId + issueDate)
+      result = await this.dynamoClient.send(new QueryCommand({
         TableName: this.invoicesTableName,
-        IndexName: 'ClientIndex',
+        IndexName: 'GSI1',
         KeyConditionExpression: 'clientId = :clientId',
         ExpressionAttributeValues: {
           ':clientId': filters.clientId,
         },
         Limit: limit + offset,
         ScanIndexForward: filters.sortOrder !== 'desc',
-      });
+      }));
     } else if (filters.status) {
-      // Query by status using GSI2
-      queryCommand = new QueryCommand({
+      // Query by status using GSI2 (status + dueDate)
+      result = await this.dynamoClient.send(new QueryCommand({
         TableName: this.invoicesTableName,
-        IndexName: 'StatusIndex',
+        IndexName: 'GSI2',
         KeyConditionExpression: '#status = :status',
         ExpressionAttributeNames: {
           '#status': 'status',
@@ -365,17 +356,16 @@ export class InvoiceRepository {
         },
         Limit: limit + offset,
         ScanIndexForward: filters.sortOrder !== 'desc',
-      });
+      }));
     } else {
       // Scan all invoices
-      queryCommand = new ScanCommand({
+      result = await this.dynamoClient.send(new ScanCommand({
         TableName: this.invoicesTableName,
         Limit: limit + offset,
-      });
+      }));
     }
 
-    const result = await this.dynamoClient.send(queryCommand);
-    const items = (result as any).Items || [];
+    const items = result.Items || [];
 
     // Convert DynamoDB items to Invoice objects
     let invoices = items.map(item => this.mapDynamoItemToInvoice(item as InvoiceDynamoItem));

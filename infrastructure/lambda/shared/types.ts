@@ -1298,15 +1298,6 @@ export enum InvoiceErrorCodes {
 
 // DynamoDB Item Types for Invoices
 export interface InvoiceDynamoItem {
-  PK: string; // "INVOICE#{id}"
-  SK: string; // "INVOICE#{id}"
-  GSI1PK: string; // "CLIENT#{clientId}"
-  GSI1SK: string; // "INVOICE#{issueDate}#{invoiceNumber}"
-  GSI2PK: string; // "STATUS#{status}"
-  GSI2SK: string; // "INVOICE#{dueDate}#{id}"
-  GSI3PK: string; // "INVOICE_NUMBER#{invoiceNumber}"
-  GSI3SK: string; // "INVOICE#{id}"
-  
   id: string;
   invoiceNumber: string;
   clientId: string;
@@ -1384,13 +1375,6 @@ export interface InvoiceTemplateDynamoItem {
 }
 
 export interface PaymentDynamoItem {
-  PK: string; // "PAYMENT#{id}"
-  SK: string; // "PAYMENT#{id}"
-  GSI1PK: string; // "INVOICE#{invoiceId}"
-  GSI1SK: string; // "PAYMENT#{paymentDate}#{id}"
-  GSI2PK: string; // "STATUS#{status}"
-  GSI2SK: string; // "PAYMENT#{paymentDate}#{id}"
-  
   id: string;
   invoiceId: string;
   amount: number;

@@ -57,9 +57,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     
     console.log('🎯 Parsed filters:', filters);
 
-    // Validate filters
+    // Validate filters (basic validation)
     console.log('✅ Validating filters...');
-    const validation = ValidationService.validateInvoiceFilters(filters as Record<string, unknown>);
+    const errors: string[] = [];
+    
+    if (filters.status && !['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'].includes(filters.status)) {
+      errors.push('Invalid status value');
+    }
+    
+    if (filters.limit && (filters.limit < 1 || filters.limit > 100)) {
+      errors.push('Limit must be between 1 and 100');
+    }
+    
+    if (filters.offset && filters.offset < 0) {
+      errors.push('Offset must be non-negative');
+    }
+    
+    if (filters.sortOrder && !['asc', 'desc'].includes(filters.sortOrder)) {
+      errors.push('Sort order must be asc or desc');
+    }
+    
+    const validation = { isValid: errors.length === 0, errors };
     console.log('📊 Validation result:', validation);
     
     if (!validation.isValid) {
