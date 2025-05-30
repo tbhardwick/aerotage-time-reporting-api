@@ -1,6 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { SuccessResponse, ErrorResponse, User } from '../shared/types';
+import { SuccessResponse, User } from '../shared/types';
 
 interface UpdateUserRequest {
   name?: string;
@@ -27,7 +29,14 @@ interface UpdateUserRequest {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Update user request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -42,13 +51,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const updateData: UpdateUserRequest = JSON.parse(event.body);
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
-
     // Authorization check: users can only update their own basic data unless they're admin
-    if (userId !== authenticatedUserId && userRole !== 'admin') {
+    if (userId !== currentUserId && userRole !== 'admin') {
       return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update your own user data');
     }
 
@@ -66,7 +70,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       if (updateData.permissions !== undefined) allowedUpdates.permissions = updateData.permissions;
       if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
       if (updateData.contactInfo !== undefined) allowedUpdates.contactInfo = updateData.contactInfo;
-    } else if (userId === authenticatedUserId) {
+    } else if (userId === currentUserId) {
       // Users can update their own basic information
       if (updateData.name !== undefined) allowedUpdates.name = updateData.name;
       if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
@@ -113,26 +117,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error updating user:', error);
     
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'Failed to update user');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
-
-function createErrorResponse(statusCode: number, code: string, message: string): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-}

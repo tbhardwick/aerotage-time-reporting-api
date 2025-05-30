@@ -1,15 +1,19 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { SuccessResponse, ErrorResponse, User } from '../shared/types';
+import { SuccessResponse, User } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('List users request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Authorization check: only admins and managers can list users
     if (userRole !== 'admin' && userRole !== 'manager') {
@@ -62,26 +66,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error listing users:', error);
     
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'Failed to list users');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
-};
-
-function createErrorResponse(statusCode: number, code: string, message: string): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 
+}; 
