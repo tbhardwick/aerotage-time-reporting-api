@@ -1,19 +1,23 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-// Removed unused import
-import { ValidationService } from '../shared/validation';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { ProjectRepository } from '../shared/project-repository';
 import { ClientRepository } from '../shared/client-repository';
-import { getCurrentUserId } from '../shared/auth-helper';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Log request for debugging in development
-
   try {
-    // Get current user from authorization context
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    // Authorization check: Only managers and admins can create projects
+    if (userRole === 'employee') {
+      return createErrorResponse(403, 'FORBIDDEN', 'Only managers and admins can create projects');
     }
 
     // Parse request body
@@ -24,15 +28,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
+    // Basic validation - ensure required fields are present
+    if (!requestBody.name || typeof requestBody.name !== 'string') {
+      return createErrorResponse(400, 'VALIDATION_ERROR', 'Project name is required and must be a string');
+    }
+
+    if (!requestBody.clientId || typeof requestBody.clientId !== 'string') {
+      return createErrorResponse(400, 'VALIDATION_ERROR', 'Client ID is required and must be a string');
+    }
+
+    if (typeof requestBody.defaultBillable !== 'boolean') {
+      return createErrorResponse(400, 'VALIDATION_ERROR', 'Default billable status is required and must be a boolean');
+    }
+
     // Add current user as creator
     requestBody.createdBy = currentUserId;
 
-    // Validate request
-    const validation = ValidationService.validateCreateProjectRequest(requestBody);
-    if (!validation.isValid) {
-      return createErrorResponse(400, 'VALIDATION_ERROR', validation.errors.join(', '));
-    }
-
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
     const projectRepository = new ProjectRepository();
     const clientRepository = new ClientRepository();
 
@@ -54,7 +66,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(newProject, 201, 'Project created successfully');
 
   } catch (error) {
-    // Log error for debugging
+    console.error('Error creating project:', error);
     
     // Handle specific DynamoDB errors
     if (error instanceof Error) {

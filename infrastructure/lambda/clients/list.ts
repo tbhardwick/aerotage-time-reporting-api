@@ -1,19 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-// Removed unused imports
-import { ValidationService } from '../shared/validation';
-import { ClientRepository, ClientFilters } from '../shared/client-repository';
-import { getCurrentUserId } from '../shared/auth-helper';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { ClientRepository, ClientFilters } from '../shared/client-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  // Log request for debugging in development
-
   try {
-    // Get current user from authorization context
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
@@ -25,22 +24,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       sortOrder: queryParams.sortOrder as 'asc' | 'desc' | undefined,
     };
 
-    // Validate filters
-    const validation = ValidationService.validateClientFilters(filters);
-    if (!validation.isValid) {
-      return createErrorResponse(400, 'VALIDATION_ERROR', validation.errors.join(', '));
+    // Basic validation
+    if (filters.limit && (filters.limit < 1 || filters.limit > 100)) {
+      return createErrorResponse(400, 'VALIDATION_ERROR', 'Limit must be between 1 and 100');
     }
 
+    if (filters.offset && filters.offset < 0) {
+      return createErrorResponse(400, 'VALIDATION_ERROR', 'Offset must be non-negative');
+    }
+
+    // Role-based access control
+    if (userRole === 'employee') {
+      // Employees can only see active clients
+      filters.isActive = true;
+    }
+
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
     const clientRepository = new ClientRepository();
 
     // Get clients with pagination
     const result = await clientRepository.listClients(filters);
-
-    // TODO: Implement role-based filtering
-    // For now, return all clients. In the future, we should:
-    // - Admins: see all clients
-    // - Managers: see all clients
-    // - Employees: see only active clients they work on projects for
 
     const responseData = {
       items: result.clients,
@@ -54,9 +57,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     return createSuccessResponse(responseData);
 
-  } catch {
-    // Log error for debugging
-    
+  } catch (error) {
+    console.error('Error listing clients:', error);
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };

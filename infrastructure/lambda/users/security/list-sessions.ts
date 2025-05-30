@@ -1,20 +1,28 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
+// Note: This function still uses some direct DynamoDB access due to complex session management logic
+// In a full standardization, this would be moved to a UserSessionRepository
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('List user sessions request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -22,16 +30,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
     }
 
-    // Get current session ID from authorizer context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const currentSessionId = authContext?.sessionId; // Session ID should be passed from authorizer
-
-    console.log('Authorizer context:', JSON.stringify(authContext, null, 2));
-    console.log('Current session ID from context:', currentSessionId);
-
     // Authorization check: users can only view their own sessions
-    if (userId !== authenticatedUserId) {
+    if (userId !== currentUserId) {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -39,14 +39,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get current request's user agent and IP for session matching
+    // Get current request details for session matching
     const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
     const currentIP = getClientIP(event);
     
-    console.log('Current request details for session matching:');
-    console.log(`  User Agent: ${currentUserAgent}`);
-    console.log(`  IP Address: ${currentIP}`);
-
     // Query active sessions for the user using GSI
     const command = new QueryCommand({
       TableName: process.env.USER_SESSIONS_TABLE!,
@@ -64,68 +60,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const result = await docClient.send(command);
     const rawSessions = result.Items || [];
 
-    console.log(`Found ${rawSessions.length} active sessions for user ${userId}`);
-
-    // If no current session ID from context, try to identify it by most recent activity
-    let identifiedCurrentSessionId = currentSessionId;
-    
-    if (!identifiedCurrentSessionId && rawSessions.length > 0) {
-      // Sort by last activity and pick the most recent as current
-      const sortedSessions = [...rawSessions].sort((a, b) => 
-        new Date(b.lastActivity || b.createdAt).getTime() - 
-        new Date(a.lastActivity || a.createdAt).getTime()
-      );
-      
-      // The most recently active session is likely the current one
-      identifiedCurrentSessionId = sortedSessions[0].sessionId;
-      console.log(`No session ID from context, using most recent session: ${identifiedCurrentSessionId}`);
-    }
-
-    // Check if any sessions lack sessionIdentifier (legacy sessions)
-    const legacySessions = rawSessions.filter(session => !session.sessionIdentifier);
-    
-    if (legacySessions.length > 0 && identifiedCurrentSessionId) {
-      console.log(`Found ${legacySessions.length} legacy sessions without sessionIdentifier. Migrating current session and cleaning up others.`);
-      
-      // Try to find the current session by token comparison (fallback for migration)
-      let currentSession = null;
-      for (const session of legacySessions) {
-        if (session.sessionId === identifiedCurrentSessionId) {
-          currentSession = session;
-          break;
-        }
-      }
-      
-      if (currentSession) {
-        console.log(`Migrating current session ${currentSession.sessionId} with sessionIdentifier: ${identifiedCurrentSessionId}`);
-        
-        // Update current session with sessionIdentifier
-        const updateCurrentCommand = new UpdateCommand({
-          TableName: process.env.USER_SESSIONS_TABLE!,
-          Key: { sessionId: currentSession.sessionId },
-          UpdateExpression: 'SET sessionIdentifier = :sessionIdentifier, updatedAt = :now',
-          ExpressionAttributeValues: {
-            ':sessionIdentifier': identifiedCurrentSessionId,
-            ':now': new Date().toISOString(),
-          },
-        });
-        
-        await docClient.send(updateCurrentCommand);
-        
-        // Update the session in our local array
-        currentSession.sessionIdentifier = identifiedCurrentSessionId;
-      }
-      
-      // Invalidate other legacy sessions (not the current one)
-      const otherLegacySessions = legacySessions.filter(session => 
-        session.sessionId !== currentSession?.sessionId
-      );
-      
-      if (otherLegacySessions.length > 0) {
-        console.log(`Invalidating ${otherLegacySessions.length} other legacy sessions`);
-        await invalidateSpecificSessions(otherLegacySessions.map(s => s.sessionId));
-      }
-    }
+    // Get current session ID from context for identification
+    const authContext = event.requestContext.authorizer;
+    const currentSessionId = authContext?.sessionId;
 
     // Transform DynamoDB items to UserSession format
     const sessions: UserSession[] = rawSessions.map(item => {
@@ -152,33 +89,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     });
 
-    // Find the current session: the most recently active session that matches current UA and IP
-    let identifiedCurrentSession: string | null = null;
+    // Identify current session
+    let identifiedCurrentSession: string | null = currentSessionId;
     
-    // First, find all sessions that match current UA and IP
-    const matchingSessions = sessions.filter(session => 
-      session.userAgent === currentUserAgent && session.ipAddress === currentIP
-    );
-    
-    if (matchingSessions.length > 0) {
-      // Sort by last activity (most recent first)
-      matchingSessions.sort((a, b) => {
-        const aTime = new Date(a.lastActivity || a.loginTime).getTime();
-        const bTime = new Date(b.lastActivity || b.loginTime).getTime();
-        return bTime - aTime;
-      });
+    if (!identifiedCurrentSession && sessions.length > 0) {
+      // Find sessions that match current UA and IP
+      const matchingSessions = sessions.filter(session => 
+        session.userAgent === currentUserAgent && session.ipAddress === currentIP
+      );
       
-      // The most recently active matching session is the current one
-      identifiedCurrentSession = matchingSessions[0].id;
-      console.log(`Identified current session: ${identifiedCurrentSession} (most recent of ${matchingSessions.length} matching sessions)`);
+      if (matchingSessions.length > 0) {
+        // Sort by last activity (most recent first)
+        matchingSessions.sort((a, b) => {
+          const aTime = new Date(a.lastActivity || a.loginTime).getTime();
+          const bTime = new Date(b.lastActivity || b.loginTime).getTime();
+          return bTime - aTime;
+        });
+        
+        // The most recently active matching session is the current one
+        identifiedCurrentSession = matchingSessions[0].id;
+      }
     }
     
-    // Mark only the identified current session
+    // Mark the current session
     sessions.forEach(session => {
       session.isCurrent = session.id === identifiedCurrentSession;
     });
 
-    // Sort sessions by last activity (most recent first)
+    // Sort sessions by current status and last activity
     sessions.sort((a, b) => {
       if (a.isCurrent && !b.isCurrent) return -1;
       if (!a.isCurrent && b.isCurrent) return 1;
@@ -186,8 +124,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const bTime = new Date(b.lastActivity || b.loginTime).getTime();
       return bTime - aTime;
     });
-
-    console.log(`Returning ${sessions.length} sessions, current session identified: ${sessions.some(s => s.isCurrent)}`);
 
     const response: SuccessResponse<UserSession[]> = {
       success: true,
@@ -204,10 +140,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('List sessions error:', error);
-    return createErrorResponse(500, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Internal server error');
+    console.error('Error listing sessions:', error);
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
+
+function getClientIP(event: APIGatewayProxyEvent): string {
+  // Check various headers in order of preference
+  const xForwardedFor = event.headers['x-forwarded-for'] || event.headers['X-Forwarded-For'];
+  const xRealIP = event.headers['x-real-ip'] || event.headers['X-Real-IP'];
+  const cfConnectingIP = event.headers['cf-connecting-ip'] || event.headers['CF-Connecting-IP'];
+  const sourceIP = event.requestContext.identity.sourceIp;
+  
+  if (xForwardedFor) {
+    // X-Forwarded-For can contain multiple IPs, take the first (original client)
+    return xForwardedFor.split(',')[0].trim();
+  }
+  
+  return xRealIP || cfConnectingIP || sourceIP || 'unknown';
+}
 
 /**
  * Invalidate specific sessions by their IDs
@@ -289,43 +240,4 @@ async function invalidateAllUserSessions(userId: string): Promise<void> {
     console.error(`Error invalidating sessions for user ${userId}:`, error);
     throw error;
   }
-}
-
-function getClientIP(event: APIGatewayProxyEvent): string {
-  // Check various headers in order of preference
-  const xForwardedFor = event.headers['x-forwarded-for'] || event.headers['X-Forwarded-For'];
-  const xRealIP = event.headers['x-real-ip'] || event.headers['X-Real-IP'];
-  const cfConnectingIP = event.headers['cf-connecting-ip'] || event.headers['CF-Connecting-IP'];
-  const sourceIP = event.requestContext.identity.sourceIp;
-  
-  if (xForwardedFor) {
-    // X-Forwarded-For can contain multiple IPs, take the first (original client)
-    return xForwardedFor.split(',')[0].trim();
-  }
-  
-  return xRealIP || cfConnectingIP || sourceIP || 'unknown';
-}
-
-function createErrorResponse(
-  statusCode: number,
-  errorCode: ProfileSettingsErrorCodes,
-  message: string
-): APIGatewayProxyResult {
-  const response: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(response),
-  };
 } 

@@ -77,16 +77,14 @@ interface ReportResponse {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Generate time report request:', JSON.stringify(event, null, 2));
-
-    // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-    
-    if (!userId) {
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
@@ -110,16 +108,22 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Apply role-based access control
     if (userRole === 'employee') {
       // Employees can only see their own data
-      filters.users = [userId];
+      filters.users = [currentUserId];
+    }
+
+    // Authorization check: Ensure user can access requested data
+    if (filters.users && filters.users.length > 0 && userRole === 'employee') {
+      if (!filters.users.includes(currentUserId)) {
+        return createErrorResponse(403, 'FORBIDDEN', 'You can only access your own time data');
+      }
     }
 
     // Generate cache key
-    const cacheKey = generateCacheKey('time-report', filters, userId);
+    const cacheKey = generateCacheKey('time-report', filters, currentUserId);
     
     // Check cache first
     const cachedReport = await getCachedReport(cacheKey);
     if (cachedReport) {
-      console.log('Returning cached report');
       return {
         statusCode: 200,
         headers: {
@@ -134,7 +138,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateTimeReport(filters, userId, userRole);
+    const reportData = await generateTimeReport(filters, currentUserId, userRole);
     
     // Cache the report (1 hour TTL)
     await cacheReport(cacheKey, reportData, 3600);
@@ -153,8 +157,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error generating time report:', error);
-    
-    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate time report');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
 
