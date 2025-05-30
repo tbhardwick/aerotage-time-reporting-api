@@ -60,7 +60,7 @@ async function testSelfApproval() {
     // Get authentication token
     console.log('🔐 Getting JWT token...');
     const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const token = authResult.token;
+    const { token: accessToken } = authResult;
     console.log('✅ JWT token obtained successfully\n');
 
     // Step 1: Create a test time entry
@@ -77,7 +77,7 @@ async function testSelfApproval() {
     const createResponse = await makeRequest(`${API_BASE_URL}/time-entries`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: timeEntryData
     });
@@ -92,7 +92,7 @@ async function testSelfApproval() {
       const submitResponse = await makeRequest(`${API_BASE_URL}/time-entries/submit`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: {
           timeEntryIds: [timeEntryId]
@@ -108,7 +108,7 @@ async function testSelfApproval() {
         const approveResponse = await makeRequest(`${API_BASE_URL}/time-entries/approve`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${accessToken}`
           },
           body: {
             timeEntryIds: [timeEntryId]

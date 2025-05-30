@@ -2,48 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { randomUUID } from 'crypto';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
-
-// Create a simple AnalyticsRepository to follow repository pattern
-class AnalyticsRepository {
-  private docClient: any;
-  private analyticsTableName: string;
-
-  constructor() {
-    // Import DynamoDB modules here to avoid top-level imports
-    const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-    const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
-    
-    const dynamoClient = new DynamoDBClient({});
-    this.docClient = DynamoDBDocumentClient.from(dynamoClient);
-    this.analyticsTableName = process.env.ANALYTICS_EVENTS_TABLE_NAME || 'aerotage-analytics-events-dev';
-  }
-
-  async trackEvent(analyticsEvent: AnalyticsEvent): Promise<void> {
-    const command = new (require('@aws-sdk/lib-dynamodb').PutCommand)({
-      TableName: this.analyticsTableName,
-      Item: analyticsEvent,
-    });
-
-    await this.docClient.send(command);
-  }
-}
-
-interface AnalyticsEvent {
-  eventId: string;
-  userId: string;
-  eventType: string;
-  timestamp: string;
-  sessionId?: string;
-  metadata: Record<string, unknown>;
-  ipAddress?: string;
-  userAgent?: string;
-  location?: {
-    country: string;
-    region: string;
-    city: string;
-  };
-  expiresAt: number; // TTL for auto-deletion (90 days)
-}
+import { AnalyticsRepository, AnalyticsEvent } from '../shared/analytics-repository';
 
 interface TrackEventRequest {
   eventType: string;
@@ -95,6 +54,9 @@ const VALID_EVENT_TYPES = [
   'feature_usage',
 ];
 
+// MANDATORY: Use repository pattern instead of direct DynamoDB
+const analyticsRepo = new AnalyticsRepository();
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     // MANDATORY: Use standardized authentication helpers
@@ -125,8 +87,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, 'INVALID_EVENT_TYPE', `Invalid event type. Must be one of: ${VALID_EVENT_TYPES.join(', ')}`);
     }
 
-    // Check rate limiting (simple implementation)
-    const rateLimitCheck = await checkRateLimit(currentUserId);
+    // Check rate limiting using repository
+    const rateLimitCheck = await analyticsRepo.checkRateLimit(currentUserId);
     if (!rateLimitCheck.allowed) {
       return {
         statusCode: 429,
@@ -165,11 +127,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     // MANDATORY: Use repository pattern instead of direct DynamoDB
-    const analyticsRepo = new AnalyticsRepository();
     await analyticsRepo.trackEvent(analyticsEvent);
 
-    // Update rate limiting counter
-    await updateRateLimit(currentUserId);
+    // Update rate limiting counter using repository
+    await analyticsRepo.updateRateLimit(currentUserId);
 
     return {
       statusCode: 201,
@@ -224,44 +185,5 @@ async function getLocationFromIP(_ipAddress: string): Promise<{ country: string;
   } catch {
     console.error('Error getting location from IP');
     return undefined;
-  }
-}
-
-async function checkRateLimit(userId: string): Promise<{ allowed: boolean; remaining: number }> {
-  // Simple rate limiting: 1000 events per hour per user
-  // In production, use Redis or DynamoDB with TTL for more sophisticated rate limiting
-  
-  try {
-    const rateLimitTable = process.env.RATE_LIMIT_TABLE_NAME;
-    if (!rateLimitTable) {
-      // If no rate limit table, allow all requests
-      return { allowed: true, remaining: 999 };
-    }
-
-    const currentHour = Math.floor(Date.now() / (60 * 60 * 1000));
-    const rateLimitKey = `${userId}-${currentHour}`;
-    
-    // For now, return allowed (implement proper rate limiting in production)
-    return { allowed: true, remaining: 999 };
-    
-  } catch (error) {
-    console.error('Error checking rate limit:', error);
-    // On error, allow the request
-    return { allowed: true, remaining: 999 };
-  }
-}
-
-async function updateRateLimit(userId: string): Promise<void> {
-  // Update rate limiting counter
-  // Implementation depends on the rate limiting strategy chosen
-  try {
-    const currentHour = Math.floor(Date.now() / (60 * 60 * 1000));
-    const _rateLimitKey = `${userId}-${currentHour}`;
-    
-    // Placeholder for rate limit update logic
-    
-  } catch {
-    console.error('Error updating rate limit');
-    // Don't throw - rate limit update failure shouldn't break event tracking
   }
 } 

@@ -1,9 +1,7 @@
 import { ScheduledEvent, Context } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, DeleteCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository } from '../../shared/session-repository';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 interface CleanupResult {
   totalSessions: number;
@@ -27,8 +25,8 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
   };
 
   try {
-    // Scan all sessions in the table
-    const sessions = await getAllSessions();
+    // Get all sessions using repository
+    const sessions = await sessionRepo.getAllSessions();
     result.totalSessions = sessions.length;
 
     console.log(`Found ${sessions.length} total sessions to analyze`);
@@ -44,7 +42,7 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
 
     for (const session of sessions) {
       try {
-        const shouldDelete = shouldDeleteSession(session, now);
+        const shouldDelete = sessionRepo.shouldDeleteSession(session, now);
         
         if (shouldDelete.delete) {
           sessionsToDelete.push(session.sessionId);
@@ -69,9 +67,9 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
     console.log(`  Inactive: ${result.inactiveSessions}`);
     console.log(`  Orphaned: ${result.orphanedSessions}`);
 
-    // Delete sessions in batches
+    // Delete sessions in batches using repository
     if (sessionsToDelete.length > 0) {
-      const deletedCount = await deleteSessions(sessionsToDelete);
+      const deletedCount = await sessionRepo.deleteSessions(sessionsToDelete);
       result.deletedSessions = deletedCount;
     }
 
@@ -87,125 +85,4 @@ export const handler = async (event: ScheduledEvent, context: Context): Promise<
     result.errors++;
     return result;
   }
-};
-
-/**
- * Get all sessions from the table
- */
-async function getAllSessions(): Promise<any[]> {
-  const sessions: any[] = [];
-  let lastEvaluatedKey: any = undefined;
-
-  do {
-    try {
-      const scanCommand = new ScanCommand({
-        TableName: process.env.USER_SESSIONS_TABLE!,
-        ExclusiveStartKey: lastEvaluatedKey,
-        Limit: 100, // Process in batches
-      });
-
-      const result = await docClient.send(scanCommand);
-      
-      if (result.Items) {
-        sessions.push(...result.Items);
-      }
-      
-      lastEvaluatedKey = result.LastEvaluatedKey;
-      
-    } catch (error) {
-      console.error('Error scanning sessions:', error);
-      break;
-    }
-  } while (lastEvaluatedKey);
-
-  return sessions;
-}
-
-/**
- * Determine if a session should be deleted
- */
-function shouldDeleteSession(session: any, now: Date): { delete: boolean; reason?: string } {
-  // Check if session has expired based on expiresAt
-  const expiresAt = new Date(session.expiresAt);
-  if (expiresAt <= now) {
-    return { delete: true, reason: 'expired' };
-  }
-
-  // Check if session is marked as inactive
-  if (!session.isActive) {
-    return { delete: true, reason: 'inactive' };
-  }
-
-  // Check if session has been inactive for too long based on session timeout
-  const lastActivity = new Date(session.lastActivity || session.loginTime);
-  const sessionTimeoutMinutes = session.sessionTimeout || 480; // Default 8 hours
-  const timeoutMs = sessionTimeoutMinutes * 60 * 1000;
-  
-  if ((now.getTime() - lastActivity.getTime()) > timeoutMs) {
-    return { delete: true, reason: 'expired' };
-  }
-
-  // Check for orphaned sessions (sessions older than 30 days regardless of activity)
-  const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-  const createdAt = new Date(session.createdAt || session.loginTime);
-  
-  if (createdAt <= thirtyDaysAgo) {
-    return { delete: true, reason: 'orphaned' };
-  }
-
-  // Session is still valid
-  return { delete: false };
-}
-
-/**
- * Delete sessions in batches
- */
-async function deleteSessions(sessionIds: string[]): Promise<number> {
-  let deletedCount = 0;
-  const batchSize = 25; // DynamoDB batch write limit
-
-  // Process in batches of 25
-  for (let i = 0; i < sessionIds.length; i += batchSize) {
-    const batch = sessionIds.slice(i, i + batchSize);
-    
-    try {
-      // Use individual delete commands for better error handling
-      const deletePromises = batch.map(sessionId => {
-        const deleteCommand = new DeleteCommand({
-          TableName: process.env.USER_SESSIONS_TABLE!,
-          Key: { sessionId },
-        });
-        return docClient.send(deleteCommand);
-      });
-
-      await Promise.all(deletePromises);
-      deletedCount += batch.length;
-      
-      console.log(`Deleted batch of ${batch.length} sessions (${deletedCount}/${sessionIds.length} total)`);
-      
-    } catch (error) {
-      console.error(`Error deleting batch of sessions:`, error);
-      
-      // Try individual deletes for this batch
-      for (const sessionId of batch) {
-        try {
-          const deleteCommand = new DeleteCommand({
-            TableName: process.env.USER_SESSIONS_TABLE!,
-            Key: { sessionId },
-          });
-          await docClient.send(deleteCommand);
-          deletedCount++;
-        } catch (individualError) {
-          console.error(`Error deleting individual session ${sessionId}:`, individualError);
-        }
-      }
-    }
-
-    // Small delay between batches to avoid throttling
-    if (i + batchSize < sessionIds.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-
-  return deletedCount;
-} 
+}; 

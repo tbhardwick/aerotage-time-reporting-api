@@ -1,18 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository } from '../../shared/session-repository';
 import { CognitoIdentityProviderClient, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
-import { createHash } from 'crypto';
-import * as bcrypt from 'bcryptjs';
 import { 
   SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const sessionRepo = new SessionRepository();
 const cognitoClient = new CognitoIdentityProviderClient({});
 
 interface ChangePasswordRequest {
@@ -63,8 +59,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Check password history to prevent reuse
-    const isPasswordReused = await checkPasswordHistory(userId, newPassword);
+    // Check password history to prevent reuse using repository
+    const isPasswordReused = await sessionRepo.checkPasswordHistory(userId, newPassword);
     if (isPasswordReused) {
       return createErrorResponse(
         400, 
@@ -73,8 +69,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get security settings to check lockout status
-    const securitySettings = await getUserSecuritySettings(userId);
+    // Get security settings to check lockout status using repository
+    const securitySettings = await sessionRepo.getUserSecuritySettingsById(userId);
     if (securitySettings && securitySettings.accountLockedUntil) {
       const lockoutTime = new Date(securitySettings.accountLockedUntil);
       if (lockoutTime > new Date()) {
@@ -103,15 +99,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Store password in history
-    await storePasswordHistory(userId, newPassword);
+    // Store password in history using repository
+    await sessionRepo.storePasswordHistory(userId, newPassword);
 
-    // Update security settings with new password change timestamp
-    await updatePasswordChangeTimestamp(userId);
+    // Update security settings with new password change timestamp using repository
+    await sessionRepo.updatePasswordChangeTimestamp(userId);
 
-    // Reset failed login attempts if any
+    // Reset failed login attempts if any using repository
     if (securitySettings && securitySettings.failedLoginAttempts > 0) {
-      await resetFailedLoginAttempts(userId);
+      await sessionRepo.resetFailedLoginAttempts(userId);
     }
 
     const response: SuccessResponse<{ message: string }> = {
@@ -154,150 +150,4 @@ function validatePassword(password: string): { isValid: boolean; message: string
   }
 
   return { isValid: true, message: '' };
-}
-
-async function checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
-  try {
-    // Query password history (last 5 passwords)
-    const command = new QueryCommand({
-      TableName: process.env.PASSWORD_HISTORY_TABLE!,
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-      },
-      ScanIndexForward: false, // Get most recent first
-      Limit: 5,
-    });
-
-    const result = await docClient.send(command);
-    
-    if (!result.Items || result.Items.length === 0) {
-      return false;
-    }
-
-    // Hash the new password and compare with stored hashes
-    for (const item of result.Items) {
-      const isMatch = await bcrypt.compare(newPassword, item.passwordHash);
-      if (isMatch) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Error checking password history:', error);
-    return false; // Allow password change if history check fails
-  }
-}
-
-async function storePasswordHistory(userId: string, password: string): Promise<void> {
-  try {
-    const passwordHash = await bcrypt.hash(password, 12);
-    const now = new Date().toISOString();
-
-    await docClient.send(new PutCommand({
-      TableName: process.env.PASSWORD_HISTORY_TABLE!,
-      Item: {
-        userId,
-        createdAt: now,
-        passwordHash,
-        expiresAt: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60), // 1 year TTL
-      },
-    }));
-
-    // Clean up old password history (keep only last 5)
-    const historyCommand = new QueryCommand({
-      TableName: process.env.PASSWORD_HISTORY_TABLE!,
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-      },
-      ScanIndexForward: false,
-      Limit: 10, // Get more than we need to clean up
-    });
-
-    const historyResult = await docClient.send(historyCommand);
-    if (historyResult.Items && historyResult.Items.length > 5) {
-      // Delete old entries beyond the 5 most recent
-      const itemsToDelete = historyResult.Items.slice(5);
-      for (const item of itemsToDelete) {
-        await docClient.send(new DeleteCommand({
-          TableName: process.env.PASSWORD_HISTORY_TABLE!,
-          Key: {
-            userId: item.userId,
-            createdAt: item.createdAt,
-          },
-        }));
-      }
-    }
-  } catch (error) {
-    console.error('Error storing password history:', error);
-    // Don't fail the password change if history storage fails
-  }
-}
-
-async function getUserSecuritySettings(userId: string): Promise<any> {
-  try {
-    const command = new GetCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      Key: { userId },
-    });
-
-    const result = await docClient.send(command);
-    return result.Item || null;
-  } catch (error) {
-    console.error('Error getting security settings:', error);
-    return null;
-  }
-}
-
-async function updatePasswordChangeTimestamp(userId: string): Promise<void> {
-  try {
-    const now = new Date().toISOString();
-    
-    // Get existing settings or create defaults
-    const existingSettings = await getUserSecuritySettings(userId);
-    
-    const settings = {
-      userId,
-      twoFactorEnabled: false,
-      sessionTimeout: 480, // 8 hours
-      allowMultipleSessions: true,
-      requirePasswordChangeEvery: 0, // Never
-      failedLoginAttempts: 0,
-      createdAt: existingSettings?.createdAt || now,
-      ...existingSettings, // Keep existing settings
-      passwordLastChanged: now, // Update this field
-      updatedAt: now, // Update timestamp
-    };
-
-    await docClient.send(new PutCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      Item: settings,
-    }));
-  } catch (error) {
-    console.error('Error updating password change timestamp:', error);
-    // Don't fail password change if this update fails
-  }
-}
-
-async function resetFailedLoginAttempts(userId: string): Promise<void> {
-  try {
-    const existingSettings = await getUserSecuritySettings(userId);
-    if (!existingSettings) return;
-
-    const updatedSettings = {
-      ...existingSettings,
-      failedLoginAttempts: 0,
-      accountLockedUntil: undefined, // Remove lockout
-      updatedAt: new Date().toISOString(),
-    };
-
-    await docClient.send(new PutCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      Item: updatedSettings,
-    }));
-  } catch (error) {
-    console.error('Error resetting failed login attempts:', error);
-  }
 } 

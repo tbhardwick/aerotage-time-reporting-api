@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { AnalyticsRepository } from '../shared/analytics-repository';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+// MANDATORY: Use repository pattern instead of direct DynamoDB
+const analyticsRepo = new AnalyticsRepository();
 
 interface PerformanceMonitorRequest {
   timeframe: 'hour' | 'day' | 'week' | 'month';

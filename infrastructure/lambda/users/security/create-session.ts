@@ -1,18 +1,15 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository } from '../../shared/session-repository';
 import { v4 as uuidv4 } from 'uuid';
-import jwt from 'jsonwebtoken';
 import { 
   UserSession, 
   SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -82,12 +79,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Ensure the new session has the most recent timestamp
     const currentTime = new Date().toISOString();
 
-    // Check user security settings for multiple sessions
-    const securitySettings = await getUserSecuritySettings(userId);
+    // Check user security settings for multiple sessions using repository
+    const securitySettings = await sessionRepo.getUserSecuritySettings(userId);
     
     if (!securitySettings.allowMultipleSessions) {
-      // Terminate existing active sessions
-      await terminateUserSessions(userId, sessionToken);
+      // Terminate existing active sessions using repository
+      await sessionRepo.terminateUserSessions(userId, sessionToken);
     }
 
     // Calculate session expiry based on security settings
@@ -118,13 +115,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: currentTime,
     };
 
-    // Save session to DynamoDB
-    const command = new PutCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      Item: sessionData,
-    });
-
-    await docClient.send(command);
+    // Save session using repository
+    await sessionRepo.createSession(sessionData);
 
     // Prepare response data (without internal DynamoDB keys)
     const responseData: UserSession = {
@@ -233,75 +225,4 @@ async function getLocationFromIP(ipAddress: string): Promise<{ city: string; cou
   }
   
   return undefined; // Location is optional
-}
-
-async function getUserSecuritySettings(userId: string): Promise<{ sessionTimeout: number; allowMultipleSessions: boolean }> {
-  try {
-    const command = new QueryCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      KeyConditionExpression: 'PK = :pk AND SK = :sk',
-      ExpressionAttributeValues: {
-        ':pk': `USER#${userId}`,
-        ':sk': 'SECURITY',
-      },
-    });
-
-    const result = await docClient.send(command);
-    
-    if (result.Items && result.Items.length > 0) {
-      const settings = result.Items[0];
-      return {
-        sessionTimeout: settings.sessionTimeout || 480, // Default 8 hours
-        allowMultipleSessions: settings.allowMultipleSessions !== false, // Default true
-      };
-    }
-  } catch (error) {
-    console.error('Error getting user security settings:', error);
-  }
-  
-  // Return default settings if not found or error
-  return {
-    sessionTimeout: 480, // 8 hours
-    allowMultipleSessions: true,
-  };
-}
-
-async function terminateUserSessions(userId: string, currentSessionToken: string): Promise<void> {
-  try {
-    // Query all active sessions for the user
-    const command = new QueryCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'isActive = :isActive AND sessionToken <> :currentToken',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':isActive': true,
-        ':currentToken': currentSessionToken,
-      },
-    });
-
-    const result = await docClient.send(command);
-
-    if (result.Items && result.Items.length > 0) {
-      // Terminate each session (set isActive to false)
-      const updatePromises = result.Items.map(session => {
-        const updateCommand = new PutCommand({
-          TableName: process.env.USER_SESSIONS_TABLE!,
-          Item: {
-            ...session,
-            isActive: false,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-        return docClient.send(updateCommand);
-      });
-
-      await Promise.all(updatePromises);
-      console.log(`Terminated ${result.Items.length} existing sessions for user ${userId}`);
-    }
-  } catch (error) {
-    console.error('Error terminating user sessions:', error);
-    // Don't throw - session creation should still succeed even if cleanup fails
-  }
 } 

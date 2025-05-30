@@ -68,7 +68,7 @@ async function testInvoiceEndpoints() {
     
     // Get authentication token using the working method
     const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const token = authResult.token;
+    const { token: accessToken } = authResult;
     
     console.log('✅ JWT token obtained successfully\n');
 
@@ -78,7 +78,7 @@ async function testInvoiceEndpoints() {
     const listResponse = await makeRequest(`${API_BASE_URL}/invoices`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       }
     });
     
@@ -115,7 +115,7 @@ async function testInvoiceEndpoints() {
     const createResponse = await makeRequest(`${API_BASE_URL}/invoices`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: createInvoiceData
     });
@@ -147,7 +147,7 @@ async function testInvoiceEndpoints() {
       const updateResponse = await makeRequest(`${API_BASE_URL}/invoices/${testInvoiceId}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: updateData
       });
@@ -174,7 +174,7 @@ async function testInvoiceEndpoints() {
       const sendResponse = await makeRequest(`${API_BASE_URL}/invoices/${testInvoiceId}/send`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: sendData
       });
@@ -199,7 +199,7 @@ async function testInvoiceEndpoints() {
       const statusResponse = await makeRequest(`${API_BASE_URL}/invoices/${testInvoiceId}/status`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: statusData
       });

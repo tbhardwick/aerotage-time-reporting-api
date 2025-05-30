@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { TimeEntryRepository } from '../shared/time-entry-repository';
+import { UserRepository } from '../shared/user-repository';
 import { 
   WeeklyOverviewRequest,
   WeeklyOverview,
@@ -14,11 +14,8 @@ import {
   SuccessResponse
 } from '../shared/types';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const TIME_ENTRIES_TABLE = process.env.TIME_ENTRIES_TABLE!;
-const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE!;
+const timeEntryRepo = new TimeEntryRepository();
+const userRepo = new UserRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -107,8 +104,8 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
     year: weekStart.getFullYear(),
   };
 
-  // Get user's work schedule
-  const workSchedule = await getUserWorkSchedule(request.userId!);
+  // Get user's work schedule using repository
+  const workSchedule = await userRepo.getUserWorkSchedule(request.userId!);
 
   // Get daily summaries for the week
   const dailySummaries = await getDailySummariesForWeek(request.userId!, weekStart, weekEnd, workSchedule);
@@ -138,34 +135,6 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
   };
 }
 
-async function getUserWorkSchedule(userId: string): Promise<UserWorkSchedule | null> {
-  try {
-    const result = await docClient.send(new GetCommand({
-      TableName: USER_WORK_SCHEDULES_TABLE,
-      Key: {
-        PK: `USER#${userId}`,
-        SK: 'WORK_SCHEDULE',
-      },
-    }));
-
-    if (!result.Item) {
-      return null;
-    }
-
-    return {
-      userId: result.Item.userId,
-      schedule: JSON.parse(result.Item.schedule),
-      timezone: result.Item.timezone,
-      weeklyTargetHours: result.Item.weeklyTargetHours,
-      createdAt: result.Item.createdAt,
-      updatedAt: result.Item.updatedAt,
-    };
-  } catch (error) {
-    console.error('Error fetching work schedule:', error);
-    return null;
-  }
-}
-
 async function getDailySummariesForWeek(
   userId: string,
   weekStart: Date,
@@ -178,7 +147,7 @@ async function getDailySummariesForWeek(
     const dateStr = date.toISOString().split('T')[0];
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     
-    // Get time entries for this date
+    // Get time entries for this date using repository
     const timeEntries = await getTimeEntriesForDate(userId, dateStr);
     
     // Get work schedule for this day
@@ -195,42 +164,9 @@ async function getDailySummariesForWeek(
 
 async function getTimeEntriesForDate(userId: string, date: string): Promise<TimeEntry[]> {
   try {
-    const result = await docClient.send(new QueryCommand({
-      TableName: TIME_ENTRIES_TABLE,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'GSI1PK = :userPK AND begins_with(GSI1SK, :datePrefix)',
-      ExpressionAttributeValues: {
-        ':userPK': `USER#${userId}`,
-        ':datePrefix': `DATE#${date}`,
-      },
-    }));
-
-    return (result.Items || []).map(item => ({
-      id: item.id,
-      userId: item.userId,
-      projectId: item.projectId,
-      taskId: item.taskId,
-      description: item.description,
-      date: item.date,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      duration: item.duration,
-      isBillable: item.isBillable,
-      hourlyRate: item.hourlyRate,
-      status: item.status,
-      tags: JSON.parse(item.tags || '[]'),
-      notes: item.notes,
-      attachments: JSON.parse(item.attachments || '[]'),
-      submittedAt: item.submittedAt,
-      approvedAt: item.approvedAt,
-      rejectedAt: item.rejectedAt,
-      approvedBy: item.approvedBy,
-      rejectionReason: item.rejectionReason,
-      isTimerEntry: item.isTimerEntry,
-      timerStartedAt: item.timerStartedAt,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
+    // Use repository to get time entries for date
+    const timeEntries = await timeEntryRepo.getTimeEntriesForUserAndDate(userId, date);
+    return timeEntries;
   } catch (error) {
     console.error('Error fetching time entries:', error);
     return [];

@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository } from '../../shared/session-repository';
 import { 
   UpdateUserSecuritySettingsRequest,
   UserSecuritySettings, 
@@ -10,8 +9,7 @@ import {
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -51,39 +49,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, validationError);
     }
 
-    // Get existing security settings
-    const getCommand = new GetCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      Key: { userId },
-    });
-
-    const getResult = await docClient.send(getCommand);
-    const now = new Date().toISOString();
-
-    // Merge with existing settings or create new ones
-    const existingSettings = getResult.Item || {};
-    const updatedSettings = {
-      userId,
-      twoFactorEnabled: existingSettings.twoFactorEnabled || false,
-      sessionTimeout: updateData.sessionTimeout ?? existingSettings.sessionTimeout ?? 480,
-      allowMultipleSessions: updateData.allowMultipleSessions ?? existingSettings.allowMultipleSessions ?? true,
-      requirePasswordChangeEvery: updateData.requirePasswordChangeEvery ?? existingSettings.requirePasswordChangeEvery ?? 0,
-      passwordLastChanged: existingSettings.passwordLastChanged || now,
-      failedLoginAttempts: existingSettings.failedLoginAttempts || 0,
-      twoFactorSecret: existingSettings.twoFactorSecret,
-      backupCodes: existingSettings.backupCodes,
-      accountLockedUntil: existingSettings.accountLockedUntil,
-      createdAt: existingSettings.createdAt || now,
-      updatedAt: now,
-    };
-
-    // Save updated settings to DynamoDB
-    const putCommand = new PutCommand({
-      TableName: process.env.USER_SECURITY_SETTINGS_TABLE!,
-      Item: updatedSettings,
-    });
-
-    await docClient.send(putCommand);
+    // Update security settings using repository
+    const updatedSettings = await sessionRepo.updateUserSecuritySettings(userId, updateData);
 
     // Transform back to API response format
     let passwordExpiresAt: string | undefined;

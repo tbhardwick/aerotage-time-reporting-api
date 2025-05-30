@@ -55,7 +55,7 @@ function makeRequest(method, path, token, body = null) {
       method: method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
     };
 

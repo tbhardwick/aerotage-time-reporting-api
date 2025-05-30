@@ -232,6 +232,78 @@ export class UserRepository {
   }
 
   /**
+   * Gets a user work schedule
+   */
+  async getUserWorkSchedule(userId: string): Promise<any | null> {
+    try {
+      const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE;
+      if (!USER_WORK_SCHEDULES_TABLE) {
+        console.warn('USER_WORK_SCHEDULES_TABLE environment variable not set');
+        return null;
+      }
+
+      const command = new GetCommand({
+        TableName: USER_WORK_SCHEDULES_TABLE,
+        Key: {
+          PK: `USER#${userId}`,
+          SK: 'WORK_SCHEDULE',
+        },
+      });
+
+      const result = await this.docClient.send(command);
+      
+      if (!result.Item) {
+        return null;
+      }
+
+      return {
+        userId: result.Item.userId,
+        schedule: JSON.parse(result.Item.schedule),
+        timezone: result.Item.timezone,
+        weeklyTargetHours: result.Item.weeklyTargetHours,
+        createdAt: result.Item.createdAt,
+        updatedAt: result.Item.updatedAt,
+      };
+    } catch (error) {
+      console.error('Error getting user work schedule:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Updates a user work schedule
+   */
+  async updateUserWorkSchedule(schedule: any): Promise<void> {
+    try {
+      const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE;
+      if (!USER_WORK_SCHEDULES_TABLE) {
+        throw new Error('USER_WORK_SCHEDULES_TABLE environment variable not set');
+      }
+
+      const item = {
+        PK: `USER#${schedule.userId}`,
+        SK: 'WORK_SCHEDULE',
+        userId: schedule.userId,
+        schedule: JSON.stringify(schedule.schedule),
+        timezone: schedule.timezone,
+        weeklyTargetHours: schedule.weeklyTargetHours,
+        createdAt: schedule.createdAt,
+        updatedAt: schedule.updatedAt,
+      };
+
+      const command = new PutCommand({
+        TableName: USER_WORK_SCHEDULES_TABLE,
+        Item: item,
+      });
+
+      await this.docClient.send(command);
+    } catch (error) {
+      console.error('Error updating user work schedule:', error);
+      throw new Error('Failed to update work schedule');
+    }
+  }
+
+  /**
    * Generates a unique ID for users
    */
   private generateId(): string {

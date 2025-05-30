@@ -1,18 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository } from '../../shared/session-repository';
 import { 
   UserSession, 
   SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-// Note: This function still uses some direct DynamoDB access due to complex session management logic
-// In a full standardization, this would be moved to a UserSessionRepository
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -43,87 +39,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
     const currentIP = getClientIP(event);
     
-    // Query active sessions for the user using GSI
-    const command = new QueryCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      IndexName: 'UserIndex', // GSI for userId lookup
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'isActive = :isActive AND expiresAt > :now',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':isActive': true,
-        ':now': new Date().toISOString(),
-      },
-      ScanIndexForward: false, // Get most recent first
-    });
-
-    const result = await docClient.send(command);
-    const rawSessions = result.Items || [];
-
     // Get current session ID from context for identification
     const authContext = event.requestContext.authorizer;
     const currentSessionId = authContext?.sessionId;
 
-    // Transform DynamoDB items to UserSession format
-    const sessions: UserSession[] = rawSessions.map(item => {
-      // Parse location data if it exists
-      let location: { city: string; country: string } | undefined;
-      if (item.locationData) {
-        try {
-          location = typeof item.locationData === 'string' 
-            ? JSON.parse(item.locationData) 
-            : item.locationData;
-        } catch (error) {
-          console.error('Error parsing location data:', error);
-        }
-      }
-
-      return {
-        id: item.sessionId,
-        ipAddress: item.ipAddress || 'Unknown',
-        userAgent: item.userAgent || 'Unknown',
-        loginTime: item.loginTime,
-        lastActivity: item.lastActivity,
-        isCurrent: false, // Will be set later
-        location,
-      };
-    });
-
-    // Identify current session
-    let identifiedCurrentSession: string | null = currentSessionId;
-    
-    if (!identifiedCurrentSession && sessions.length > 0) {
-      // Find sessions that match current UA and IP
-      const matchingSessions = sessions.filter(session => 
-        session.userAgent === currentUserAgent && session.ipAddress === currentIP
-      );
-      
-      if (matchingSessions.length > 0) {
-        // Sort by last activity (most recent first)
-        matchingSessions.sort((a, b) => {
-          const aTime = new Date(a.lastActivity || a.loginTime).getTime();
-          const bTime = new Date(b.lastActivity || b.loginTime).getTime();
-          return bTime - aTime;
-        });
-        
-        // The most recently active matching session is the current one
-        identifiedCurrentSession = matchingSessions[0].id;
-      }
-    }
-    
-    // Mark the current session
-    sessions.forEach(session => {
-      session.isCurrent = session.id === identifiedCurrentSession;
-    });
-
-    // Sort sessions by current status and last activity
-    sessions.sort((a, b) => {
-      if (a.isCurrent && !b.isCurrent) return -1;
-      if (!a.isCurrent && b.isCurrent) return 1;
-      const aTime = new Date(a.lastActivity || a.loginTime).getTime();
-      const bTime = new Date(b.lastActivity || b.loginTime).getTime();
-      return bTime - aTime;
-    });
+    // Get formatted sessions using repository
+    const sessions = await sessionRepo.getFormattedSessionsForUser(
+      userId, 
+      currentUserAgent, 
+      currentIP, 
+      currentSessionId
+    );
 
     const response: SuccessResponse<UserSession[]> = {
       success: true,
@@ -165,26 +91,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
  */
 async function invalidateSpecificSessions(sessionIds: string[]): Promise<void> {
   try {
-    console.log(`Invalidating ${sessionIds.length} specific sessions:`, sessionIds);
-
-    // Mark specific sessions as inactive
-    const updatePromises = sessionIds.map(sessionId => {
-      const updateCommand = new UpdateCommand({
-        TableName: process.env.USER_SESSIONS_TABLE!,
-        Key: { sessionId },
-        UpdateExpression: 'SET isActive = :false, updatedAt = :now, invalidationReason = :reason',
-        ExpressionAttributeValues: {
-          ':false': false,
-          ':now': new Date().toISOString(),
-          ':reason': 'legacy_session_cleanup'
-        },
-      });
-      return docClient.send(updateCommand);
-    });
-
-    await Promise.all(updatePromises);
-    console.log(`Successfully invalidated ${sessionIds.length} specific sessions`);
-
+    await sessionRepo.invalidateSpecificSessions(sessionIds);
   } catch (error) {
     console.error(`Error invalidating specific sessions:`, error);
     throw error;
@@ -196,46 +103,7 @@ async function invalidateSpecificSessions(sessionIds: string[]): Promise<void> {
  */
 async function invalidateAllUserSessions(userId: string): Promise<void> {
   try {
-    console.log(`Invalidating all sessions for user: ${userId}`);
-
-    // Query all active sessions for the user
-    const command = new QueryCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'isActive = :isActive',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':isActive': true,
-      },
-    });
-
-    const result = await docClient.send(command);
-    const sessions = result.Items || [];
-
-    if (sessions.length === 0) {
-      console.log('No active sessions found to invalidate');
-      return;
-    }
-
-    // Mark all sessions as inactive
-    const updatePromises = sessions.map(session => {
-      const updateCommand = new UpdateCommand({
-        TableName: process.env.USER_SESSIONS_TABLE!,
-        Key: { sessionId: session.sessionId },
-        UpdateExpression: 'SET isActive = :false, updatedAt = :now, invalidationReason = :reason',
-        ExpressionAttributeValues: {
-          ':false': false,
-          ':now': new Date().toISOString(),
-          ':reason': 'session_migration_security_update'
-        },
-      });
-      return docClient.send(updateCommand);
-    });
-
-    await Promise.all(updatePromises);
-    console.log(`Successfully invalidated ${sessions.length} sessions for user ${userId}`);
-
+    await sessionRepo.invalidateAllUserSessions(userId);
   } catch (error) {
     console.error(`Error invalidating sessions for user ${userId}:`, error);
     throw error;

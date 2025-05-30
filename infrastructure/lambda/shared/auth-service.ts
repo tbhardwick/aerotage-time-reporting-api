@@ -1,21 +1,13 @@
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { SessionRepository, SessionValidationResult } from './session-repository';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 export interface AuthValidationResult {
   isValid: boolean;
   userId?: string;
   userClaims?: any;
-  errorMessage?: string;
-}
-
-export interface SessionValidationResult {
-  hasActiveSessions: boolean;
-  sessionCount: number;
   errorMessage?: string;
 }
 
@@ -44,8 +36,8 @@ export class AuthService {
       const userId = jwtResult.userId!;
       console.log(`JWT validation successful for user: ${userId}`);
 
-      // Step 2: Check if user has active sessions
-      const sessionResult = await this.validateUserSession(userId);
+      // Step 2: Check if user has active sessions using repository
+      const sessionResult = await sessionRepo.validateUserSessions(userId);
       if (!sessionResult.hasActiveSessions) {
         console.log(`No active sessions found for user: ${userId}`, sessionResult);
         return {
@@ -111,7 +103,7 @@ export class AuthService {
   static async checkUserHasActiveSessions(userId: string): Promise<boolean> {
     try {
       console.log(`🔍 AUTH SERVICE: Checking active sessions for user ${userId}`);
-      const sessionResult = await this.validateUserSession(userId);
+      const sessionResult = await sessionRepo.validateUserSessions(userId);
       console.log(`📊 AUTH SERVICE: Session check result - Has active sessions: ${sessionResult.hasActiveSessions}, Count: ${sessionResult.sessionCount}`);
       return sessionResult.hasActiveSessions;
     } catch (error) {
@@ -165,94 +157,6 @@ export class AuthService {
         }
       });
     });
-  }
-
-  /**
-   * Checks if user has at least one active session
-   */
-  private static async validateUserSession(userId: string): Promise<SessionValidationResult> {
-    try {
-      console.log(`Checking active sessions for user: ${userId}`);
-
-      // Query for active sessions for this user using GSI
-      const command = new QueryCommand({
-        TableName: process.env.USER_SESSIONS_TABLE!,
-        IndexName: 'UserIndex', // GSI for userId lookup
-        KeyConditionExpression: 'userId = :userId',
-        FilterExpression: 'isActive = :isActive AND expiresAt > :now',
-        ExpressionAttributeValues: {
-          ':userId': userId,
-          ':isActive': true,
-          ':now': new Date().toISOString(),
-        },
-      });
-
-      const result = await docClient.send(command);
-      const sessions = result.Items || [];
-
-      console.log(`Found ${sessions.length} potentially active sessions for user ${userId}`);
-
-      // Check session timeout (from user's security settings)
-      const currentTime = new Date();
-      const validSessions = [];
-
-      for (const session of sessions) {
-        try {
-          // Check session timeout
-          const lastActivity = new Date(session.lastActivity);
-          const sessionTimeoutMinutes = session.sessionTimeout || 480; // Default 8 hours
-          
-          const timeDiffMinutes = (currentTime.getTime() - lastActivity.getTime()) / (1000 * 60);
-          
-          if (timeDiffMinutes <= sessionTimeoutMinutes) {
-            validSessions.push(session);
-            console.log(`Valid session found: ${session.sessionId}, last activity: ${session.lastActivity}`);
-          } else {
-            console.log(`Session expired: ${session.sessionId}, last activity: ${session.lastActivity}, timeout: ${sessionTimeoutMinutes}min`);
-            // Mark expired session as inactive
-            await this.markSessionExpired(session.sessionId);
-          }
-        } catch (sessionError) {
-          console.error(`Error validating session ${session.sessionId}:`, sessionError);
-        }
-      }
-
-      return {
-        hasActiveSessions: validSessions.length > 0,
-        sessionCount: validSessions.length
-      };
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Session validation error';
-      console.error(`Session validation failed for user ${userId}:`, error);
-      return {
-        hasActiveSessions: false,
-        sessionCount: 0,
-        errorMessage: `Session validation error: ${errorMessage}`
-      };
-    }
-  }
-
-  /**
-   * Mark expired sessions as inactive
-   */
-  private static async markSessionExpired(sessionId: string): Promise<void> {
-    try {
-      const updateCommand = new UpdateCommand({
-        TableName: process.env.USER_SESSIONS_TABLE!,
-        Key: { sessionId },
-        UpdateExpression: 'SET isActive = :false, expiredAt = :now',
-        ExpressionAttributeValues: {
-          ':false': false,
-          ':now': new Date().toISOString()
-        }
-      });
-
-      await docClient.send(updateCommand);
-      console.log(`Session ${sessionId} marked as expired`);
-    } catch (error) {
-      console.error(`Failed to mark session ${sessionId} as expired:`, error);
-    }
   }
 
   /**

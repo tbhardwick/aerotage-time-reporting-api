@@ -60,7 +60,7 @@ async function testCreateUserEndpoint() {
     // Get authentication token
     console.log('🔐 Getting JWT token...');
     const authResult = await getCognitoToken(TEST_USER.email, TEST_USER.password);
-    const token = authResult.token;
+    const { token: accessToken } = authResult;
     console.log('✅ JWT token obtained successfully\n');
 
     // Test creating a new user
@@ -85,7 +85,7 @@ async function testCreateUserEndpoint() {
     const createResponse = await makeRequest(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: newUserData
     });
@@ -115,7 +115,7 @@ async function testCreateUserEndpoint() {
     const validationResponse = await makeRequest(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: invalidUserData
     });
@@ -133,7 +133,7 @@ async function testCreateUserEndpoint() {
     const duplicateResponse = await makeRequest(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: {
         email: 'bhardwick@aerotage.com', // Existing email

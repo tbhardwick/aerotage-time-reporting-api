@@ -1,16 +1,13 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import jwt from 'jsonwebtoken';
+import { SessionRepository } from '../../shared/session-repository';
 import { 
   SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+const sessionRepo = new SessionRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -45,19 +42,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const currentUserAgent = event.headers['User-Agent'] || event.headers['user-agent'] || '';
     const currentIP = getClientIP(event);
 
-    // Get the session to verify it exists and belongs to the user
-    const getCommand = new GetCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      Key: { sessionId },
-    });
+    // Get the session to verify it exists and belongs to the user using repository
+    const session = await sessionRepo.getSessionById(sessionId);
 
-    const getResult = await docClient.send(getCommand);
-
-    if (!getResult.Item) {
+    if (!session) {
       return createErrorResponse(404, ProfileSettingsErrorCodes.SESSION_NOT_FOUND, 'Session not found');
     }
-
-    const session = getResult.Item;
 
     // Verify the session belongs to the authenticated user
     if (session.userId !== currentUserId) {
@@ -86,43 +76,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Use the same logic as list-sessions.ts to determine if this is the current session
-    // We need to check if this session would be identified as "current" by list-sessions
-    
-    // Query all active sessions for the user to find the current one
-    const queryCommand = new QueryCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'userId = :userId',
-      FilterExpression: 'isActive = :isActive AND expiresAt > :now',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':isActive': true,
-        ':now': new Date().toISOString(),
-      },
-    });
-
-    const queryResult = await docClient.send(queryCommand);
-    const activeSessions = queryResult.Items || [];
-
-    // Find all sessions that match current UA and IP
-    const matchingSessions = activeSessions.filter(s => 
-      s.userAgent === currentUserAgent && s.ipAddress === currentIP
-    );
-
-    let currentSessionId: string | null = null;
-    
-    if (matchingSessions.length > 0) {
-      // Sort by last activity (most recent first)
-      matchingSessions.sort((a, b) => {
-        const aTime = new Date(a.lastActivity || a.loginTime).getTime();
-        const bTime = new Date(b.lastActivity || b.loginTime).getTime();
-        return bTime - aTime;
-      });
-      
-      // The most recently active matching session is the current one
-      currentSessionId = matchingSessions[0].sessionId;
-    }
+    // Get the current session ID using repository
+    const currentSessionId = await sessionRepo.getCurrentSessionId(userId, currentUserAgent, currentIP);
 
     // Check if the session being terminated is the current session
     const isCurrentSession = sessionId === currentSessionId;
@@ -135,13 +90,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Actually delete the session from the database
-    const deleteCommand = new DeleteCommand({
-      TableName: process.env.USER_SESSIONS_TABLE!,
-      Key: { sessionId },
-    });
-
-    await docClient.send(deleteCommand);
+    // Actually delete the session using repository
+    await sessionRepo.deleteSession(sessionId);
 
     const response: SuccessResponse<{ message: string }> = {
       success: true,

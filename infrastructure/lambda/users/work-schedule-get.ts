@@ -1,19 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { UserRepository } from '../shared/user-repository';
 import { 
   UserWorkSchedule,
   WorkDaySchedule,
-  TimeTrackingErrorCodes,
   SuccessResponse
 } from '../shared/types';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE!;
+const userRepo = new UserRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -35,8 +30,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(403, 'FORBIDDEN', 'Employees can only view their own work schedule');
     }
 
-    // Get work schedule from DynamoDB
-    const workSchedule = await getUserWorkSchedule(targetUserId);
+    // Get work schedule using repository
+    const workSchedule = await userRepo.getUserWorkSchedule(targetUserId);
 
     if (!workSchedule) {
       // Return default work schedule if none exists
@@ -76,34 +71,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };
-
-async function getUserWorkSchedule(userId: string): Promise<UserWorkSchedule | null> {
-  try {
-    const result = await docClient.send(new GetCommand({
-      TableName: USER_WORK_SCHEDULES_TABLE,
-      Key: {
-        PK: `USER#${userId}`,
-        SK: 'WORK_SCHEDULE',
-      },
-    }));
-
-    if (!result.Item) {
-      return null;
-    }
-
-    return {
-      userId: result.Item.userId,
-      schedule: JSON.parse(result.Item.schedule),
-      timezone: result.Item.timezone,
-      weeklyTargetHours: result.Item.weeklyTargetHours,
-      createdAt: result.Item.createdAt,
-      updatedAt: result.Item.updatedAt,
-    };
-  } catch (error) {
-    console.error('Error fetching work schedule:', error);
-    return null;
-  }
-}
 
 function createDefaultWorkSchedule(userId: string): UserWorkSchedule {
   const defaultWorkDay: WorkDaySchedule = {

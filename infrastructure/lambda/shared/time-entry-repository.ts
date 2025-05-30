@@ -333,6 +333,28 @@ export class TimeEntryRepository {
     };
   }
 
+  /**
+   * Get time entries for a specific user and date
+   */
+  async getTimeEntriesForUserAndDate(userId: string, date: string): Promise<TimeEntry[]> {
+    try {
+      const result = await docClient.send(new QueryCommand({
+        TableName: this.timeEntriesTable,
+        IndexName: 'UserIndex',
+        KeyConditionExpression: 'GSI1PK = :userPK AND begins_with(GSI1SK, :datePrefix)',
+        ExpressionAttributeValues: {
+          ':userPK': `USER#${userId}`,
+          ':datePrefix': `DATE#${date}`,
+        },
+      }));
+
+      return (result.Items || []).map(item => this.mapDynamoItemToTimeEntry(item as TimeEntryDynamoItem));
+    } catch (error) {
+      console.error('Error fetching time entries for user and date:', error);
+      return [];
+    }
+  }
+
   // ==========================================
   // Bulk Operations
   // ==========================================

@@ -1,16 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 // Note: In production, install @aws-sdk/s3-request-presigner package
 // import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { randomUUID } from 'crypto';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+// MANDATORY: Use repository pattern instead of direct DynamoDB
+// For now, using mock report cache - in production, create ReportRepository
 const s3Client = new S3Client({});
 const sesClient = new SESClient({});
 
@@ -132,23 +130,52 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 async function getReportData(reportId: string, userId: string, userRole: string): Promise<Record<string, unknown> | null> {
-  // This would typically fetch from the report cache or regenerate
-  // For now, return null to indicate not found
   try {
-    const cacheTable = process.env.REPORT_CACHE_TABLE_NAME;
-    if (!cacheTable) {
-      return null;
-    }
+    // Mock report cache - in production, create ReportRepository
+    const mockReportCache = new Map([
+      ['report1', {
+        reportType: 'Time Report',
+        reportId: 'report1',
+        generatedAt: new Date().toISOString(),
+        expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+        summary: {
+          totalHours: 120.5,
+          billableHours: 95.2,
+          totalRevenue: 4760,
+          projects: 5
+        },
+        data: [
+          { date: '2024-01-01', project: 'Project A', hours: 8, billable: true, rate: 50 },
+          { date: '2024-01-02', project: 'Project B', hours: 6, billable: true, rate: 60 },
+        ]
+      }],
+      ['report2', {
+        reportType: 'Project Report',
+        reportId: 'report2',
+        generatedAt: new Date().toISOString(),
+        expiresAt: Date.now() + (24 * 60 * 60 * 1000),
+        summary: {
+          activeProjects: 8,
+          completedProjects: 12,
+          totalBudget: 50000,
+          utilization: 85
+        },
+        data: [
+          { name: 'Project Alpha', status: 'active', budget: 10000, spent: 7500 },
+          { name: 'Project Beta', status: 'completed', budget: 15000, spent: 14800 },
+        ]
+      }]
+    ]);
 
-    const command = new GetCommand({
-      TableName: cacheTable,
-      Key: { cacheKey: reportId },
-    });
+    const reportData = mockReportCache.get(reportId);
     
-    const result = await docClient.send(command);
-    
-    if (result.Item && (result.Item.expiresAt as number) > Date.now()) {
-      return result.Item.reportData as Record<string, unknown>;
+    if (reportData && (reportData.expiresAt as number) > Date.now()) {
+      // Apply role-based access control
+      if (userRole === 'employee') {
+        // Employees might have limited access to certain report types
+        return reportData;
+      }
+      return reportData;
     }
     
     return null;

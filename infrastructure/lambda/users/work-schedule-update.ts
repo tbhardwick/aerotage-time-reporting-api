@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { UserRepository } from '../shared/user-repository';
 import { 
   UserWorkSchedule,
   WorkDaySchedule,
@@ -11,10 +10,7 @@ import {
   SuccessResponse
 } from '../shared/types';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE!;
+const userRepo = new UserRepository();
 
 // Valid timezones (simplified list)
 const VALID_TIMEZONES = [
@@ -69,8 +65,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE, validationError);
     }
 
-    // Get existing work schedule or create default
-    let existingSchedule = await getUserWorkSchedule(targetUserId);
+    // Get existing work schedule or create default using repository
+    let existingSchedule = await userRepo.getUserWorkSchedule(targetUserId);
     if (!existingSchedule) {
       existingSchedule = createDefaultWorkSchedule(targetUserId);
     }
@@ -78,8 +74,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Apply updates
     const updatedSchedule = applyUpdates(existingSchedule, updateRequest);
 
-    // Save updated schedule
-    await saveWorkSchedule(updatedSchedule);
+    // Save updated schedule using repository
+    await userRepo.updateUserWorkSchedule(updatedSchedule);
 
     const response: SuccessResponse<UserWorkSchedule> = {
       success: true,
@@ -100,34 +96,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };
-
-async function getUserWorkSchedule(userId: string): Promise<UserWorkSchedule | null> {
-  try {
-    const result = await docClient.send(new GetCommand({
-      TableName: USER_WORK_SCHEDULES_TABLE,
-      Key: {
-        PK: `USER#${userId}`,
-        SK: 'WORK_SCHEDULE',
-      },
-    }));
-
-    if (!result.Item) {
-      return null;
-    }
-
-    return {
-      userId: result.Item.userId,
-      schedule: JSON.parse(result.Item.schedule),
-      timezone: result.Item.timezone,
-      weeklyTargetHours: result.Item.weeklyTargetHours,
-      createdAt: result.Item.createdAt,
-      updatedAt: result.Item.updatedAt,
-    };
-  } catch (error) {
-    console.error('Error fetching work schedule:', error);
-    return null;
-  }
-}
 
 function createDefaultWorkSchedule(userId: string): UserWorkSchedule {
   const defaultWorkDay: WorkDaySchedule = {
@@ -252,22 +220,4 @@ function applyUpdates(existingSchedule: UserWorkSchedule, updateRequest: UpdateW
   }
 
   return updatedSchedule;
-}
-
-async function saveWorkSchedule(schedule: UserWorkSchedule): Promise<void> {
-  const item = {
-    PK: `USER#${schedule.userId}`,
-    SK: 'WORK_SCHEDULE',
-    userId: schedule.userId,
-    schedule: JSON.stringify(schedule.schedule),
-    timezone: schedule.timezone,
-    weeklyTargetHours: schedule.weeklyTargetHours,
-    createdAt: schedule.createdAt,
-    updatedAt: schedule.updatedAt,
-  };
-
-  await docClient.send(new PutCommand({
-    TableName: USER_WORK_SCHEDULES_TABLE,
-    Item: item,
-  }));
 } 

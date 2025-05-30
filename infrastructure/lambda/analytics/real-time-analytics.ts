@@ -1,11 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, QueryCommandInput, ScanCommandInput } from '@aws-sdk/lib-dynamodb';
+import { AnalyticsRepository } from '../shared/analytics-repository';
+import { SessionRepository } from '../shared/session-repository';
+import { TimeEntryRepository } from '../shared/time-entry-repository';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+// MANDATORY: Use repository pattern instead of direct DynamoDB
+const analyticsRepo = new AnalyticsRepository();
+const sessionRepo = new SessionRepository();
+const timeEntryRepo = new TimeEntryRepository();
 
 interface RealTimeAnalyticsRequest {
   metrics: string[];
@@ -250,46 +253,32 @@ async function generateRealTimeMetrics(
 
 async function generateActivityFeed(userId: string, userRole: string): Promise<ActivityFeed[]> {
   try {
-    const analyticsTable = process.env.ANALYTICS_EVENTS_TABLE_NAME;
-    if (!analyticsTable) return [];
+    // Use AnalyticsRepository instead of direct DynamoDB access
+    const events = await analyticsRepo.getEventsForTimeRange(
+      new Date(Date.now() - (60 * 60 * 1000)).toISOString(), // 1 hour ago
+      new Date().toISOString()
+    );
 
-    const oneHourAgo = new Date(Date.now() - (60 * 60 * 1000)).toISOString();
-    
-    let queryParams: QueryCommandInput = {
-      TableName: analyticsTable,
-      IndexName: 'EventTypeTimestampIndex',
-      KeyConditionExpression: '#eventType = :eventType AND #timestamp > :timestamp',
-      ExpressionAttributeNames: {
-        '#eventType': 'eventType',
-        '#timestamp': 'timestamp',
-      },
-      ExpressionAttributeValues: {
-        ':eventType': 'activity',
-        ':timestamp': oneHourAgo,
-      },
-      ScanIndexForward: false, // Most recent first
-      Limit: 50,
-    };
+    const activityEvents = events.filter(event => 
+      event.eventType.includes('activity') || 
+      event.eventType.includes('timer') || 
+      event.eventType.includes('time_entry')
+    );
 
     // Apply role-based filtering
-    if (userRole === 'employee') {
-      queryParams.FilterExpression = '#userId = :userId';
-      queryParams.ExpressionAttributeNames!['#userId'] = 'userId';
-      queryParams.ExpressionAttributeValues![':userId'] = userId;
-    }
+    const filteredEvents = userRole === 'employee' 
+      ? activityEvents.filter(event => event.userId === userId)
+      : activityEvents;
 
-    const command = new QueryCommand(queryParams);
-    const result = await docClient.send(command);
-    
-    return (result.Items || []).map(item => ({
-      id: item.eventId,
-      userId: item.userId,
-      userName: item.metadata?.userName || 'Unknown User',
-      action: item.metadata?.action || 'Unknown Action',
-      timestamp: item.timestamp,
-      details: item.metadata?.details || {},
-      type: item.metadata?.type || 'system',
-      priority: item.metadata?.priority || 'low',
+    return filteredEvents.slice(0, 50).map(event => ({
+      id: event.eventId,
+      userId: event.userId,
+      userName: (event.metadata?.userName as string) || 'Unknown User',
+      action: (event.metadata?.action as string) || event.eventType,
+      timestamp: event.timestamp,
+      details: (event.metadata?.details as Record<string, unknown>) || {},
+      type: (event.metadata?.type as any) || 'system',
+      priority: (event.metadata?.priority as any) || 'low',
     }));
 
   } catch (error) {
@@ -300,46 +289,30 @@ async function generateActivityFeed(userId: string, userRole: string): Promise<A
 
 async function generateActiveSessions(userId: string, userRole: string): Promise<ActiveSession[]> {
   try {
-    const sessionsTable = process.env.USER_SESSIONS_TABLE_NAME;
-    if (!sessionsTable) return [];
+    // Use SessionRepository instead of direct DynamoDB access
+    const allSessions = userRole === 'employee' 
+      ? await sessionRepo.getActiveSessionsForUser(userId)
+      : await sessionRepo.getAllSessions();
 
-    const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000)).toISOString();
-    
-    let scanParams: ScanCommandInput = {
-      TableName: sessionsTable,
-      FilterExpression: '#lastActivity > :lastActivity AND #status = :status',
-      ExpressionAttributeNames: {
-        '#lastActivity': 'lastActivity',
-        '#status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':lastActivity': fifteenMinutesAgo,
-        ':status': 'active',
-      },
-    };
+    // Filter for recently active sessions
+    const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000));
+    const activeSessions = allSessions.filter(session => {
+      const lastActivity = new Date(session.lastActivity || session.loginTime);
+      return lastActivity > fifteenMinutesAgo && session.isActive;
+    });
 
-    // Apply role-based filtering
-    if (userRole === 'employee') {
-      scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues![':userId'] = userId;
-    }
-
-    const command = new ScanCommand(scanParams);
-    const result = await docClient.send(command);
-    
-    return (result.Items || []).map(session => ({
+    return activeSessions.map(session => ({
       sessionId: session.sessionId,
       userId: session.userId,
-      userName: session.metadata?.userName || 'Unknown User',
-      startTime: session.startTime,
-      lastActivity: session.lastActivity,
+      userName: 'User', // TODO: Fetch from user repository
+      startTime: session.loginTime,
+      lastActivity: session.lastActivity || session.loginTime,
       ipAddress: session.ipAddress || 'Unknown',
       userAgent: session.userAgent || 'Unknown',
-      location: session.metadata?.location,
-      activeTimers: session.metadata?.activeTimers || 0,
-      todayHours: session.metadata?.todayHours || 0,
-      status: determineSessionStatus(session.lastActivity),
+      location: undefined, // TODO: Add location parsing
+      activeTimers: 0, // TODO: Calculate from time entries
+      todayHours: 0, // TODO: Calculate from time entries
+      status: determineSessionStatus(session.lastActivity || session.loginTime),
     }));
 
   } catch (error) {
@@ -425,106 +398,51 @@ async function generateRealTimeAlerts(userId: string, userRole: string): Promise
   return alerts;
 }
 
-// Helper functions
-async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<Record<string, unknown>[]> {
-  const timeEntriesTable = process.env.TIME_ENTRIES_TABLE_NAME;
-  if (!timeEntriesTable) return [];
-
+// Helper functions using repositories
+async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<any[]> {
   try {
-    let scanParams: ScanCommandInput = {
-      TableName: timeEntriesTable,
-      FilterExpression: '#startDate >= :todayStart',
-      ExpressionAttributeNames: {
-        '#startDate': 'startDate',
-      },
-      ExpressionAttributeValues: {
-        ':todayStart': todayStart.toISOString(),
-      },
+    const filters = {
+      dateFrom: todayStart.toISOString().split('T')[0],
+      dateTo: new Date().toISOString().split('T')[0],
+      userId: userRole === 'employee' ? userId : undefined,
     };
 
-    // Apply role-based filtering
-    if (userRole === 'employee') {
-      scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues![':userId'] = userId;
-    }
-
-    const command = new ScanCommand(scanParams);
-    const result = await docClient.send(command);
-    
-    return result.Items || [];
+    const result = await timeEntryRepo.listTimeEntries(filters);
+    return result.items;
   } catch (error) {
     console.error('Error fetching today time entries:', error);
     return [];
   }
 }
 
-async function fetchActiveSessions(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
-  const sessionsTable = process.env.USER_SESSIONS_TABLE_NAME;
-  if (!sessionsTable) return [];
-
+async function fetchActiveSessions(userId: string, userRole: string): Promise<any[]> {
   try {
-    const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000)).toISOString();
-    
-    let scanParams: ScanCommandInput = {
-      TableName: sessionsTable,
-      FilterExpression: '#lastActivity > :lastActivity AND #status = :status',
-      ExpressionAttributeNames: {
-        '#lastActivity': 'lastActivity',
-        '#status': 'status',
-      },
-      ExpressionAttributeValues: {
-        ':lastActivity': fifteenMinutesAgo,
-        ':status': 'active',
-      },
-    };
+    const sessions = userRole === 'employee' 
+      ? await sessionRepo.getActiveSessionsForUser(userId)
+      : await sessionRepo.getAllSessions();
 
-    // Apply role-based filtering
-    if (userRole === 'employee') {
-      scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues![':userId'] = userId;
-    }
-
-    const command = new ScanCommand(scanParams);
-    const result = await docClient.send(command);
-    
-    return result.Items || [];
+    // Filter for recently active sessions
+    const fifteenMinutesAgo = new Date(Date.now() - (15 * 60 * 1000));
+    return sessions.filter(session => {
+      const lastActivity = new Date(session.lastActivity || session.loginTime);
+      return lastActivity > fifteenMinutesAgo && session.isActive;
+    });
   } catch (error) {
     console.error('Error fetching active sessions:', error);
     return [];
   }
 }
 
-async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Promise<Record<string, unknown>[]> {
-  const analyticsTable = process.env.ANALYTICS_EVENTS_TABLE_NAME;
-  if (!analyticsTable) return [];
-
+async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Promise<any[]> {
   try {
-    const oneHourAgo = new Date(Date.now() - (60 * 60 * 1000)).toISOString();
-    
-    let scanParams: ScanCommandInput = {
-      TableName: analyticsTable,
-      FilterExpression: '#timestamp > :timestamp',
-      ExpressionAttributeNames: {
-        '#timestamp': 'timestamp',
-      },
-      ExpressionAttributeValues: {
-        ':timestamp': oneHourAgo,
-      },
-    };
+    const events = await analyticsRepo.getEventsForTimeRange(
+      new Date(Date.now() - (60 * 60 * 1000)).toISOString(), // 1 hour ago
+      new Date().toISOString()
+    );
 
-    // Apply role-based filtering
-    if (userRole === 'employee') {
-      scanParams.FilterExpression += ' AND #userId = :userId';
-      scanParams.ExpressionAttributeNames!['#userId'] = 'userId';
-      scanParams.ExpressionAttributeValues![':userId'] = userId;
-    }
-
-    const command = new ScanCommand(scanParams);
-    const result = await docClient.send(command);
-    
-    return result.Items || [];
+    return userRole === 'employee' 
+      ? events.filter(event => event.userId === userId)
+      : events;
   } catch (error) {
     console.error('Error fetching recent analytics events:', error);
     return [];
@@ -581,14 +499,13 @@ export async function trackRealTimeActivity(
   priority: string = 'low'
 ): Promise<void> {
   try {
-    const analyticsTable = process.env.ANALYTICS_EVENTS_TABLE_NAME;
-    if (!analyticsTable) return;
-
+    // Use AnalyticsRepository instead of direct DynamoDB access
     const event = {
       eventId: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       userId,
       eventType: 'activity',
       timestamp: new Date().toISOString(),
+      sessionId: undefined,
       metadata: {
         action,
         details,
@@ -596,14 +513,13 @@ export async function trackRealTimeActivity(
         priority,
         realTime: true,
       },
+      ipAddress: undefined,
+      userAgent: undefined,
+      location: undefined,
+      expiresAt: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days TTL
     };
 
-    const command = new PutCommand({
-      TableName: analyticsTable,
-      Item: event,
-    });
-
-    await docClient.send(command);
+    await analyticsRepo.trackEvent(event);
   } catch (error) {
     console.error('Error tracking real-time activity:', error);
   }
