@@ -67,7 +67,7 @@ function makeAwsRequest(service, target, payload) {
  * Get Cognito token for user
  * @param {string} email - User email
  * @param {string} password - User password
- * @returns {Promise<{success: boolean, token?: string, userId?: string, error?: string}>}
+ * @returns {Promise<{success: boolean, AccessToken?: string, token?: string, userId?: string, error?: string}>}
  */
 async function getCognitoToken(email, password) {
   try {
@@ -90,7 +90,7 @@ async function getCognitoToken(email, password) {
     );
 
     if (authResponse.AuthenticationResult) {
-      const { AccessToken, IdToken } = authResponse.AuthenticationResult;
+      const { AccessToken } = authResponse.AuthenticationResult;
       
       // Decode the access token to get user ID
       const tokenParts = AccessToken.split('.');
@@ -99,12 +99,11 @@ async function getCognitoToken(email, password) {
       
       console.log(`✅ Authentication successful for user: ${userId}`);
       
+      // Return only AccessToken-based authentication (MANDATORY pattern)
       return {
         success: true,
-        AccessToken: AccessToken,
-        IdToken: IdToken,
-        token: AccessToken,
-        idToken: IdToken,
+        AccessToken: AccessToken,    // ✅ PRIMARY - Use for API requests
+        token: AccessToken,          // ✅ ALIAS - Backward compatibility
         userId: userId
       };
     } else if (authResponse.ChallengeName) {

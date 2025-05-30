@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { getCognitoToken } = require('./scripts/get-cognito-token');
+const { getCognitoToken } = require('../../scripts/get-cognito-token');
 const https = require('https');
 
 // Configuration
