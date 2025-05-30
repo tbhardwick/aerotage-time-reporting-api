@@ -1,9 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
-import { 
-  SuccessResponse
-} from '../shared/types';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { ProjectRepository } from '../shared/project-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -47,20 +44,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // For now, we'll do a hard delete
     await projectRepository.deleteProject(projectId);
 
-    const response: SuccessResponse<null> = {
-      success: true,
-      data: null,
-      message: 'Project deleted successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(null, 200, 'Project deleted successfully');
 
   } catch (error) {
     console.error('Error deleting project:', error);

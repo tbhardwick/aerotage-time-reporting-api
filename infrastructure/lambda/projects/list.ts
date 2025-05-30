@@ -1,12 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
-  Project,
-  PaginationResponse
+  Project
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository, ProjectFilters } from '../shared/project-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('List projects request:', JSON.stringify(event, null, 2));
@@ -47,27 +46,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // - Managers: see projects they manage or are team members of
     // - Employees: see only projects they are team members of
 
-    const response: PaginationResponse<Project> = {
-      success: true,
-      data: {
-        items: result.projects,
-        pagination: {
-          total: result.total,
-          limit: filters.limit || 50,
-          offset: filters.offset || 0,
-          hasMore: result.hasMore,
-        },
+    const responseData = {
+      items: result.projects,
+      pagination: {
+        total: result.total,
+        limit: filters.limit || 50,
+        offset: filters.offset || 0,
+        hasMore: result.hasMore,
       },
     };
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(responseData, 200, 'Projects retrieved successfully');
 
   } catch {
     console.error('Error listing projects');

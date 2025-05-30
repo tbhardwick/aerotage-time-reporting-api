@@ -1,9 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  Project,
-  SuccessResponse
+  Project
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository } from '../shared/project-repository';
@@ -76,20 +75,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update the project
     const updatedProject = await projectRepository.updateProject(projectId, requestBody);
 
-    const response: SuccessResponse<Project> = {
-      success: true,
-      data: updatedProject,
-      message: 'Project updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(updatedProject, 200, 'Project updated successfully');
 
   } catch (error) {
     console.error('Error updating project:', error);

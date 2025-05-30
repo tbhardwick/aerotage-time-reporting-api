@@ -1,9 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  Client,
-  SuccessResponse
+  Client
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ClientRepository } from '../shared/client-repository';
@@ -65,20 +64,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update the client
     const updatedClient = await clientRepository.updateClient(clientId, requestBody);
 
-    const response: SuccessResponse<Client> = {
-      success: true,
-      data: updatedClient,
-      message: 'Client updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(updatedClient, 200, 'Client updated successfully');
 
   } catch (error) {
     console.error('Error updating client:', error);

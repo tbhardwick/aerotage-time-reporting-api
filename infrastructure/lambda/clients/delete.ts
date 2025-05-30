@@ -1,9 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
-import { 
-  SuccessResponse
-} from '../shared/types';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { ClientRepository } from '../shared/client-repository';
 import { ProjectRepository } from '../shared/project-repository';
 
@@ -58,20 +55,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       await clientRepository.deleteClient(clientId);
     }
 
-    const response: SuccessResponse<null> = {
-      success: true,
-      data: null,
-      message: hardDelete ? 'Client permanently deleted' : 'Client deactivated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    const message = hardDelete ? 'Client permanently deleted' : 'Client deactivated successfully';
+    return createSuccessResponse(null, 200, message);
 
   } catch (error) {
     console.error('Error deleting client:', error);
