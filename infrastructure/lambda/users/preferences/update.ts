@@ -1,16 +1,13 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
+import { UserRepository } from '../../shared/user-repository';
 import { 
   UpdateUserPreferencesRequest,
   UserPreferences, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
-
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
 
 // Default preferences for merging
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -43,7 +40,14 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Update user preferences request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -58,13 +62,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const updateData: UpdateUserPreferencesRequest = JSON.parse(event.body);
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
-
     // Authorization check: users can only update their own preferences unless they're admin
-    if (userId !== authenticatedUserId && userRole !== 'admin') {
+    if (userId !== currentUserId && userRole !== 'admin') {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -78,32 +77,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, validationError);
     }
 
-    // Get current preferences (if any)
-    const getCommand = new GetCommand({
-      TableName: process.env.USER_PREFERENCES_TABLE!,
-      Key: { userId },
-    });
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const userRepo = new UserRepository();
+    const userData = await userRepo.getUserById(userId);
 
-    const currentResult = await docClient.send(getCommand);
+    if (!userData) {
+      return createErrorResponse(404, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User not found');
+    }
 
     // Start with existing preferences or defaults
-    let currentPreferences: UserPreferences;
-    if (currentResult.Item) {
-      currentPreferences = {
-        theme: currentResult.Item.theme,
-        notifications: currentResult.Item.notifications,
-        timezone: currentResult.Item.timezone,
-        timeTracking: typeof currentResult.Item.timeTracking === 'string' 
-          ? JSON.parse(currentResult.Item.timeTracking) 
-          : currentResult.Item.timeTracking,
-        formatting: typeof currentResult.Item.formatting === 'string' 
-          ? JSON.parse(currentResult.Item.formatting) 
-          : currentResult.Item.formatting,
-        updatedAt: currentResult.Item.updatedAt,
-      };
-    } else {
-      currentPreferences = { ...DEFAULT_PREFERENCES };
-    }
+    const currentPreferences: UserPreferences = userData.preferences ? {
+      ...DEFAULT_PREFERENCES,
+      ...userData.preferences
+    } : { ...DEFAULT_PREFERENCES };
 
     // Merge updates with current preferences
     const updatedPreferences: UserPreferences = {
@@ -160,22 +146,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: new Date().toISOString(),
     };
 
-    // Save updated preferences
-    const putCommand = new PutCommand({
-      TableName: process.env.USER_PREFERENCES_TABLE!,
-      Item: {
-        userId,
-        theme: updatedPreferences.theme,
-        notifications: updatedPreferences.notifications,
-        timezone: updatedPreferences.timezone,
-        timeTracking: JSON.stringify(updatedPreferences.timeTracking),
-        formatting: JSON.stringify(updatedPreferences.formatting),
-        createdAt: currentResult.Item?.createdAt || new Date().toISOString(),
-        updatedAt: updatedPreferences.updatedAt,
-      },
+    // Update user preferences using repository pattern
+    await userRepo.updateUser(userId, { 
+      preferences: updatedPreferences 
     });
-
-    await docClient.send(putCommand);
 
     const response: SuccessResponse<UserPreferences> = {
       success: true,
@@ -194,7 +168,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error updating user preferences:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -258,28 +232,4 @@ function validateUpdateRequest(data: UpdateUserPreferencesRequest): string | nul
   }
 
   return null;
-}
-
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: ProfileSettingsErrorCodes | string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
 } 

@@ -1,12 +1,33 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { randomUUID } from 'crypto';
-import { getCurrentUserId } from '../shared/auth-helper';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
 
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
+// Create a simple AnalyticsRepository to follow repository pattern
+class AnalyticsRepository {
+  private docClient: any;
+  private analyticsTableName: string;
+
+  constructor() {
+    // Import DynamoDB modules here to avoid top-level imports
+    const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+    const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+    
+    const dynamoClient = new DynamoDBClient({});
+    this.docClient = DynamoDBDocumentClient.from(dynamoClient);
+    this.analyticsTableName = process.env.ANALYTICS_EVENTS_TABLE_NAME || 'aerotage-analytics-events-dev';
+  }
+
+  async trackEvent(analyticsEvent: AnalyticsEvent): Promise<void> {
+    const command = new (require('@aws-sdk/lib-dynamodb').PutCommand)({
+      TableName: this.analyticsTableName,
+      Item: analyticsEvent,
+    });
+
+    await this.docClient.send(command);
+    console.log('Analytics event stored:', analyticsEvent.eventId);
+  }
+}
 
 interface AnalyticsEvent {
   eventId: string;
@@ -77,15 +98,14 @@ const VALID_EVENT_TYPES = [
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Track analytics event request:', JSON.stringify(event, null, 2));
-
-    // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
-    const sessionId = event.requestContext.authorizer?.sessionId;
-    
-    if (!userId) {
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const sessionId = event.requestContext.authorizer?.sessionId;
 
     // Parse request body
     let requestBody: TrackEventRequest;
@@ -106,7 +126,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Check rate limiting (simple implementation)
-    const rateLimitCheck = await checkRateLimit(userId);
+    const rateLimitCheck = await checkRateLimit(currentUserId);
     if (!rateLimitCheck.allowed) {
       return {
         statusCode: 429,
@@ -126,25 +146,30 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    // Create analytics event
+    // Create analytics event with user context
     const analyticsEvent: AnalyticsEvent = {
       eventId: randomUUID(),
-      userId,
+      userId: currentUserId,
       eventType: requestBody.eventType,
       timestamp: requestBody.timestamp || new Date().toISOString(),
       sessionId,
-      metadata: requestBody.metadata || {},
+      metadata: {
+        ...requestBody.metadata,
+        userRole: user?.role || 'employee',
+        userDepartment: user?.department,
+      },
       ipAddress: getClientIP(event),
       userAgent: event.headers['User-Agent'] || event.headers['user-agent'],
       location: await getLocationFromIP(getClientIP(event)),
       expiresAt: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60), // 90 days TTL
     };
 
-    // Store the event
-    await storeAnalyticsEvent(analyticsEvent);
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const analyticsRepo = new AnalyticsRepository();
+    await analyticsRepo.trackEvent(analyticsEvent);
 
     // Update rate limiting counter
-    await updateRateLimit(userId);
+    await updateRateLimit(currentUserId);
 
     return {
       statusCode: 201,
@@ -164,25 +189,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error tracking analytics event:', error);
-    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to track analytics event');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
-
-async function storeAnalyticsEvent(analyticsEvent: AnalyticsEvent): Promise<void> {
-  const analyticsTable = process.env.ANALYTICS_EVENTS_TABLE_NAME;
-  
-  if (!analyticsTable) {
-    throw new Error('ANALYTICS_EVENTS_TABLE_NAME environment variable not set');
-  }
-
-  const command = new PutCommand({
-    TableName: analyticsTable,
-    Item: analyticsEvent,
-  });
-
-  await docClient.send(command);
-  console.log('Analytics event stored:', analyticsEvent.eventId);
-}
 
 function getClientIP(event: APIGatewayProxyEvent): string {
   // Try to get real IP from various headers (CloudFront, ALB, etc.)

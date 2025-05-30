@@ -1,15 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
+import { UserRepository } from '../../shared/user-repository';
 import { 
   UserPreferences, 
   SuccessResponse, 
-  ErrorResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
-
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
 
 // Default preferences for new users
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -42,7 +39,14 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Get user preferences request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -50,13 +54,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User ID is required');
     }
 
-    // Get authenticated user from context
-    const authContext = event.requestContext.authorizer;
-    const authenticatedUserId = authContext?.userId;
-    const userRole = authContext?.role || 'employee';
-
     // Authorization check: users can only access their own preferences unless they're admin
-    if (userId !== authenticatedUserId && userRole !== 'admin') {
+    if (userId !== currentUserId && userRole !== 'admin') {
       return createErrorResponse(
         403, 
         ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS, 
@@ -64,35 +63,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       );
     }
 
-    // Get user preferences from DynamoDB
-    const command = new GetCommand({
-      TableName: process.env.USER_PREFERENCES_TABLE!,
-      Key: { userId },
-    });
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const userRepo = new UserRepository();
+    const userData = await userRepo.getUserById(userId);
 
-    const result = await docClient.send(command);
-
-    let preferences: UserPreferences;
-
-    if (!result.Item) {
-      // Return default preferences if none exist
-      preferences = DEFAULT_PREFERENCES;
-    } else {
-      // Transform DynamoDB item to UserPreferences
-      const item = result.Item;
-      preferences = {
-        theme: item.theme,
-        notifications: item.notifications,
-        timezone: item.timezone,
-        timeTracking: typeof item.timeTracking === 'string' 
-          ? JSON.parse(item.timeTracking) 
-          : item.timeTracking,
-        formatting: typeof item.formatting === 'string' 
-          ? JSON.parse(item.formatting) 
-          : item.formatting,
-        updatedAt: item.updatedAt,
-      };
+    if (!userData) {
+      return createErrorResponse(404, ProfileSettingsErrorCodes.PROFILE_NOT_FOUND, 'User not found');
     }
+
+    // Get preferences from user data or return defaults
+    const preferences: UserPreferences = userData.preferences ? {
+      ...DEFAULT_PREFERENCES,
+      ...userData.preferences,
+      updatedAt: userData.updatedAt || new Date().toISOString(),
+    } : DEFAULT_PREFERENCES;
 
     const response: SuccessResponse<UserPreferences> = {
       success: true,
@@ -110,30 +94,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   } catch (error) {
     console.error('Error getting user preferences:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'Internal server error');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
-};
-
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: ProfileSettingsErrorCodes | string, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 
+}; 
