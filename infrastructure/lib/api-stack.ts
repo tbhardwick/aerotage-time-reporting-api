@@ -71,7 +71,7 @@ export class ApiStack extends cdk.Stack {
         STAGE: stage,
         USER_POOL_ID: userPool.userPoolId,
         USER_SESSIONS_TABLE: tables.userSessionsTable.tableName,
-        FORCE_BOOTSTRAP: 'false', // Session migration now handles legacy sessions gracefully
+        FORCE_BOOTSTRAP: 'true', // Temporarily enable to bypass session validation after DB recreation
       },
       bundling: {
         minify: false,
