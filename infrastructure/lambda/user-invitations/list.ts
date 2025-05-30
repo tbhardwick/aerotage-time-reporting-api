@@ -1,8 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   InvitationFilters, 
   PaginationResponse, 
-  ErrorResponse, 
   InvitationErrorCodes,
   UserInvitation
 } from '../shared/types';
@@ -10,17 +11,21 @@ import { ValidationService } from '../shared/validation';
 import { InvitationRepository } from '../shared/invitation-repository';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('List user invitations request:', JSON.stringify(event, null, 2));
-
   try {
-    // Get current user from Cognito token
+    // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
-      return createErrorResponse(401, InvitationErrorCodes.INSUFFICIENT_PERMISSIONS, 'User authentication required');
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    // TODO: Check if user has admin permissions
-    // For now, we'll allow all authenticated users to list invitations
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    // Role-based access control - only managers and admins can list invitations
+    if (userRole === 'employee') {
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to list invitations');
+    }
+    // Managers and admins can list invitations
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
@@ -75,66 +80,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   } catch (error) {
     console.error('Error listing user invitations:', error);
     
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'An internal server error occurred',
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    };
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
-};
-
-/**
- * Extracts current user ID from authorization context
- */
-function getCurrentUserId(event: APIGatewayProxyEvent): string | null {
-  const authContext = event.requestContext.authorizer;
-  
-  // Primary: get from custom authorizer context
-  if (authContext?.userId) {
-    return authContext.userId;
-  }
-
-  // Fallback: try to get from Cognito claims (for backward compatibility)
-  if (authContext?.claims?.sub) {
-    return authContext.claims.sub;
-  }
-
-  return null;
-}
-
-/**
- * Creates standardized error response
- */
-function createErrorResponse(
-  statusCode: number, 
-  errorCode: InvitationErrorCodes, 
-  message: string
-): APIGatewayProxyResult {
-  const errorResponse: ErrorResponse = {
-    success: false,
-    error: {
-      code: errorCode,
-      message,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  return {
-    statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: JSON.stringify(errorResponse),
-  };
-} 
+}; 
