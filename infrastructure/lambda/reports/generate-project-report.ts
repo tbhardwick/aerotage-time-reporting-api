@@ -144,7 +144,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateProjectReport(filters: ProjectReportFilters, userId: string, userRole: string): Promise<ProjectReportResponse> {
+async function generateProjectReport(filters: ProjectReportFilters, userId: string, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  userRole: string): Promise<ProjectReportResponse> {
   const reportId = `project-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -277,6 +279,7 @@ async function transformProjectData(
   projects: Record<string, unknown>[],
   timeEntries: Record<string, unknown>[],
   clients: Map<string, Record<string, unknown>>,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filters: ProjectReportFilters
 ): Promise<ProjectReportDataItem[]> {
   // Group time entries by project
@@ -482,11 +485,12 @@ async function getCachedReport(cacheKey: string): Promise<ProjectReportResponse 
   }
 }
 
-async function cacheReport(cacheKey: string, reportData: ProjectReportResponse, ttlSeconds: number): Promise<void> {
+async function cacheReport(
+  _cacheKey: string, reportData: ProjectReportResponse, ttlSeconds: number): Promise<void> {
   try {
     // Mock cache implementation - in production, create ReportCacheRepository
     // For now, just log that we would cache the report
-    console.log(`Would cache project report with key: ${cacheKey} for ${ttlSeconds} seconds`);
+    console.log(`Would cache report for ${ttlSeconds} seconds`);
   } catch (error) {
     console.error('Error caching project report:', error);
     // Don't throw - caching failure shouldn't break the report generation

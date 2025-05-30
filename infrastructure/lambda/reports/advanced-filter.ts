@@ -6,6 +6,7 @@ import { UserRepository } from '../shared/user-repository';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const userRepo = new UserRepository();
 
 interface AdvancedFilterRequest {
@@ -93,7 +94,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let filterRequest: AdvancedFilterRequest;
     try {
       filterRequest = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -143,7 +144,10 @@ function applyAccessControl(request: AdvancedFilterRequest, userId: string, user
   return request;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: string): Promise<FilteredDataResponse> {
+  const startTime = Date.now();
+  
   const filterId = `filter-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
   // Get raw data from data source
@@ -153,13 +157,13 @@ async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: str
   const filteredData = applyFilters(rawData, request.filters);
   
   // Apply grouping if specified
-  let groupedData: any[] | undefined;
+  let groupedData: Record<string, unknown>[] | undefined;
   if (request.groupBy) {
     groupedData = applyGrouping(filteredData, request.groupBy);
   }
 
   // Apply aggregations if specified
-  let aggregations: { [key: string]: any } | undefined;
+  let aggregations: Record<string, unknown> | undefined;
   if (request.aggregations && request.aggregations.length > 0) {
     aggregations = applyAggregations(filteredData, request.aggregations);
   }
@@ -182,6 +186,8 @@ async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: str
   // Format output based on requested format
   const outputData = formatOutput(paginatedData, groupedData, request.outputFormat || 'detailed');
 
+  const executionTime = Date.now() - startTime;
+
   return {
     filterId,
     dataSource: request.dataSource,
@@ -191,7 +197,7 @@ async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: str
     groupedData,
     aggregations,
     pagination: paginationInfo,
-    executionTime: 0, // Will be set by caller
+    executionTime,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -259,11 +265,11 @@ function applyFilters(data: Record<string, unknown>[], filters: FilterCriteria[]
   });
 }
 
-function getNestedValue(obj: any, path: string): any {
-  return path.split('.').reduce((current, key) => current?.[key], obj);
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce((current, key) => current?.[key as keyof typeof current], obj);
 }
 
-function evaluateFilter(value: any, filter: FilterCriteria): boolean {
+function evaluateFilter(value: unknown, filter: FilterCriteria): boolean {
   const { operator, value: filterValue, secondValue, caseSensitive = true } = filter;
 
   // Handle null/undefined values
@@ -346,15 +352,15 @@ function evaluateFilter(value: any, filter: FilterCriteria): boolean {
   }
 }
 
-function applyGrouping(data: any[], groupBy: GroupByOptions): any[] {
-  const groups = new Map<string, any[]>();
+function applyGrouping(data: Record<string, unknown>[], groupBy: GroupByOptions): Record<string, unknown>[] {
+  const groups = new Map<string, Record<string, unknown>[]>();
 
   data.forEach(item => {
     let groupKey: string;
 
     if (groupBy.dateGrouping && groupBy.fields.length === 1) {
       // Date-based grouping
-      const dateValue = new Date(getNestedValue(item, groupBy.fields[0]));
+      const dateValue = new Date(getNestedValue(item, groupBy.fields[0]) as string);
       groupKey = formatDateForGrouping(dateValue, groupBy.dateGrouping);
     } else if (groupBy.customGrouping) {
       // Custom range-based grouping
@@ -362,7 +368,7 @@ function applyGrouping(data: any[], groupBy: GroupByOptions): any[] {
       groupKey = findCustomGroup(value, groupBy.customGrouping.ranges);
     } else {
       // Standard field-based grouping
-      groupKey = groupBy.fields.map(field => getNestedValue(item, field)).join('|');
+      groupKey = groupBy.fields.map(field => getNestedValue(item, field) as string).join('|');
     }
 
     if (!groups.has(groupKey)) {
@@ -398,35 +404,36 @@ function formatDateForGrouping(date: Date, grouping: string): string {
   }
 }
 
-function findCustomGroup(value: any, ranges: any[]): string {
+function findCustomGroup(value: unknown, ranges: Record<string, unknown>[]): string {
   for (const range of ranges) {
-    if (range.values && range.values.includes(value)) {
-      return range.label;
+    if (range.values && Array.isArray(range.values) && range.values.includes(value)) {
+      return range.label as string;
     }
     if (range.min !== undefined && range.max !== undefined) {
       const numValue = Number(value);
-      if (numValue >= range.min && numValue <= range.max) {
-        return range.label;
+      if (numValue >= Number(range.min) && numValue <= Number(range.max)) {
+        return range.label as string;
       }
     }
   }
   return 'Other';
 }
 
-function applyAggregations(data: any[], aggregations: AggregationOptions[]): { [key: string]: any } {
-  const results: { [key: string]: any } = {};
+function applyAggregations(data: Record<string, unknown>[], aggregations: AggregationOptions[]): Record<string, unknown> {
+  const results: Record<string, unknown> = {};
 
   aggregations.forEach(agg => {
     const values = data.map(item => getNestedValue(item, agg.field)).filter(v => v != null);
+    const numericValues = values.map(val => Number(val)); // Convert to numbers first
     const alias = agg.alias || `${agg.function}_${agg.field}`;
 
     switch (agg.function) {
       case 'sum':
-        results[alias] = values.reduce((sum, val) => sum + Number(val), 0);
+        results[alias] = numericValues.reduce((sum, val) => sum + val, 0);
         break;
       
       case 'avg':
-        results[alias] = values.length > 0 ? values.reduce((sum, val) => sum + Number(val), 0) / values.length : 0;
+        results[alias] = numericValues.length > 0 ? numericValues.reduce((sum, val) => sum + val, 0) / numericValues.length : 0;
         break;
       
       case 'count':
@@ -438,15 +445,15 @@ function applyAggregations(data: any[], aggregations: AggregationOptions[]): { [
         break;
       
       case 'min':
-        results[alias] = values.length > 0 ? Math.min(...values.map(Number)) : null;
+        results[alias] = numericValues.length > 0 ? Math.min(...numericValues) : null;
         break;
       
       case 'max':
-        results[alias] = values.length > 0 ? Math.max(...values.map(Number)) : null;
+        results[alias] = numericValues.length > 0 ? Math.max(...numericValues) : null;
         break;
       
       case 'median':
-        const sortedValues = values.map(Number).sort((a, b) => a - b);
+        const sortedValues = numericValues.sort((a, b) => a - b);
         const mid = Math.floor(sortedValues.length / 2);
         results[alias] = sortedValues.length > 0 ? 
           (sortedValues.length % 2 === 0 ? 
@@ -456,7 +463,7 @@ function applyAggregations(data: any[], aggregations: AggregationOptions[]): { [
       
       case 'percentile':
         const percentile = agg.percentile || 50;
-        const sortedPercentileValues = values.map(Number).sort((a, b) => a - b);
+        const sortedPercentileValues = numericValues.sort((a, b) => a - b);
         const index = Math.ceil((percentile / 100) * sortedPercentileValues.length) - 1;
         results[alias] = sortedPercentileValues.length > 0 ? sortedPercentileValues[Math.max(0, index)] : null;
         break;
@@ -466,7 +473,7 @@ function applyAggregations(data: any[], aggregations: AggregationOptions[]): { [
   return results;
 }
 
-function applySorting(data: any[], sorting: SortingOptions[]): any[] {
+function applySorting(data: Record<string, unknown>[], sorting: SortingOptions[]): Record<string, unknown>[] {
   return data.sort((a, b) => {
     for (const sort of sorting) {
       const aValue = getNestedValue(a, sort.field);
@@ -492,8 +499,8 @@ function applySorting(data: any[], sorting: SortingOptions[]): any[] {
   });
 }
 
-function applyPagination(data: any[], pagination: PaginationOptions): {
-  data: any[];
+function applyPagination(data: Record<string, unknown>[], pagination: PaginationOptions): {
+  data: Record<string, unknown>[];
   pagination: {
     hasMore: boolean;
     nextCursor?: string;
@@ -515,12 +522,12 @@ function applyPagination(data: any[], pagination: PaginationOptions): {
   };
 }
 
-function formatOutput(data: any[], groupedData: any[] | undefined, format: string): any[] {
+function formatOutput(data: Record<string, unknown>[], groupedData: Record<string, unknown>[] | undefined, format: string): Record<string, unknown>[] {
   switch (format) {
     case 'summary':
       return data.map(item => {
         // Return only key fields for summary
-        const summary: any = {};
+        const summary: Record<string, unknown> = {};
         ['id', 'name', 'status', 'date', 'amount', 'hours'].forEach(field => {
           if (item[field] !== undefined) {
             summary[field] = item[field];

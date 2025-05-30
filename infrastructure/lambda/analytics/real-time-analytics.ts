@@ -2,8 +2,9 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
 import { AnalyticsRepository } from '../shared/analytics-repository';
-import { SessionRepository } from '../shared/session-repository';
+import { SessionRepository, UserSession } from '../shared/session-repository';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
+import { TimeEntry } from '../shared/types';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const analyticsRepo = new AnalyticsRepository();
@@ -96,7 +97,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (event.body) {
       try {
         analyticsRequest = JSON.parse(event.body);
-      } catch (error) {
+      } catch {
         return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
       }
     } else {
@@ -212,22 +213,21 @@ async function generateRealTimeMetrics(
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
   // Fetch current data
-  const [timeEntries, sessions, analyticsEvents] = await Promise.all([
+  const [timeEntries, sessions] = await Promise.all([
     fetchTodayTimeEntries(todayStart, userId, userRole),
     fetchActiveSessions(userId, userRole),
-    fetchRecentAnalyticsEvents(userId, userRole),
   ]);
 
   // Calculate metrics
   const activeUsers = await calculateActiveUsers(sessions);
   const currentSessions = sessions.length;
-  const todayHours = timeEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+  const todayHours = timeEntries.reduce((sum, entry) => sum + ((entry.duration || 0) / 60), 0);
   const todayRevenue = timeEntries
-    .filter(entry => entry.billable)
-    .reduce((sum, entry) => sum + ((entry.hours || 0) * (entry.hourlyRate || 0)), 0);
-  const liveTimers = await calculateLiveTimers(userId, userRole);
+    .filter(entry => entry.isBillable)
+    .reduce((sum, entry) => sum + (((entry.duration || 0) / 60) * (entry.hourlyRate || 0)), 0);
+  const liveTimers = await calculateLiveTimers();
   const recentEntries = timeEntries.filter(entry => {
-    const entryTime = new Date(entry.createdAt || entry.startDate);
+    const entryTime = new Date(entry.createdAt || entry.date);
     return (now.getTime() - entryTime.getTime()) < (60 * 60 * 1000); // Last hour
   }).length;
 
@@ -277,8 +277,8 @@ async function generateActivityFeed(userId: string, userRole: string): Promise<A
       action: (event.metadata?.action as string) || event.eventType,
       timestamp: event.timestamp,
       details: (event.metadata?.details as Record<string, unknown>) || {},
-      type: (event.metadata?.type as any) || 'system',
-      priority: (event.metadata?.priority as any) || 'low',
+      type: (event.metadata?.type as 'timer' | 'entry' | 'project' | 'client' | 'system') || 'system',
+      priority: (event.metadata?.priority as 'low' | 'medium' | 'high') || 'low',
     }));
 
   } catch (error) {
@@ -359,7 +359,7 @@ async function generateRealTimeAlerts(userId: string, userRole: string): Promise
     }
 
     // Business alerts
-    const liveTimers = await calculateLiveTimers(userId, userRole);
+    const liveTimers = await calculateLiveTimers();
     if (liveTimers > 50) { // Many active timers
       alerts.push({
         id: `alert-${now.getTime()}-timers`,
@@ -399,7 +399,7 @@ async function generateRealTimeAlerts(userId: string, userRole: string): Promise
 }
 
 // Helper functions using repositories
-async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<any[]> {
+async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole: string): Promise<TimeEntry[]> {
   try {
     const filters = {
       dateFrom: todayStart.toISOString().split('T')[0],
@@ -415,7 +415,7 @@ async function fetchTodayTimeEntries(todayStart: Date, userId: string, userRole:
   }
 }
 
-async function fetchActiveSessions(userId: string, userRole: string): Promise<any[]> {
+async function fetchActiveSessions(userId: string, userRole: string): Promise<UserSession[]> {
   try {
     const sessions = userRole === 'employee' 
       ? await sessionRepo.getActiveSessionsForUser(userId)
@@ -433,28 +433,12 @@ async function fetchActiveSessions(userId: string, userRole: string): Promise<an
   }
 }
 
-async function fetchRecentAnalyticsEvents(userId: string, userRole: string): Promise<any[]> {
-  try {
-    const events = await analyticsRepo.getEventsForTimeRange(
-      new Date(Date.now() - (60 * 60 * 1000)).toISOString(), // 1 hour ago
-      new Date().toISOString()
-    );
-
-    return userRole === 'employee' 
-      ? events.filter(event => event.userId === userId)
-      : events;
-  } catch (error) {
-    console.error('Error fetching recent analytics events:', error);
-    return [];
-  }
-}
-
-async function calculateActiveUsers(sessions: Record<string, unknown>[]): Promise<number> {
+async function calculateActiveUsers(sessions: UserSession[]): Promise<number> {
   const uniqueUsers = new Set(sessions.map(session => session.userId));
   return uniqueUsers.size;
 }
 
-async function calculateLiveTimers(userId: string, userRole: string): Promise<number> {
+async function calculateLiveTimers(): Promise<number> {
   // Mock implementation - in production, query active timers from time entries
   // where status = 'running' or similar
   return Math.floor(Math.random() * 25) + 5; // 5-30 active timers
@@ -492,7 +476,6 @@ function determineSessionStatus(lastActivity: string): 'active' | 'idle' | 'away
 
 // Track real-time activity
 export async function trackRealTimeActivity(
-  userId: string,
   action: string,
   details: Record<string, unknown>,
   type: string = 'system',
@@ -502,7 +485,7 @@ export async function trackRealTimeActivity(
     // Use AnalyticsRepository instead of direct DynamoDB access
     const event = {
       eventId: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      userId,
+      userId: 'system', // Default to system user for real-time tracking
       eventType: 'activity',
       timestamp: new Date().toISOString(),
       sessionId: undefined,

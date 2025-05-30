@@ -121,7 +121,7 @@ async function createReportConfig(event: APIGatewayProxyEvent, userId: string, u
     let requestBody: CreateReportConfigRequest;
     try {
       requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -256,7 +256,7 @@ async function updateReportConfig(reportId: string, event: APIGatewayProxyEvent,
     let updateData: UpdateReportConfigRequest;
     try {
       updateData = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -428,7 +428,7 @@ function canModifyReport(reportConfig: ReportConfig, userId: string, userRole: s
 
 function calculateNextRun(schedule: ReportSchedule): string {
   const now = new Date();
-  let nextRun = new Date(now);
+  const nextRun = new Date(now);
   
   // Parse time
   const [hours, minutes] = schedule.time.split(':').map(Number);

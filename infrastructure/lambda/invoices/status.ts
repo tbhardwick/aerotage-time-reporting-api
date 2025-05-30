@@ -5,7 +5,6 @@ import {
   Invoice,
   Payment,
   RecordPaymentRequest,
-  SuccessResponse,
   InvoiceErrorCodes
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
@@ -96,12 +95,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
 
       // Update the invoice status
-      updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, {
+      const changes: Record<string, unknown> = {
         status: requestBody.status,
-      });
+        updatedAt: new Date().toISOString(),
+      };
+      updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, changes);
     }
 
-    const responseData: any = {
+    const responseData: Record<string, unknown> = {
       invoice: updatedInvoice,
     };
 

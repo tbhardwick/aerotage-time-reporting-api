@@ -1,13 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
-import { 
-  Invoice,
-  UpdateInvoiceRequest,
-  SuccessResponse,
-  InvoiceErrorCodes
-} from '../shared/types';
 import { InvoiceRepository } from '../shared/invoice-repository';
+import { UpdateInvoiceRequest, InvoiceErrorCodes } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {

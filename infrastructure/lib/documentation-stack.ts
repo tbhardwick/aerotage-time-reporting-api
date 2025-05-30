@@ -19,6 +19,7 @@ export class DocumentationStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DocumentationStackProps) {
     super(scope, id, props);
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { stage, apiGatewayUrl } = props;
 
     // S3 bucket for hosting documentation

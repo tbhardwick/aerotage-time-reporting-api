@@ -3,10 +3,7 @@ import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  TimeEntryFilters, 
-  PaginationResponse, 
-  ErrorResponse,
-  TimeEntry
+  TimeEntryFilters
 } from '../shared/types';
 
 const timeEntryRepo = new TimeEntryRepository();

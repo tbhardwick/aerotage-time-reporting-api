@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { 

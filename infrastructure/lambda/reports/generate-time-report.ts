@@ -7,6 +7,7 @@ import { createHash } from 'crypto';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const userRepo = new UserRepository();
 
 interface ReportFilters {
@@ -142,7 +143,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateTimeReport(filters: ReportFilters, userId: string, userRole: string): Promise<ReportResponse> {
+async function generateTimeReport(filters: ReportFilters, userId: string, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  userRole: string): Promise<ReportResponse> {
   const reportId = `time-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -187,7 +190,9 @@ async function generateTimeReport(filters: ReportFilters, userId: string, userRo
   };
 }
 
-async function queryTimeEntries(filters: ReportFilters, userRole: string): Promise<Record<string, unknown>[]> {
+async function queryTimeEntries(filters: ReportFilters, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  userRole: string): Promise<Record<string, unknown>[]> {
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const result = await timeEntryRepo.listTimeEntries({
@@ -331,7 +336,7 @@ function transformTimeEntries(
     if (typeof tags === 'string') {
       try {
         tags = JSON.parse(tags);
-      } catch (e) {
+      } catch {
         tags = [];
       }
     }
@@ -381,7 +386,9 @@ function calculateSummary(data: TimeReportDataItem[]): ReportSummary {
   };
 }
 
-function groupData(data: TimeReportDataItem[], groupBy: string): TimeReportDataItem[] {
+function groupData(data: TimeReportDataItem[], 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  groupBy: string): TimeReportDataItem[] {
   // For now, return data as-is. In production, implement proper grouping logic
   return data;
 }
@@ -437,13 +444,14 @@ async function getCachedReport(cacheKey: string): Promise<ReportResponse | null>
   }
 }
 
-async function cacheReport(cacheKey: string, reportData: ReportResponse, ttlSeconds: number): Promise<void> {
+async function cacheReport(
+  _cacheKey: string, reportData: ReportResponse, ttlSeconds: number): Promise<void> {
   try {
     // Mock cache implementation - in production, create ReportCacheRepository
     // For now, just log that we would cache the report
-    console.log(`Would cache time report with key: ${cacheKey} for ${ttlSeconds} seconds`);
+    console.log(`Would cache report for ${ttlSeconds} seconds`);
   } catch (error) {
-    console.error('Error caching report:', error);
+    console.error('Error caching time report:', error);
     // Don't throw - caching failure shouldn't break the report generation
   }
 } 

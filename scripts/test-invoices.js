@@ -73,6 +73,19 @@ async function authenticateUser() {
     throw error;
   }
 }
+
+// Test data storage
+const TEST_DATA = {
+  clientId: 'test-client-001',
+  projectId: 'test-project-001',
+  timeEntryIds: [],
+  invoiceIds: [],
+  paymentIds: []
+};
+
+// Session creation using MANDATORY pattern
+async function createSession(accessToken) {
+  console.log('🔑 Creating session with MANDATORY pattern...');
   
   try {
     const tokenParts = accessToken.split('.');

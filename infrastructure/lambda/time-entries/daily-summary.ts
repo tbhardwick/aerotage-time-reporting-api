@@ -14,6 +14,21 @@ import {
   SuccessResponse
 } from '../shared/types';
 
+interface DaySchedule {
+  targetHours: number;
+  start: string | null;
+  end: string | null;
+}
+
+interface PeriodSummary {
+  totalDays: number;
+  workDays: number;
+  totalHours: number;
+  averageHoursPerDay: number;
+  targetHours: number;
+  completionPercentage: number;
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     // MANDATORY: Use standardized authentication helpers
@@ -197,7 +212,7 @@ async function calculateDailySummary(
   dayOfWeek: string,
   timeEntries: TimeEntry[],
   targetHours: number,
-  daySchedule: any,
+  daySchedule: DaySchedule | null,
   includeGaps: boolean
 ): Promise<DailySummary> {
   // Calculate totals
@@ -298,7 +313,7 @@ function calculateWorkingHours(timeEntries: TimeEntry[]): {
   return { firstEntry, lastEntry, totalSpan };
 }
 
-function calculateTimeGaps(timeEntries: TimeEntry[], daySchedule: any): TimeGap[] {
+function calculateTimeGaps(timeEntries: TimeEntry[], daySchedule: DaySchedule | null): TimeGap[] {
   // Simplified gap calculation - would need more sophisticated logic
   // This is a basic implementation
   const gaps: TimeGap[] = [];
@@ -334,7 +349,8 @@ function calculateTimeGaps(timeEntries: TimeEntry[], daySchedule: any): TimeGap[
   return gaps;
 }
 
-function calculatePeriodSummary(summaries: DailySummary[], workSchedule: UserWorkSchedule | null) {
+function calculatePeriodSummary(summaries: DailySummary[], 
+  _workSchedule: UserWorkSchedule | null): PeriodSummary {
   const totalDays = summaries.length;
   const workDays = summaries.filter(s => s.targetHours > 0).length;
   const totalHours = summaries.reduce((sum, s) => sum + s.totalHours, 0);

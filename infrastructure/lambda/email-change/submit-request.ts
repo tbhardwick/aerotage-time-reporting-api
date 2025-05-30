@@ -7,7 +7,6 @@ import { EmailChangeValidation } from '../shared/email-change-validation';
 import { UserRepository } from '../shared/user-repository';
 import { 
   CreateEmailChangeRequest, 
-  EmailChangeRequestResponse,
   EmailChangeErrorCodes
 } from '../shared/types';
 
@@ -42,7 +41,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let createRequest: CreateEmailChangeRequest;
     try {
       createRequest = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
     

@@ -1,10 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
-import { AnalyticsRepository } from '../shared/analytics-repository';
-
-// MANDATORY: Use repository pattern instead of direct DynamoDB
-const analyticsRepo = new AnalyticsRepository();
 
 interface PerformanceMonitorRequest {
   timeframe: 'hour' | 'day' | 'week' | 'month';
@@ -188,14 +184,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     console.log('Performance monitor request:', JSON.stringify(event, null, 2));
 
-    // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-    
-    if (!userId) {
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+
+    const { queryStringParameters } = event;
 
     // Only admins and managers can access performance monitoring
     if (userRole === 'employee') {
@@ -220,7 +217,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (event.body) {
       try {
         monitorRequest = JSON.parse(event.body);
-      } catch (error) {
+      } catch {
         return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
       }
     } else {
@@ -235,13 +232,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Apply query parameters
-    const queryParams = event.queryStringParameters || {};
-    if (queryParams.timeframe) {
-      monitorRequest.timeframe = queryParams.timeframe as PerformanceMonitorRequest['timeframe'];
+    if (queryStringParameters) {
+      if (queryStringParameters.timeframe) {
+        monitorRequest.timeframe = queryStringParameters.timeframe as PerformanceMonitorRequest['timeframe'];
+      }
     }
 
     // Generate performance monitoring data
-    const performanceData = await generatePerformanceMonitoring(monitorRequest, userId, userRole);
+    const performanceData = await generatePerformanceMonitoring(monitorRequest);
 
     return {
       statusCode: 200,
@@ -277,9 +275,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 async function generatePerformanceMonitoring(
-  request: PerformanceMonitorRequest,
-  userId: string,
-  userRole: string
+  request: PerformanceMonitorRequest
 ): Promise<PerformanceMonitorResponse> {
   const timestamp = new Date().toISOString();
   
@@ -309,7 +305,7 @@ async function generatePerformanceMonitoring(
   // Generate comparisons if requested
   let comparisons: PerformanceComparison | undefined;
   if (request.includeComparisons) {
-    comparisons = await generatePerformanceComparisons(timeRange);
+    comparisons = await generatePerformanceComparisons();
   }
 
   // Generate summary
@@ -785,7 +781,7 @@ function generatePerformanceAlerts(
   return alerts;
 }
 
-async function generatePerformanceComparisons(timeRange: TimeRange): Promise<PerformanceComparison> {
+async function generatePerformanceComparisons(): Promise<PerformanceComparison> {
   // Mock comparison data - in production, fetch historical data
   return {
     previousPeriod: {

@@ -19,6 +19,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
@@ -40,7 +41,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestBody;
     try {
       requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Invalid JSON in request body');
     }
 

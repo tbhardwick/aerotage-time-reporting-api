@@ -1,16 +1,13 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { 
-  AcceptInvitationRequest, 
-  AcceptInvitationResponse, 
-  InvitationErrorCodes,
-  User
-} from '../shared/types';
-import { ValidationService } from '../shared/validation';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { InvitationRepository } from '../shared/invitation-repository';
+import { InvitationErrorCodes } from '../shared/types';
+import { 
+  AcceptInvitationRequest
+} from '../shared/types';
 import { EmailService, EmailTemplateData } from '../shared/email-service';
 import { TokenService } from '../shared/token-service';
 import { UserRepository } from '../shared/user-repository';
-import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Accept invitation request:', JSON.stringify(event, null, 2));

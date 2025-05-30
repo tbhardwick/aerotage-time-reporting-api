@@ -1,6 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { 
-  InvitationValidation, 
   InvitationErrorCodes
 } from '../shared/types';
 import { InvitationRepository } from '../shared/invitation-repository';
@@ -53,21 +52,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Prepare validation response
-    const validationData: InvitationValidation = {
-      invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        department: invitation.department,
-        jobTitle: invitation.jobTitle,
-        hourlyRate: invitation.hourlyRate,
-        permissions: invitation.permissions,
-        expiresAt: invitation.expiresAt,
-        isExpired: isExpired,
-      },
-    };
-
-    return createSuccessResponse(validationData);
+    return createSuccessResponse({
+      valid: true,
+      invitation,
+      expiresAt: invitation.expiresAt
+    });
 
   } catch (error) {
     console.error('Error validating invitation token:', error);

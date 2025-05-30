@@ -1,6 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { createErrorResponse } from '../shared/response-helper';
 import { InvitationRepository } from '../shared/invitation-repository';
 import { TokenService } from '../shared/token-service';
+import { UserInvitation } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Accept invitation page request:', JSON.stringify(event, null, 2));
@@ -62,7 +64,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-function createAcceptancePage(invitation: any, token: string): APIGatewayProxyResult {
+function createAcceptancePage(invitation: UserInvitation, token: string): APIGatewayProxyResult {
   const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com';
   const apiUrl = `https://${process.env.API_GATEWAY_ID || '0z6kxagbh2'}.execute-api.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${process.env.STAGE || 'dev'}`;
 

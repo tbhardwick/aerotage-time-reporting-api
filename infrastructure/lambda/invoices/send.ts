@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  Invoice,
   SendInvoiceRequest,
   InvoiceErrorCodes
 } from '../shared/types';
@@ -64,8 +63,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 4. Update invoice status and sent timestamp
 
     // For now, just update the invoice status to 'sent'
-    const sendData = requestBody as SendInvoiceRequest;
-    const now = new Date().toISOString();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _sendData = requestBody as SendInvoiceRequest; // Store for future email implementation
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _now = new Date().toISOString(); // Store for future timestamp tracking
     
     const updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, {
       status: 'sent',

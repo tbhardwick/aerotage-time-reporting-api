@@ -1,9 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
-import { 
-  Project
-} from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository } from '../shared/project-repository';
 import { ClientRepository } from '../shared/client-repository';
@@ -28,8 +25,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse request body
     let requestBody;
     try {
-      requestBody = JSON.parse(event.body || '{}');
-    } catch (error) {
+      requestBody = JSON.parse(event.body);
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 

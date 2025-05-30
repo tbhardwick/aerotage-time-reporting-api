@@ -1,12 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { createErrorResponse } from '../shared/response-helper';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { AnalyticsRepository } from '../shared/analytics-repository';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { UserRepository } from '../shared/user-repository';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
-const analyticsRepo = new AnalyticsRepository();
 const timeEntryRepo = new TimeEntryRepository();
 const userRepo = new UserRepository();
 
@@ -139,6 +137,43 @@ interface AlertData {
   threshold: number;
   timestamp: string;
   acknowledged: boolean;
+}
+
+interface TimeEntryData {
+  id?: string;
+  userId?: string;
+  projectId?: string;
+  hours?: number;
+  hourlyRate?: number;
+  billable?: boolean;
+  startDate?: string;
+  startTime?: string;
+  endTime?: string;
+  productivityScore?: number;
+}
+
+interface ProjectData {
+  id?: string;
+  projectId?: string;
+  name?: string;
+  status?: string;
+  managerId?: string;
+  budget?: number;
+  budgetHours?: number;
+  isOverdue?: boolean;
+}
+
+interface ClientData {
+  id: string;
+  name: string;
+  status: string;
+}
+
+interface UserData {
+  userId?: string;
+  name?: string;
+  email?: string;
+  role?: string;
 }
 
 interface DateRange {
@@ -381,7 +416,7 @@ function calculateDateRange(timeframe: string, customRange?: { startDate: string
   };
 }
 
-async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: string): Promise<any[]> {
+async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: string): Promise<TimeEntryData[]> {
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const filters = {
@@ -398,7 +433,7 @@ async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: 
   }
 }
 
-async function fetchProjects(userId: string, userRole: string): Promise<any[]> {
+async function fetchProjects(userId: string, userRole: string): Promise<ProjectData[]> {
   try {
     // Mock projects data - in production, create ProjectRepository
     const mockProjects = [
@@ -421,7 +456,8 @@ async function fetchProjects(userId: string, userRole: string): Promise<any[]> {
   }
 }
 
-async function fetchClients(_userId: string, _userRole: string): Promise<any[]> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function fetchClients(_userId: string, _userRole: string): Promise<ClientData[]> {
   try {
     // Mock clients data - in production, create ClientRepository
     const mockClients = [
@@ -437,7 +473,7 @@ async function fetchClients(_userId: string, _userRole: string): Promise<any[]> 
   }
 }
 
-async function fetchUsers(userId: string, userRole: string): Promise<any[]> {
+async function fetchUsers(userId: string, userRole: string): Promise<UserData[]> {
   try {
     // Use UserRepository for user data
     if (userRole === 'employee') {
@@ -461,10 +497,10 @@ async function fetchUsers(userId: string, userRole: string): Promise<any[]> {
 
 async function generateWidget(
   widget: WidgetConfig,
-  timeEntries: Record<string, unknown>[],
-  projects: Record<string, unknown>[],
-  clients: Record<string, unknown>[],
-  users: Record<string, unknown>[],
+  timeEntries: TimeEntryData[],
+  projects: ProjectData[],
+  clients: ClientData[],
+  users: UserData[],
   dateRange: DateRange
 ): Promise<WidgetData> {
   let data: Record<string, unknown>;
@@ -520,7 +556,8 @@ async function generateWidget(
   };
 }
 
-function generateKPIData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[]): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function generateKPIData(metric: string, timeEntries: TimeEntryData[], projects: ProjectData[], _clients: ClientData[]): Record<string, unknown> {
   switch (metric) {
     case 'revenue':
       const totalRevenue = timeEntries
@@ -567,7 +604,7 @@ function generateKPIData(metric: string, timeEntries: Record<string, unknown>[],
   }
 }
 
-function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], users: Record<string, unknown>[]): Record<string, unknown> {
+function generateGaugeData(metric: string, timeEntries: TimeEntryData[], projects: ProjectData[], users: UserData[]): Record<string, unknown> {
   switch (metric) {
     case 'utilization':
       const totalPossibleHours = users.length * 40 * 4; // 40 hours/week * 4 weeks
@@ -606,7 +643,7 @@ function generateGaugeData(metric: string, timeEntries: Record<string, unknown>[
   }
 }
 
-function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[], _dateRange: DateRange): Record<string, unknown> {
+function generateChartData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], projects: ProjectData[], _clients: ClientData[], _dateRange: DateRange): Record<string, unknown> {
   switch (config.metric) {
     case 'revenue':
       if (config.groupBy === 'month') {
@@ -622,7 +659,7 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<str
           }],
         };
       }
-      break;
+      return { type: 'line', labels: [], datasets: [] };
 
     case 'projects':
       if (config.groupBy === 'status') {
@@ -641,14 +678,15 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: Record<str
           }],
         };
       }
-      break;
+      return { type: 'pie', labels: [], datasets: [] };
 
     default:
       return { type: 'line', labels: [], datasets: [] };
   }
 }
 
-function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], _clients: Record<string, unknown>[]): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function generateTableData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], projects: ProjectData[], _clients: ClientData[]): Record<string, unknown> {
   switch (config.metric) {
     case 'top_projects':
       const projectHours = projects.map(project => {
@@ -657,7 +695,7 @@ function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<str
           .reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
         
         return {
-          name: project.name,
+          name: project.name || 'Unknown Project',
           hours,
           budget: project.budget,
           utilization: Number(project.budget || 0) > 0 ? (hours / Number(project.budgetHours || 1)) * 100 : 0,
@@ -679,24 +717,32 @@ function generateTableData(config: WidgetSpecificConfig, timeEntries: Record<str
   }
 }
 
-function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], users: Record<string, unknown>[], dateRange: DateRange): Record<string, unknown> {
+function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], users: UserData[], dateRange: DateRange): Record<string, unknown> {
   if (config.groupBy === 'user_day') {
     const heatmapData: Array<{ x: string; y: string; value: number }> = [];
     const startDate = new Date(dateRange.startDate);
     const endDate = new Date(dateRange.endDate);
     
     users.forEach(user => {
+      // Only process users with valid userId
+      if (!user.userId) return;
+      
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dayEntries = timeEntries.filter(entry => 
-          entry.userId === user.userId && 
-          String(entry.startDate || '').startsWith(d.toISOString().split('T')[0])
-        );
+        const dayKey = d.toISOString().split('T')[0];
+        const dayEntries = timeEntries.filter(entry => {
+          if (entry.userId !== user.userId) return false;
+          const entryStartDate: string = entry.startDate || '';
+          return entryStartDate.startsWith(dayKey);
+        });
         
         const dayHours = dayEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
         
+        // Ensure we always have a valid string for the y-axis
+        const userLabel: string = user.name || user.email || user.userId || 'Unknown User';
+        
         heatmapData.push({
           x: d.toISOString().split('T')[0],
-          y: String(user.name || user.email || 'Unknown User'),
+          y: userLabel,
           value: dayHours,
         });
       }
@@ -715,7 +761,8 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: Record<s
   return { data: [] };
 }
 
-function generateTrendData(config: WidgetSpecificConfig, timeEntries: Record<string, unknown>[], _projects: Record<string, unknown>[], _dateRange: DateRange): Record<string, unknown> {
+ 
+function generateTrendData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], _projects: ProjectData[], _dateRange: DateRange): Record<string, unknown> {
   const weeklyData = groupByWeek(timeEntries, _dateRange);
   const values = weeklyData.map(d => d.value);
   
@@ -740,11 +787,12 @@ function generateTrendData(config: WidgetSpecificConfig, timeEntries: Record<str
   };
 }
 
-function groupByMonth(timeEntries: Record<string, unknown>[], dateRange: DateRange): Array<{ month: string; hours: number; revenue: number }> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function groupByMonth(timeEntries: TimeEntryData[], dateRange: DateRange): Array<{ month: string; hours: number; revenue: number }> {
   const months = new Map<string, { month: string; hours: number; revenue: number }>();
   
   timeEntries.forEach(entry => {
-    const startDate = String(entry.startDate || '');
+    const startDate = entry.startDate || '';
     const month = startDate.substring(0, 7); // YYYY-MM
     if (!months.has(month)) {
       months.set(month, { month, hours: 0, revenue: 0 });
@@ -762,11 +810,12 @@ function groupByMonth(timeEntries: Record<string, unknown>[], dateRange: DateRan
   return Array.from(months.values()).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-function groupByWeek(timeEntries: Record<string, unknown>[], dateRange: DateRange): Array<{ week: string; value: number }> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function groupByWeek(timeEntries: TimeEntryData[], dateRange: DateRange): Array<{ week: string; value: number }> {
   const weeks = new Map<string, { week: string; value: number }>();
   
   timeEntries.forEach(entry => {
-    const startDate = String(entry.startDate || '');
+    const startDate = entry.startDate || '';
     const date = new Date(startDate);
     const weekStart = new Date(date);
     weekStart.setDate(date.getDate() - date.getDay());
@@ -785,7 +834,7 @@ function groupByWeek(timeEntries: Record<string, unknown>[], dateRange: DateRang
   return Array.from(weeks.values()).sort((a, b) => a.week.localeCompare(b.week));
 }
 
-function generateDashboardSummary(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], users: Record<string, unknown>[]): DashboardSummary {
+function generateDashboardSummary(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[], users: UserData[]): DashboardSummary {
   const totalHours = timeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
   const billableHours = timeEntries.filter(entry => entry.billable).reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
   const totalRevenue = timeEntries
@@ -809,6 +858,7 @@ function generateDashboardSummary(timeEntries: Record<string, unknown>[], projec
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function generateRealTimeMetrics(_userId: string, _userRole: string): Promise<RealTimeMetrics> {
   // Mock real-time data - in production, this would query live sessions and current activities
   return {
@@ -836,7 +886,7 @@ async function generateRealTimeMetrics(_userId: string, _userRole: string): Prom
   };
 }
 
-async function generateForecastingData(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], dateRange: DateRange): Promise<ForecastingData> {
+async function generateForecastingData(timeEntries: TimeEntryData[], projects: ProjectData[], dateRange: DateRange): Promise<ForecastingData> {
   const monthlyRevenue = groupByMonth(timeEntries, dateRange);
   const recentRevenue = monthlyRevenue.slice(-3).map(m => m.revenue);
   

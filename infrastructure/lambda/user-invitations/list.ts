@@ -1,14 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
-import { 
-  InvitationFilters, 
-  PaginationResponse, 
-  InvitationErrorCodes,
-  UserInvitation
-} from '../shared/types';
-import { ValidationService } from '../shared/validation';
 import { InvitationRepository } from '../shared/invitation-repository';
+import { ValidationService } from '../shared/validation';
+import { 
+  InvitationFilters,
+  InvitationErrorCodes
+} from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -30,11 +28,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
     const filters: InvitationFilters = {
-      status: queryParams.status as any,
+      status: queryParams.status as 'pending' | 'accepted' | 'expired' | 'cancelled' | undefined,
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
-      sortBy: queryParams.sortBy as any,
-      sortOrder: queryParams.sortOrder as any,
+      sortBy: queryParams.sortBy as 'createdAt' | 'expiresAt' | 'email' | undefined,
+      sortOrder: queryParams.sortOrder as 'asc' | 'desc' | undefined,
     };
 
     // Validate filters

@@ -23,6 +23,33 @@ export interface RateLimitResult {
   remaining: number;
 }
 
+export interface PerformanceMetric {
+  eventId: string;
+  userId: string;
+  eventType: 'performance_metric';
+  timestamp: string;
+  metadata: {
+    loadTime?: number;
+    renderTime?: number;
+    apiResponseTime?: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface UserActivitySummary {
+  uniqueUsers: number;
+  totalEvents: number;
+  eventsByType: Record<string, number>;
+  timeRange: {
+    startTime: string;
+    endTime: string;
+  };
+}
+
+export interface ConditionalCheckError extends Error {
+  name: 'ConditionalCheckFailedException';
+}
+
 export class AnalyticsRepository {
   private docClient: DynamoDBDocumentClient;
   private analyticsTableName: string;
@@ -186,8 +213,9 @@ export class AnalyticsRepository {
 
       try {
         await this.docClient.send(command);
-      } catch (conditionalError: any) {
-        if (conditionalError.name === 'ConditionalCheckFailedException') {
+      } catch (conditionalError: unknown) {
+        const error = conditionalError as ConditionalCheckError;
+        if (error.name === 'ConditionalCheckFailedException') {
           // Item exists, increment count
           const updateCommand = new UpdateCommand({
             TableName: this.rateLimitTableName,
@@ -211,7 +239,7 @@ export class AnalyticsRepository {
   /**
    * Get performance metrics
    */
-  async getPerformanceMetrics(timeRange: string): Promise<any[]> {
+  async getPerformanceMetrics(timeRange: string): Promise<PerformanceMetric[]> {
     try {
       const endTime = new Date().toISOString();
       const startTime = new Date(Date.now() - this.parseTimeRange(timeRange)).toISOString();
@@ -230,7 +258,7 @@ export class AnalyticsRepository {
       });
 
       const result = await this.docClient.send(command);
-      return result.Items || [];
+      return (result.Items || []) as PerformanceMetric[];
     } catch (error) {
       console.error('Error getting performance metrics:', error);
       return [];
@@ -240,7 +268,7 @@ export class AnalyticsRepository {
   /**
    * Get user activity metrics
    */
-  async getUserActivityMetrics(timeRange: string): Promise<any> {
+  async getUserActivityMetrics(timeRange: string): Promise<UserActivitySummary | null> {
     try {
       const endTime = new Date().toISOString();
       const startTime = new Date(Date.now() - this.parseTimeRange(timeRange)).toISOString();

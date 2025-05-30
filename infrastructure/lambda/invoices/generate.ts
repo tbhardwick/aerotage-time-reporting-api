@@ -4,7 +4,6 @@ import { createErrorResponse, createSuccessResponse } from '../shared/response-h
 import { InvoiceRepository } from '../shared/invoice-repository';
 import { 
   CreateInvoiceRequest,
-  Invoice,
   InvoiceErrorCodes
 } from '../shared/types';
 
@@ -27,8 +26,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestData: CreateInvoiceRequest;
     try {
       requestData = JSON.parse(event.body);
-    } catch (parseError) {
-      return createErrorResponse(400, 'VALIDATION_ERROR', 'Invalid JSON in request body');
+    } catch {
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Basic validation - ensure required fields are present

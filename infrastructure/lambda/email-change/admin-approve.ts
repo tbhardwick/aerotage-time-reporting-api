@@ -5,15 +5,15 @@ import { EmailChangeRepository } from '../shared/email-change-repository';
 import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
 import { UserRepository } from '../shared/user-repository';
-import { 
-  ApproveEmailChangeRequest,
-  ApproveRequestResponse,
-  EmailChangeErrorCodes
-} from '../shared/types';
+import { EmailChangeErrorCodes } from '../shared/types';
 
 const emailChangeRepo = new EmailChangeRepository();
 const emailService = new EmailChangeService();
 const userRepo = new UserRepository();
+
+interface ApproveEmailChangeRequest {
+  approvalNotes?: string;
+}
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -42,7 +42,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (event.body) {
       try {
         approveRequest = JSON.parse(event.body);
-      } catch (error) {
+      } catch {
         return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
       }
     }

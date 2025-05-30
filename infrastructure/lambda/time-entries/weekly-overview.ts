@@ -17,6 +17,32 @@ import {
 const timeEntryRepo = new TimeEntryRepository();
 const userRepo = new UserRepository();
 
+interface WeeklyTotals {
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  targetHours: number;
+  completionPercentage: number;
+  totalEntries: number;
+}
+
+interface WeeklyPatterns {
+  mostProductiveDay: string;
+  leastProductiveDay: string;
+  averageStartTime: string;
+  averageEndTime: string;
+  longestWorkDay: string;
+  shortestWorkDay: string;
+}
+
+interface WeeklyComparison {
+  previousWeek: {
+    totalHours: number;
+    change: string;
+    changePercentage: string;
+  };
+}
+
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     console.log('Weekly overview request:', JSON.stringify(event, null, 2));
@@ -209,7 +235,7 @@ function calculateBasicDailySummary(
   };
 }
 
-function calculateWeeklyTotals(dailySummaries: DailySummary[]) {
+function calculateWeeklyTotals(dailySummaries: DailySummary[]): WeeklyTotals {
   const totalHours = dailySummaries.reduce((sum, day) => sum + day.totalHours, 0);
   const billableHours = dailySummaries.reduce((sum, day) => sum + day.billableHours, 0);
   const nonBillableHours = dailySummaries.reduce((sum, day) => sum + day.nonBillableHours, 0);
@@ -226,7 +252,7 @@ function calculateWeeklyTotals(dailySummaries: DailySummary[]) {
   };
 }
 
-function calculateWeeklyPatterns(dailySummaries: DailySummary[]) {
+function calculateWeeklyPatterns(dailySummaries: DailySummary[]): WeeklyPatterns {
   // Find most and least productive days
   const workDays = dailySummaries.filter(day => day.totalHours > 0);
   
@@ -316,7 +342,7 @@ async function calculateWeeklyProjectDistribution(
   }));
 }
 
-async function getWeeklyComparison(userId: string, currentWeekStart: Date) {
+async function getWeeklyComparison(userId: string, currentWeekStart: Date): Promise<WeeklyComparison> {
   // Get previous week data
   const previousWeekStart = new Date(currentWeekStart);
   previousWeekStart.setDate(previousWeekStart.getDate() - 7);

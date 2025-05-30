@@ -12,7 +12,9 @@ interface CleanupResult {
   errors: number;
 }
 
-export const handler = async (event: ScheduledEvent, context: Context): Promise<CleanupResult> => {
+export const handler = async (event: ScheduledEvent, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  context: Context): Promise<CleanupResult> => {
   console.log('Starting session cleanup job:', JSON.stringify(event, null, 2));
   
   const result: CleanupResult = {

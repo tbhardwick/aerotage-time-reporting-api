@@ -30,6 +30,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters

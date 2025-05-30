@@ -76,11 +76,24 @@ export function createErrorResponse(
  * Utility function to extract data from API response
  * This is the pattern that should be used in frontend API clients
  */
-export function extractApiData<T>(response: any): T {
+export function extractApiData<T>(response: Record<string, unknown>): T {
   // If response has success and data properties, extract data
   if (response && typeof response === 'object' && 'success' in response && 'data' in response) {
-    return response.data;
+    return response.data as T;
   }
   // Otherwise return the response as-is (for backward compatibility)
-  return response;
+  return response as T;
+}
+
+export function createCorsHeaders(response: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...response,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      ...((response.headers as Record<string, unknown>) || {}),
+    },
+  };
 } 

@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 // Note: In production, install @aws-sdk/s3-request-presigner package
 // import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
@@ -69,7 +69,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let exportRequest: ExportRequest;
     try {
       exportRequest = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -180,7 +180,7 @@ async function generateExport(
   format: string,
   options: ExportOptions,
   userId: string,
-  userEmail?: string
+  _userEmail?: string
 ): Promise<ExportResponse> {
   const exportId = randomUUID();
   const timestamp = new Date().toISOString();
@@ -230,7 +230,8 @@ async function generateExport(
   };
 }
 
-async function generateCSV(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
+async function generateCSV(reportData: Record<string, unknown>, 
+  _options: ExportOptions): Promise<Buffer> {
   try {
     let csvContent = '';
     
@@ -255,7 +256,7 @@ async function generateCSV(reportData: Record<string, unknown>, options: ExportO
       
       // Headers
       const headers = Object.keys(reportData.data[0] as Record<string, unknown>);
-      csvContent += headers.join(',') + '\n';
+      csvContent += `${headers.join(',')}\n`;
       
       // Data rows
       (reportData.data as Record<string, unknown>[]).forEach((row) => {
@@ -266,7 +267,7 @@ async function generateCSV(reportData: Record<string, unknown>, options: ExportO
           }
           return value || '';
         });
-        csvContent += values.join(',') + '\n';
+        csvContent += `${values.join(',')}\n`;
       });
     }
 
@@ -277,22 +278,10 @@ async function generateCSV(reportData: Record<string, unknown>, options: ExportO
   }
 }
 
-async function generateExcel(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
+async function generateExcel(reportData: Record<string, unknown>, 
+  options: ExportOptions): Promise<Buffer> {
   try {
     // Simplified Excel generation - in production, use a library like ExcelJS
-    const workbookData = {
-      worksheets: [
-        {
-          name: 'Summary',
-          data: reportData.summary ? Object.entries(reportData.summary as Record<string, unknown>).map(([key, value]) => [key, value]) : []
-        },
-        {
-          name: 'Data',
-          data: reportData.data || []
-        }
-      ]
-    };
-
     // For now, return CSV format as Excel isn't fully implemented
     // In production, implement proper Excel generation with formatting
     const csvBuffer = await generateCSV(reportData, options);
@@ -303,7 +292,8 @@ async function generateExcel(reportData: Record<string, unknown>, options: Expor
   }
 }
 
-async function generatePDF(reportData: Record<string, unknown>, options: ExportOptions): Promise<Buffer> {
+async function generatePDF(reportData: Record<string, unknown>, 
+  _options: ExportOptions): Promise<Buffer> {
   try {
     // Simplified PDF generation - in production, use Puppeteer or similar
     let htmlContent = `
@@ -430,7 +420,7 @@ async function handleDelivery(
 async function sendEmailDelivery(
   exportResult: ExportResponse,
   delivery: DeliveryOptions,
-  userEmail?: string
+  _userEmail?: string
 ): Promise<void> {
   const fromEmail = process.env.FROM_EMAIL || 'noreply@aerotage.com';
   

@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { TokenService } from '../shared/token-service';
+import { EmailChangeRequest } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Email verification page request:', JSON.stringify(event, null, 2));
@@ -66,7 +67,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-function createVerificationPage(emailChangeRequest: any, token: string, emailType: string): APIGatewayProxyResult {
+function createVerificationPage(emailChangeRequest: EmailChangeRequest, token: string, emailType: string): APIGatewayProxyResult {
   const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'https://time.aerotage.com';
   
   // Use the custom domain if available, otherwise fall back to API Gateway URL

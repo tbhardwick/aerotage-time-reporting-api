@@ -1,12 +1,36 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
-import { AnalyticsRepository } from '../shared/analytics-repository';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
-const analyticsRepo = new AnalyticsRepository();
 const timeEntryRepo = new TimeEntryRepository();
+
+interface TimeEntryData {
+  id?: string;
+  userId?: string;
+  projectId?: string;
+  duration?: number;
+  hourlyRate?: number;
+  billable?: boolean;
+  date?: string;
+  userName?: string;
+}
+
+interface ProjectData {
+  id?: string;
+  name?: string;
+  status?: string;
+  isOverdue?: boolean;
+  clientId?: string;
+  endDate?: string;
+}
+
+interface ClientData {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
 
 interface DashboardData {
   kpis: {
@@ -180,7 +204,7 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
   return { startDate, endDate };
 }
 
-async function getTimeEntriesData(dateRange: { startDate: string; endDate: string }, filter: Record<string, unknown>): Promise<any[]> {
+async function getTimeEntriesData(dateRange: { startDate: string; endDate: string }, filter: Record<string, unknown>): Promise<TimeEntryData[]> {
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const filters = {
@@ -197,7 +221,8 @@ async function getTimeEntriesData(dateRange: { startDate: string; endDate: strin
   }
 }
 
-async function getProjectsData(filter: Record<string, unknown>): Promise<any[]> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getProjectsData(filter: Record<string, unknown>): Promise<ProjectData[]> {
   try {
     // Mock projects data - in production, create ProjectRepository
     const mockProjects = [
@@ -213,7 +238,8 @@ async function getProjectsData(filter: Record<string, unknown>): Promise<any[]> 
   }
 }
 
-async function getClientsData(filter: Record<string, unknown>): Promise<any[]> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function getClientsData(filter: Record<string, unknown>): Promise<ClientData[]> {
   try {
     // Mock clients data - in production, create ClientRepository
     const mockClients = [
@@ -229,13 +255,14 @@ async function getClientsData(filter: Record<string, unknown>): Promise<any[]> {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function getPreviousPeriodData(period: string, filter: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   // Get data from previous period for trend calculation
   // This is a simplified implementation - in production, implement proper period calculation
   return null;
 }
 
-function calculateKPIs(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): DashboardData['kpis'] {
+function calculateKPIs(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[]): DashboardData['kpis'] {
   // Calculate total hours and revenue
   const totalHours = timeEntries.reduce((sum, entry) => {
     return sum + (Number(entry.duration || 0) / 3600); // Convert seconds to hours
@@ -298,7 +325,8 @@ function calculateTrends(currentKPIs: DashboardData['kpis'], previousData: Recor
   };
 }
 
-function generateChartData(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[], period: string): DashboardData['charts'] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function generateChartData(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[], period: string): DashboardData['charts'] {
   // Revenue by month (simplified - group by month)
   const revenueByMonth = generateRevenueByMonth(timeEntries);
   
@@ -319,7 +347,7 @@ function generateChartData(timeEntries: Record<string, unknown>[], projects: Rec
   };
 }
 
-function generateRevenueByMonth(timeEntries: Record<string, unknown>[]): ChartData[] {
+function generateRevenueByMonth(timeEntries: TimeEntryData[]): ChartData[] {
   const monthlyRevenue = new Map<string, number>();
 
   timeEntries.forEach(entry => {
@@ -341,19 +369,21 @@ function generateRevenueByMonth(timeEntries: Record<string, unknown>[]): ChartDa
     .sort((a, b) => a.date!.localeCompare(b.date!));
 }
 
-function generateHoursByProject(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[]): ChartData[] {
+function generateHoursByProject(timeEntries: TimeEntryData[], projects: ProjectData[]): ChartData[] {
   const projectHours = new Map<string, number>();
   const projectNames = new Map<string, string>();
 
-  // Build project name lookup
+  // Build project name lookup with null checks
   projects.forEach(project => {
-    projectNames.set(String(project.id), String(project.name));
+    if (project.id && project.name) {
+      projectNames.set(project.id, project.name);
+    }
   });
 
   timeEntries.forEach(entry => {
     if (entry.projectId) {
       const hours = Number(entry.duration || 0) / 3600;
-      const projectId = String(entry.projectId);
+      const projectId = entry.projectId;
       projectHours.set(projectId, (projectHours.get(projectId) || 0) + hours);
     }
   });
@@ -368,14 +398,15 @@ function generateHoursByProject(timeEntries: Record<string, unknown>[], projects
     .slice(0, 10); // Top 10 projects
 }
 
-function generateUtilizationByUser(timeEntries: Record<string, unknown>[]): ChartData[] {
+function generateUtilizationByUser(timeEntries: TimeEntryData[]): ChartData[] {
   const userStats = new Map<string, { total: number; billable: number; name: string }>();
 
   timeEntries.forEach(entry => {
     if (entry.userId) {
       const hours = Number(entry.duration || 0) / 3600;
-      const userId = String(entry.userId);
-      const stats = userStats.get(userId) || { total: 0, billable: 0, name: String(entry.userName || 'Unknown User') };
+      const userId = entry.userId;
+      const userName = entry.userName || 'Unknown User';
+      const stats = userStats.get(userId) || { total: 0, billable: 0, name: userName };
       
       stats.total += hours;
       if (entry.billable) {
@@ -395,25 +426,25 @@ function generateUtilizationByUser(timeEntries: Record<string, unknown>[]): Char
     .sort((a, b) => b.value - a.value);
 }
 
-function generateClientActivity(timeEntries: Record<string, unknown>[], projects: Record<string, unknown>[], clients: Record<string, unknown>[]): ChartData[] {
+function generateClientActivity(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[]): ChartData[] {
   const clientHours = new Map<string, number>();
   const clientNames = new Map<string, string>();
   const projectClientMap = new Map<string, string>();
 
-  // Build lookup maps
+  // Build lookup maps with null checks
   clients.forEach(client => {
-    clientNames.set(String(client.id), String(client.name));
+    clientNames.set(client.id, client.name);
   });
 
   projects.forEach(project => {
-    if (project.clientId) {
-      projectClientMap.set(String(project.id), String(project.clientId));
+    if (project.id && project.clientId) {
+      projectClientMap.set(project.id, project.clientId);
     }
   });
 
   timeEntries.forEach(entry => {
     if (entry.projectId) {
-      const clientId = projectClientMap.get(String(entry.projectId));
+      const clientId = projectClientMap.get(entry.projectId);
       if (clientId) {
         const hours = Number(entry.duration || 0) / 3600;
         clientHours.set(clientId, (clientHours.get(clientId) || 0) + hours);
@@ -431,7 +462,7 @@ function generateClientActivity(timeEntries: Record<string, unknown>[], projects
     .slice(0, 10); // Top 10 clients
 }
 
-function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['trends'], projects: Record<string, unknown>[]): Alert[] {
+function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['trends'], projects: ProjectData[]): Alert[] {
   const alerts: Alert[] = [];
   const now = new Date().toISOString();
 

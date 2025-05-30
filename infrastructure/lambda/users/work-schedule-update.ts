@@ -54,7 +54,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let updateRequest: UpdateWorkScheduleRequest;
     try {
       updateRequest = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE, 'Invalid JSON in request body');
     }
 

@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { UserRepository } from '../../shared/user-repository';
-import { User, UserProfile } from '../../shared/types';
+import { UserProfile } from '../../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {

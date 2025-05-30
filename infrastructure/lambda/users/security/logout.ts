@@ -2,9 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
-import { 
-  ProfileSettingsErrorCodes 
-} from '../../shared/types';
 
 const sessionRepo = new SessionRepository();
 

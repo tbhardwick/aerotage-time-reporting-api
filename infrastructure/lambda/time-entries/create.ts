@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { getCurrentUserId } from '../shared/auth-helper';
 import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
 import { 
   CreateTimeEntryRequest, 
-  TimeEntryErrorCodes, 
-  ErrorResponse 
+  TimeEntryErrorCodes
 } from '../shared/types';
 
 const timeEntryRepo = new TimeEntryRepository();
@@ -16,7 +15,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Extract user information from authorization context using shared helper
     const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
     
     if (!userId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');

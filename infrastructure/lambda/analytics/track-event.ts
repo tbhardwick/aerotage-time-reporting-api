@@ -132,6 +132,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update rate limiting counter using repository
     await analyticsRepo.updateRateLimit(currentUserId);
 
+    // Log for debugging
+    console.log('Event tracked successfully:', analyticsEvent.eventId);
+
     // ✅ FIXED: Use standardized response helper
     return createSuccessResponse({
       eventId: analyticsEvent.eventId,
@@ -160,7 +163,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   return event.requestContext.identity?.sourceIp || 'unknown';
 }
 
-async function getLocationFromIP(_ipAddress: string): Promise<{ country: string; region: string; city: string } | undefined> {
+async function getLocationFromIP(ipAddress: string): Promise<{ country: string; region: string; city: string } | undefined> {
   // In production, integrate with a geolocation service like MaxMind or ipapi.co
   // For now, return undefined to avoid external dependencies
   try {
@@ -172,6 +175,7 @@ async function getLocationFromIP(_ipAddress: string): Promise<{ country: string;
     //   region: data.region,
     //   city: data.city,
     // };
+    console.log('Location lookup disabled for IP:', ipAddress);
     return undefined;
   } catch {
     console.error('Error getting location from IP');

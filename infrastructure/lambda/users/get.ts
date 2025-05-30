@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { User } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -35,15 +34,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(404, 'USER_NOT_FOUND', 'User not found');
     }
 
-    // Filter sensitive information based on role and ownership
-    let filteredUser: any = targetUser;
-    
+    // Transform user data to remove sensitive information for non-admin users
+    const userData: Record<string, unknown> = {
+      id: targetUser.id,
+      email: targetUser.email,
+      name: targetUser.name,
+      role: targetUser.role,
+      department: targetUser.department,
+      jobTitle: targetUser.jobTitle,
+      isActive: targetUser.isActive,
+      startDate: targetUser.startDate,
+      createdAt: targetUser.createdAt,
+      preferences: targetUser.preferences,
+    };
+
     if (userRole === 'employee' && userId === currentUserId) {
       // Employees can see their own full data
-      filteredUser = targetUser;
+      userData.fullData = targetUser;
     } else if (userRole === 'manager') {
       // Managers can see basic information
-      filteredUser = {
+      userData.basicInfo = {
         id: targetUser.id,
         email: targetUser.email,
         name: targetUser.name,
@@ -57,11 +67,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     } else if (userRole === 'admin') {
       // Admins can see everything
-      filteredUser = targetUser;
+      userData.fullData = targetUser;
     }
 
     // ✅ FIXED: Use standardized response helper
-    return createSuccessResponse({ user: filteredUser }, 200, 'User retrieved successfully');
+    return createSuccessResponse({ user: userData }, 200, 'User retrieved successfully');
   } catch (error) {
     console.error('Error getting user:', error);
     

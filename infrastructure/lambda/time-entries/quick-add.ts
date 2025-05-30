@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { 
   QuickTimeEntryRequest,
-  TimeEntry,
   TimeTrackingErrorCodes,
 } from '../shared/types';
 
@@ -16,9 +15,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-
     // Parse request body
     if (!event.body) {
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_TIME_ENTRY_DATA, 'Request body is required');
@@ -27,7 +23,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let request: QuickTimeEntryRequest;
     try {
       request = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_TIME_ENTRY_DATA, 'Invalid JSON in request body');
     }
 
@@ -109,7 +105,7 @@ async function validateQuickTimeEntry(request: QuickTimeEntryRequest, userId: st
   // MANDATORY: Use repository pattern for overlap check
   const timeEntryRepo = new TimeEntryRepository();
   const existingEntries = await timeEntryRepo.listTimeEntries({
-    userId: userId,
+    userId,
     dateFrom: request.date,
     dateTo: request.date,
     limit: 100

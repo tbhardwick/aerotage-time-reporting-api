@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { 
   EmailChangeRequest, 
   EmailChangeAuditLog,
@@ -592,7 +592,7 @@ export class EmailChangeRepository {
   }): Promise<{ requests: EmailChangeRequest[]; lastEvaluatedKey?: string }> {
     const limit = options.limit || 20;
     
-    let queryParams: any = {
+    const queryParams: any = {
       TableName: this.requestsTableName,
       Limit: limit,
       ScanIndexForward: false, // Most recent first

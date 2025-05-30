@@ -5,7 +5,6 @@ import { EmailChangeValidation } from '../shared/email-change-validation';
 import { UserRepository } from '../shared/user-repository';
 import { 
   ResendVerificationRequest,
-  ResendVerificationResponse,
   EmailChangeErrorCodes
 } from '../shared/types';
 import { getCurrentUserId } from '../shared/auth-helper';
@@ -48,7 +47,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let resendRequest: ResendVerificationRequest;
     try {
       resendRequest = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -126,8 +125,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Send verification email
     try {
       await emailService.sendVerificationEmail(updatedRequest, resendRequest.emailType, user.name);
-    } catch (emailError) {
-      console.error('❌ Failed to send verification email:', emailError);
+    } catch {
+      console.log('❌ Failed to send verification email');
       return createErrorResponse(500, EmailChangeErrorCodes.EMAIL_SEND_FAILED, 'Failed to send verification email');
     }
 
@@ -148,8 +147,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(responseData, 200, `Verification email resent to ${emailAddress}`);
 
   } catch (error) {
-    console.error('❌ Error resending verification email:', error);
-
+    console.error('Error resending email verification:', error);
+    
     // Handle specific errors
     if ((error as Error).message === EmailChangeErrorCodes.EMAIL_CHANGE_REQUEST_NOT_FOUND) {
       return createErrorResponse(404, EmailChangeErrorCodes.EMAIL_CHANGE_REQUEST_NOT_FOUND, 'Email change request not found');
@@ -163,6 +162,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(429, EmailChangeErrorCodes.VERIFICATION_RATE_LIMITED, 'Too many verification emails sent. Please wait before requesting another.');
     }
 
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred while resending the verification email');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 }; 

@@ -5,7 +5,6 @@ import { createSuccessResponse, createErrorResponse } from '../shared/response-h
 import { 
   UpdateTimeEntryRequest, 
   TimeEntryErrorCodes, 
-  SuccessResponse, 
   ErrorResponse 
 } from '../shared/types';
 
@@ -37,7 +36,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let requestData: UpdateTimeEntryRequest;
     try {
       requestData = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 

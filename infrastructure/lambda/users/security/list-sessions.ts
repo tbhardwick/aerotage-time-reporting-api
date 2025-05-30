@@ -18,6 +18,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
@@ -89,6 +90,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
 /**
  * Invalidate specific sessions by their IDs
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function invalidateSpecificSessions(sessionIds: string[]): Promise<void> {
   try {
     await sessionRepo.invalidateSpecificSessions(sessionIds);
@@ -101,6 +103,7 @@ async function invalidateSpecificSessions(sessionIds: string[]): Promise<void> {
 /**
  * Invalidate all active sessions for a user
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function invalidateAllUserSessions(userId: string): Promise<void> {
   try {
     await sessionRepo.invalidateAllUserSessions(userId);

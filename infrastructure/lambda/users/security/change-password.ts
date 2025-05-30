@@ -47,6 +47,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Request body is required');
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { currentPassword, newPassword }: ChangePasswordRequest = JSON.parse(event.body);
 
     // Validate password requirements
@@ -90,7 +91,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         Password: newPassword,
         Permanent: true,
       }));
-    } catch (cognitoError: any) {
+    } catch (cognitoError: unknown) {
       console.error('Cognito password update error:', cognitoError);
       return createErrorResponse(
         400, 

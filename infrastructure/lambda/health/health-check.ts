@@ -1,5 +1,5 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { createSuccessResponse, createErrorResponse } from '../shared/response-helper';
+import { createSuccessResponse } from '../shared/response-helper';
 
 interface HealthCheckResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -42,21 +42,22 @@ export const handler = async (): Promise<APIGatewayProxyResult> => {
 
     return createSuccessResponse(healthResponse);
   } catch (error) {
-    console.error('Health check error:', error);
+    console.error('Health check failed:', error);
     
-    const errorResponse: HealthCheckResponse = {
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: process.env.STAGE || 'unknown',
-      services: {
-        api: 'unhealthy',
-        database: 'unhealthy',
-        auth: 'unhealthy',
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       },
-      uptime: Math.floor((Date.now() - startTime) / 1000),
+      body: JSON.stringify({
+        success: false,
+        status: 'unhealthy',
+        error: {
+          code: 'HEALTH_CHECK_FAILED',
+          message: 'Health check failed',
+        },
+      }),
     };
-
-    return createErrorResponse(503, 'HEALTH_CHECK_FAILED', 'Health check failed');
   }
 }; 

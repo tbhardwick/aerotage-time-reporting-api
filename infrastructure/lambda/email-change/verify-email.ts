@@ -4,8 +4,7 @@ import { EmailChangeService } from '../shared/email-change-service';
 import { EmailChangeValidation } from '../shared/email-change-validation';
 import { UserRepository } from '../shared/user-repository';
 import { 
-  EmailVerificationRequest, 
-  EmailVerificationResponse,
+  EmailVerificationRequest,
   EmailChangeErrorCodes
 } from '../shared/types';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
@@ -30,7 +29,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let verificationRequest: EmailVerificationRequest;
     try {
       verificationRequest = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -169,17 +168,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createSuccessResponse(responseData);
 
   } catch (error) {
-    console.error('❌ Error verifying email:', error);
-
+    console.error('Error verifying email:', error);
+    
     // Handle specific errors
-    if ((error as Error).message === EmailChangeErrorCodes.EMAIL_CHANGE_REQUEST_NOT_FOUND) {
-      return createErrorResponse(404, EmailChangeErrorCodes.EMAIL_CHANGE_REQUEST_NOT_FOUND, 'Email change request not found');
-    }
-
     if ((error as Error).message === EmailChangeErrorCodes.INVALID_VERIFICATION_TOKEN) {
-      return createErrorResponse(400, EmailChangeErrorCodes.INVALID_VERIFICATION_TOKEN, 'Invalid verification token');
+      return createErrorResponse(400, EmailChangeErrorCodes.INVALID_VERIFICATION_TOKEN, 'Invalid or expired verification token');
     }
 
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred while verifying the email address');
+    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 }; 

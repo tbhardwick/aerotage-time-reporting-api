@@ -1,13 +1,13 @@
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { SessionRepository, SessionValidationResult } from './session-repository';
+import { SessionRepository } from './session-repository';
 
 const sessionRepo = new SessionRepository();
 
 export interface AuthValidationResult {
   isValid: boolean;
   userId?: string;
-  userClaims?: any;
+  userClaims?: Record<string, unknown>;
   errorMessage?: string;
 }
 
@@ -117,9 +117,9 @@ export class AuthService {
    * Validates JWT token signature and expiration
    */
   private static async validateJwtToken(token: string): Promise<AuthValidationResult> {
-    return new Promise((resolve) => {
-      const getKey = (header: any, callback: (err: any, key?: string) => void) => {
-        this.jwksClient.getSigningKey(header.kid, (err: any, key: any) => {
+    return new Promise((resolve): void => {
+      const getKey = (header: jwt.JwtHeader, callback: (err: Error | null, key?: string) => void): void => {
+        this.jwksClient.getSigningKey(header.kid as string, (err: Error | null, key: jwksClient.SigningKey) => {
           if (err) {
             console.error('Error getting signing key:', err);
             callback(err);
@@ -133,7 +133,7 @@ export class AuthService {
       jwt.verify(token, getKey, {
         issuer: `https://cognito-idp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${process.env.USER_POOL_ID}`,
         algorithms: ['RS256'],
-      }, (err: any, decoded: any) => {
+      }, (err: jwt.VerifyErrors | null, decoded: jwt.JwtPayload | string | undefined) => {
         if (err) {
           console.error('JWT verification failed:', err);
           resolve({
@@ -141,7 +141,8 @@ export class AuthService {
             errorMessage: `JWT validation failed: ${err.message}`
           });
         } else {
-          const userId = decoded.sub;
+          const decodedPayload = decoded as jwt.JwtPayload;
+          const userId = decodedPayload.sub;
           if (!userId) {
             resolve({
               isValid: false,
@@ -151,7 +152,7 @@ export class AuthService {
             resolve({
               isValid: true,
               userId,
-              userClaims: decoded
+              userClaims: decodedPayload
             });
           }
         }

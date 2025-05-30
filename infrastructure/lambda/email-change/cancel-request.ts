@@ -1,11 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { UserRepository } from '../shared/user-repository';
-import { 
-  CancelRequestResponse,
-  EmailChangeErrorCodes
-} from '../shared/types';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { EmailChangeErrorCodes } from '../shared/types';
+import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
@@ -78,7 +75,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Get user information for response
     const user = await userRepo.getUserById(currentUserId);
-    const userName = user?.name || 'Unknown User';
+    let userName = 'Unknown User';
+    if (user) {
+      userName = user.name || 'Unknown User';
+    }
 
     console.log('✅ Email change request cancelled successfully');
 
@@ -86,7 +86,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       requestId: cancelledRequest.id,
       status: 'cancelled',
       cancelledAt: cancelledRequest.cancelledAt!,
-      cancelledBy: currentUserId
+      cancelledBy: currentUserId,
+      cancelledByName: userName
     };
 
     return createSuccessResponse(responseData, 200, 'Email change request cancelled successfully');

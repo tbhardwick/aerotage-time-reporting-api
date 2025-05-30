@@ -1,7 +1,4 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { 
-  Project
-} from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { ProjectRepository, ProjectFilters } from '../shared/project-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
@@ -20,13 +17,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
     const filters: ProjectFilters = {
-      clientId: queryParams.clientId,
-      status: queryParams.status as any,
-      teamMember: queryParams.teamMember,
+      clientId: queryParams.clientId as string | undefined,
+      status: queryParams.status as 'active' | 'paused' | 'completed' | 'cancelled' | undefined,
+      teamMember: queryParams.teamMember as string | undefined,
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
-      sortBy: queryParams.sortBy as any,
-      sortOrder: queryParams.sortOrder as any,
+      sortBy: queryParams.sortBy as 'name' | 'createdAt' | 'deadline' | undefined,
+      sortOrder: queryParams.sortOrder as 'asc' | 'desc' | undefined,
     };
 
     // Validate filters

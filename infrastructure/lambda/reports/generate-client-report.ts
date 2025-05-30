@@ -155,7 +155,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateClientReport(filters: ClientReportFilters, userId: string, userRole: string): Promise<ClientReportResponse> {
+async function generateClientReport(filters: ClientReportFilters, userId: string, 
+  _userRole: string): Promise<ClientReportResponse> {
   const reportId = `client-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -508,12 +509,12 @@ function calculateClientSummary(data: ClientReportDataItem[]): ClientReportSumma
 
 function sortClientData(data: ClientReportDataItem[], sortBy: string, sortOrder: string): ClientReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: any = a[sortBy as keyof ClientReportDataItem];
-    let bValue: any = b[sortBy as keyof ClientReportDataItem];
+    let aValue: unknown = a[sortBy as keyof ClientReportDataItem];
+    let bValue: unknown = b[sortBy as keyof ClientReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
-      bValue = bValue.toLowerCase();
+      bValue = (bValue as string).toLowerCase();
     }
     
     if (sortOrder === 'desc') {
@@ -557,11 +558,12 @@ async function getCachedReport(cacheKey: string): Promise<ClientReportResponse |
   }
 }
 
-async function cacheReport(cacheKey: string, reportData: ClientReportResponse, ttlSeconds: number): Promise<void> {
+async function cacheReport(
+  _cacheKey: string, reportData: ClientReportResponse, ttlSeconds: number): Promise<void> {
   try {
     // Mock cache implementation - in production, create ReportCacheRepository
     // For now, just log that we would cache the report
-    console.log(`Would cache report with key: ${cacheKey} for ${ttlSeconds} seconds`);
+    console.log(`Would cache report for ${ttlSeconds} seconds`);
   } catch (error) {
     console.error('Error caching client report:', error);
     // Don't throw - caching failure shouldn't break the report generation

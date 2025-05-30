@@ -1,11 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EmailChangeRepository } from '../shared/email-change-repository';
 import { UserRepository } from '../shared/user-repository';
-import { 
-  EmailChangeRequestsResponse,
-  EmailChangeErrorCodes
-} from '../shared/types';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { EmailChangeErrorCodes } from '../shared/types';
+import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 
 const emailChangeRepo = new EmailChangeRepository();
@@ -118,7 +115,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log(`✅ Retrieved ${enrichedRequests.length} email change requests`);
 
-    const responseData = {
+    const responseData: Record<string, unknown> = {
       requests: enrichedRequests,
       pagination: {
         total: enrichedRequests.length, // Note: This is the current page count, not total across all pages
@@ -130,7 +127,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Add lastEvaluatedKey to response for cursor-based pagination
     if (result.lastEvaluatedKey) {
-      (responseData as any).lastEvaluatedKey = result.lastEvaluatedKey;
+      responseData.lastEvaluatedKey = result.lastEvaluatedKey;
     }
 
     return createSuccessResponse(responseData);

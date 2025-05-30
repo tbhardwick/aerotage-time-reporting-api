@@ -1,12 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { 
-  Invoice,
-  InvoiceFilters
-} from '../shared/types';
-import { ValidationService } from '../shared/validation';
-import { InvoiceRepository } from '../shared/invoice-repository';
 import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
+import { InvoiceRepository } from '../shared/invoice-repository';
+import { 
+  InvoiceFilters
+} from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Log request for debugging in development

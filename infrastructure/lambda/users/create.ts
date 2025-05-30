@@ -4,9 +4,7 @@ import { createErrorResponse, createSuccessResponse } from '../shared/response-h
 import { UserRepository } from '../shared/user-repository';
 import { 
   CreateUserRequest, 
-  User, 
-  UserErrorCodes, 
-  SuccessResponse
+  UserErrorCodes
 } from '../shared/types';
 import { ValidationService } from '../shared/validation';
 import { InvitationRepository } from '../shared/invitation-repository';
@@ -37,7 +35,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     let createUserRequest: CreateUserRequest;
     try {
       createUserRequest = JSON.parse(event.body);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
     

@@ -1,4 +1,4 @@
-import { CreateEmailChangeRequest, EmailChangeErrorCodes } from './types';
+import { EmailChangeErrorCodes } from './types';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -30,7 +30,7 @@ export class EmailChangeValidation {
     if (request.reason && typeof request.reason === 'string') {
       const validReasons = ['name_change', 'company_change', 'personal_preference', 'security_concern', 'other'];
       if (!validReasons.includes(request.reason)) {
-        errors.push('Invalid reason. Must be one of: ' + validReasons.join(', '));
+        errors.push(`Invalid reason. Must be one of: ${validReasons.join(', ')}`);
       }
 
       // Check if custom reason is required
@@ -155,7 +155,7 @@ export class EmailChangeValidation {
     if (filters.status && typeof filters.status === 'string') {
       const validStatuses = ['pending_verification', 'pending_approval', 'approved', 'rejected', 'completed', 'cancelled'];
       if (!validStatuses.includes(filters.status)) {
-        errors.push('Invalid status filter. Must be one of: ' + validStatuses.join(', '));
+        errors.push(`Invalid status filter. Must be one of: ${validStatuses.join(', ')}`);
       }
     }
 
@@ -163,7 +163,7 @@ export class EmailChangeValidation {
     if (filters.reason && typeof filters.reason === 'string') {
       const validReasons = ['name_change', 'company_change', 'personal_preference', 'security_concern', 'other'];
       if (!validReasons.includes(filters.reason)) {
-        errors.push('Invalid reason filter. Must be one of: ' + validReasons.join(', '));
+        errors.push(`Invalid reason filter. Must be one of: ${validReasons.join(', ')}`);
       }
     }
 
@@ -199,7 +199,7 @@ export class EmailChangeValidation {
     if (filters.sortBy && typeof filters.sortBy === 'string') {
       const validSortFields = ['requestedAt', 'status', 'reason'];
       if (!validSortFields.includes(filters.sortBy)) {
-        errors.push('Invalid sortBy field. Must be one of: ' + validSortFields.join(', '));
+        errors.push(`Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`);
       }
     }
 

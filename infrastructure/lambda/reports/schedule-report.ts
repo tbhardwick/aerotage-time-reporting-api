@@ -74,35 +74,32 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    const httpMethod = event.httpMethod;
+    // Check role-based permissions
+    if (userRole === 'employee') {
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'Only managers and admins can schedule reports');
+    }
+
     const pathParameters = event.pathParameters || {};
     const scheduleId = pathParameters.scheduleId;
+    const { action } = event.pathParameters || {};
 
-    switch (httpMethod) {
-      case 'GET':
-        if (scheduleId) {
-          return await getScheduledReport(scheduleId, userId, userRole);
-        } else {
-          return await listScheduledReports(event, userId, userRole);
-        }
-      
-      case 'POST':
+    switch (action) {
+      case 'list':
+        return await listScheduledReports(event, userId, userRole);
+      case 'create':
         return await createScheduledReport(event, userId, userRole);
-      
-      case 'PUT':
+      case 'update':
         if (!scheduleId) {
-          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for updates');
+          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for update');
         }
         return await updateScheduledReport(scheduleId, event, userId, userRole);
-      
-      case 'DELETE':
+      case 'delete':
         if (!scheduleId) {
-          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for deletion');
+          return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for delete');
         }
         return await deleteScheduledReport(scheduleId, userId, userRole);
-      
       default:
-        return createErrorResponse(405, 'METHOD_NOT_ALLOWED', `HTTP method ${httpMethod} not allowed`);
+        return createErrorResponse(400, 'INVALID_ACTION', 'Invalid action. Supported actions: list, create, update, delete');
     }
 
   } catch (error) {
@@ -118,7 +115,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
     let scheduleRequest: ScheduleReportRequest;
     try {
       scheduleRequest = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -245,7 +242,7 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
     let updateData: Partial<ScheduleReportRequest>;
     try {
       updateData = JSON.parse(event.body || '{}');
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
@@ -451,7 +448,7 @@ async function deleteEventBridgeRule(ruleName: string): Promise<void> {
 // Utility functions
 function calculateNextRun(schedule: ScheduleConfig): string {
   const now = new Date();
-  let nextRun = new Date(now);
+  const nextRun = new Date(now);
   
   // Parse time
   const [hours, minutes] = schedule.time.split(':').map(Number);
@@ -527,4 +524,11 @@ function canModifySchedule(schedule: ScheduledReport, userId: string, userRole: 
   if (userRole === 'admin') return true;
   
   return false;
+}
+
+// Mock execution function for EventBridge triggers
+async function processScheduledReport(
+  _reportConfigId: string, _userId: string, _userRole: string): Promise<void> {
+  // This function will be implemented in Phase 7 for actual report execution
+  console.log('Would execute scheduled report');
 } 

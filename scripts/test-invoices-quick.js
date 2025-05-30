@@ -70,6 +70,12 @@ async function authenticate() {
   }
 }
 
+async function quickTest() {
+  try {
+    // Step 1: Authenticate
+    console.log('🚀 Starting quick invoice test...');
+    const token = await authenticate();
+
     // Step 2: List existing invoices
     console.log('📋 Listing invoices...');
     const listResponse = await makeRequest(`${CONFIG.API_BASE_URL}/invoices?limit=5`, {

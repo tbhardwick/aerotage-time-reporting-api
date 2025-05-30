@@ -42,8 +42,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (event.body) {
       try {
         resendOptions = { ...resendOptions, ...JSON.parse(event.body) };
-      } catch (parseError) {
-        return createErrorResponse(400, InvitationErrorCodes.INVALID_EMAIL, 'Invalid request body format');
+      } catch {
+        return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
       }
     }
 

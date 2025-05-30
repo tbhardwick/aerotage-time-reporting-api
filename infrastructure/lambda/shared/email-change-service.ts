@@ -46,7 +46,7 @@ export class EmailChangeService {
       expiresIn: '24 hours',
       // Additional data for the verification page
       verificationToken: token,
-      emailType: emailType
+      emailType
     };
 
     await this.sesClient.send(new SendTemplatedEmailCommand({
