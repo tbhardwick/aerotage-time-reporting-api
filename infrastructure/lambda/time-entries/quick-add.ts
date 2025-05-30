@@ -1,32 +1,24 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse } from '../shared/response-helper';
+import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { 
   QuickTimeEntryRequest,
   TimeEntry,
   TimeTrackingErrorCodes,
   SuccessResponse
 } from '../shared/types';
-import { v4 as uuidv4 } from 'uuid';
-
-const dynamoClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-
-const TIME_ENTRIES_TABLE = process.env.TIME_ENTRIES_TABLE!;
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Quick time entry request:', JSON.stringify(event, null, 2));
-
-    // Extract user information
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
-    
-    if (!userId) {
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Parse request body
     if (!event.body) {
@@ -41,7 +33,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Validate the request
-    const validationError = await validateQuickTimeEntry(request, userId);
+    const validationError = await validateQuickTimeEntry(request, currentUserId);
     if (validationError) {
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_TIME_ENTRY_DATA, validationError);
     }
@@ -51,9 +43,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const endTime = new Date(`${request.date}T${request.endTime}:00`);
     const durationMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
-    // Create time entry
-    const timeEntry = await createQuickTimeEntry(request, userId, durationMinutes);
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const timeEntryRepo = new TimeEntryRepository();
+    const timeEntry = await timeEntryRepo.createTimeEntry(currentUserId, {
+      projectId: request.projectId,
+      description: request.description,
+      date: request.date,
+      startTime: `${request.date}T${request.startTime}:00.000Z`,
+      endTime: `${request.date}T${request.endTime}:00.000Z`,
+      duration: durationMinutes,
+      isBillable: request.isBillable ?? true,
+      notes: request.fillGap ? 'Created via quick entry to fill time gap' : undefined,
+    });
 
+    // MANDATORY: Standardized success response format
     const response: SuccessResponse<TimeEntry> = {
       success: true,
       data: timeEntry,
@@ -69,8 +72,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error creating quick time entry:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
+    console.error('Function error:', error);
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
 
@@ -116,136 +119,30 @@ async function validateQuickTimeEntry(request: QuickTimeEntryRequest, userId: st
     return 'Cannot create time entries for future dates';
   }
 
-  // Check for overlapping time entries
-  const hasOverlap = await checkForTimeOverlap(userId, request.date, request.startTime, request.endTime);
-  if (hasOverlap) {
-    return 'Time entry overlaps with existing entry';
+  // MANDATORY: Use repository pattern for overlap check
+  const timeEntryRepo = new TimeEntryRepository();
+  const existingEntries = await timeEntryRepo.listTimeEntries({
+    userId: userId,
+    dateFrom: request.date,
+    dateTo: request.date,
+    limit: 100
+  });
+
+  // Check for overlaps with existing entries
+  const newStart = new Date(`${request.date}T${request.startTime}:00`);
+  const newEnd = new Date(`${request.date}T${request.endTime}:00`);
+
+  for (const entry of existingEntries.items) {
+    if (entry.startTime && entry.endTime) {
+      const existingStart = new Date(entry.startTime);
+      const existingEnd = new Date(entry.endTime);
+
+      // Check if times overlap
+      if (newStart < existingEnd && newEnd > existingStart) {
+        return 'Time entry overlaps with existing entry';
+      }
+    }
   }
 
   return null;
-}
-
-async function checkForTimeOverlap(
-  userId: string,
-  date: string,
-  startTime: string,
-  endTime: string
-): Promise<boolean> {
-  try {
-    // Get all time entries for the date
-    const result = await docClient.send(new QueryCommand({
-      TableName: TIME_ENTRIES_TABLE,
-      IndexName: 'UserIndex',
-      KeyConditionExpression: 'GSI1PK = :userPK AND begins_with(GSI1SK, :datePrefix)',
-      ExpressionAttributeValues: {
-        ':userPK': `USER#${userId}`,
-        ':datePrefix': `DATE#${date}`,
-      },
-    }));
-
-    const existingEntries = result.Items || [];
-    
-    // Check for overlaps
-    const newStart = new Date(`${date}T${startTime}:00`);
-    const newEnd = new Date(`${date}T${endTime}:00`);
-
-    for (const entry of existingEntries) {
-      if (entry.startTime && entry.endTime) {
-        const existingStart = new Date(entry.startTime);
-        const existingEnd = new Date(entry.endTime);
-
-        // Check if times overlap
-        if (newStart < existingEnd && newEnd > existingStart) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.error('Error checking for time overlap:', error);
-    return false; // Allow creation if we can't check
-  }
-}
-
-async function createQuickTimeEntry(
-  request: QuickTimeEntryRequest,
-  userId: string,
-  durationMinutes: number
-): Promise<TimeEntry> {
-  const now = new Date().toISOString();
-  const timeEntryId = uuidv4();
-  
-  const startDateTime = `${request.date}T${request.startTime}:00.000Z`;
-  const endDateTime = `${request.date}T${request.endTime}:00.000Z`;
-
-  const timeEntry: TimeEntry = {
-    id: timeEntryId,
-    userId,
-    projectId: request.projectId,
-    taskId: undefined,
-    description: request.description,
-    date: request.date,
-    startTime: startDateTime,
-    endTime: endDateTime,
-    duration: durationMinutes,
-    isBillable: request.isBillable ?? true,
-    hourlyRate: undefined,
-    status: 'draft',
-    tags: [],
-    notes: request.fillGap ? 'Created via quick entry to fill time gap' : undefined,
-    attachments: [],
-    submittedAt: undefined,
-    approvedAt: undefined,
-    rejectedAt: undefined,
-    approvedBy: undefined,
-    rejectionReason: undefined,
-    isTimerEntry: false,
-    timerStartedAt: undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  // Save to DynamoDB
-  const dynamoItem = {
-    PK: `TIME_ENTRY#${timeEntryId}`,
-    SK: `TIME_ENTRY#${timeEntryId}`,
-    GSI1PK: `USER#${userId}`,
-    GSI1SK: `DATE#${request.date}#TIME_ENTRY#${timeEntryId}`,
-    GSI2PK: `PROJECT#${request.projectId}`,
-    GSI2SK: `DATE#${request.date}#TIME_ENTRY#${timeEntryId}`,
-    GSI3PK: `STATUS#draft`,
-    GSI3SK: `DATE#${request.date}#TIME_ENTRY#${timeEntryId}`,
-    id: timeEntryId,
-    userId,
-    projectId: request.projectId,
-    taskId: undefined,
-    description: request.description,
-    date: request.date,
-    startTime: startDateTime,
-    endTime: endDateTime,
-    duration: durationMinutes,
-    isBillable: request.isBillable ?? true,
-    hourlyRate: undefined,
-    status: 'draft',
-    tags: JSON.stringify([]),
-    notes: timeEntry.notes,
-    attachments: JSON.stringify([]),
-    submittedAt: undefined,
-    approvedAt: undefined,
-    rejectedAt: undefined,
-    approvedBy: undefined,
-    rejectionReason: undefined,
-    isTimerEntry: false,
-    timerStartedAt: undefined,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  await docClient.send(new PutCommand({
-    TableName: TIME_ENTRIES_TABLE,
-    Item: dynamoItem,
-  }));
-
-  return timeEntry;
 } 

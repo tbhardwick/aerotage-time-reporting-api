@@ -1,134 +1,56 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { UserProfile, SuccessResponse, ErrorResponse, ProfileSettingsErrorCodes } from '../../shared/types';
-import { getAuthenticatedUser } from '../../shared/auth-helper';
-
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse } from '../../shared/response-helper';
+import { UserRepository } from '../../shared/user-repository';
+import { UserProfile, SuccessResponse } from '../../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    console.log('Get user profile request:', JSON.stringify(event, null, 2));
+    // MANDATORY: Use standardized authentication helpers
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
+    }
+
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
 
     // Extract user ID from path parameters
-    const userId = event.pathParameters?.id;
-    if (!userId) {
-      const response: ErrorResponse = {
-        success: false,
-        error: {
-          code: ProfileSettingsErrorCodes.PROFILE_NOT_FOUND,
-          message: 'User ID is required',
-        },
-        timestamp: new Date().toISOString(),
-      };
-      
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(response),
-      };
+    const requestedUserId = event.pathParameters?.id;
+    if (!requestedUserId) {
+      return createErrorResponse(400, 'MISSING_PARAMETER', 'User ID is required');
     }
-
-    // Get authenticated user from custom authorizer context
-    const authenticatedUser = getAuthenticatedUser(event);
-    if (!authenticatedUser) {
-      const response: ErrorResponse = {
-        success: false,
-        error: {
-          code: ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS,
-          message: 'Authentication required',
-        },
-        timestamp: new Date().toISOString(),
-      };
-      
-      return {
-        statusCode: 401,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(response),
-      };
-    }
-
-    const { userId: authenticatedUserId, role: userRole } = authenticatedUser;
 
     // Authorization check: users can only access their own profile unless they're admin
-    if (userId !== authenticatedUserId && userRole !== 'admin') {
-      const response: ErrorResponse = {
-        success: false,
-        error: {
-          code: ProfileSettingsErrorCodes.UNAUTHORIZED_PROFILE_ACCESS,
-          message: 'You can only access your own profile',
-        },
-        timestamp: new Date().toISOString(),
-      };
-      
-      return {
-        statusCode: 403,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(response),
-      };
+    if (requestedUserId !== currentUserId && userRole !== 'admin') {
+      return createErrorResponse(403, 'FORBIDDEN', 'You can only access your own profile');
     }
 
-    // Get user profile from DynamoDB
-    const command = new GetCommand({
-      TableName: process.env.USERS_TABLE!,
-      Key: { id: userId },
-    });
+    // MANDATORY: Use repository pattern instead of direct DynamoDB
+    const userRepo = new UserRepository();
+    const userProfile = await userRepo.getUserById(requestedUserId);
 
-    const result = await docClient.send(command);
-
-    if (!result.Item) {
-      const response: ErrorResponse = {
-        success: false,
-        error: {
-          code: ProfileSettingsErrorCodes.PROFILE_NOT_FOUND,
-          message: 'User profile not found',
-        },
-        timestamp: new Date().toISOString(),
-      };
-      
-      return {
-        statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(response),
-      };
+    if (!userProfile) {
+      return createErrorResponse(404, 'USER_NOT_FOUND', 'User profile not found');
     }
 
-    // Transform DynamoDB item to UserProfile
-    const user = result.Item;
+    // Transform to UserProfile format (remove sensitive fields)
     const profile: UserProfile = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      jobTitle: user.jobTitle,
-      department: user.department,
-      hourlyRate: user.hourlyRate,
-      role: user.role,
-      contactInfo: user.contactInfo ? {
-        phone: user.contactInfo.phone,
-        address: user.contactInfo.address,
-        emergencyContact: user.contactInfo.emergencyContact,
-      } : undefined,
-      profilePicture: user.profilePicture,
-      startDate: user.startDate,
-      lastLogin: user.lastLogin,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      id: userProfile.id,
+      email: userProfile.email,
+      name: userProfile.name,
+      jobTitle: userProfile.jobTitle,
+      department: userProfile.department,
+      hourlyRate: userProfile.hourlyRate,
+      role: userProfile.role,
+      contactInfo: userProfile.contactInfo,
+      startDate: userProfile.startDate,
+      isActive: userProfile.isActive,
+      createdAt: userProfile.createdAt,
+      updatedAt: userProfile.updatedAt,
     };
 
+    // MANDATORY: Standardized success response format
     const response: SuccessResponse<UserProfile> = {
       success: true,
       data: profile,
@@ -144,24 +66,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error getting user profile:', error);
-    
-    const response: ErrorResponse = {
-      success: false,
-      error: {
-        code: ProfileSettingsErrorCodes.PROFILE_NOT_FOUND,
-        message: 'Internal server error',
-      },
-      timestamp: new Date().toISOString(),
-    };
-    
-    return {
-      statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    console.error('Function error:', error);
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 }; 
