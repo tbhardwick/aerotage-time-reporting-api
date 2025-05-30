@@ -1,12 +1,12 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, UpdateCommand, QueryCommandInput } from '@aws-sdk/lib-dynamodb';
 import { 
   EmailChangeRequest, 
   EmailChangeAuditLog,
   EmailChangeRequestDynamoItem,
   EmailChangeAuditLogDynamoItem,
   EmailChangeRequestFilters,
-  EmailChangeErrorCodes 
+  EmailChangeErrorCodes,
 } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
@@ -132,7 +132,7 @@ export class EmailChangeRepository {
     const offset = filters?.offset || 0;
 
     let keyConditionExpression = 'userId = :userId';
-    const expressionAttributeValues: Record<string, any> = {
+    const expressionAttributeValues: Record<string, string> = {
       ':userId': userId,
     };
 
@@ -212,7 +212,7 @@ export class EmailChangeRepository {
 
     // Update verification status
     let updateExpression = `SET ${verificationField} = :verified, verifiedAt = :verifiedAt`;
-    const expressionAttributeValues: Record<string, any> = {
+    const expressionAttributeValues: Record<string, string | boolean> = {
       ':verified': true,
       ':verifiedAt': now,
     };
@@ -539,8 +539,8 @@ export class EmailChangeRepository {
       userId: item.userId,
       currentEmail: item.currentEmail,
       newEmail: item.newEmail,
-      status: item.status as any,
-      reason: item.reason as any,
+      status: item.status as EmailChangeRequest['status'],
+      reason: item.reason as EmailChangeRequest['reason'],
       customReason: item.customReason,
       
       currentEmailVerified: item.currentEmailVerified,
@@ -573,7 +573,7 @@ export class EmailChangeRepository {
     return {
       id: item.id,
       requestId: item.requestId,
-      action: item.action as any,
+      action: item.action as EmailChangeAuditLog['action'],
       performedBy: item.performedBy,
       performedAt: item.performedAt,
       details: item.details ? JSON.parse(item.details) : undefined,
@@ -592,7 +592,7 @@ export class EmailChangeRepository {
   }): Promise<{ requests: EmailChangeRequest[]; lastEvaluatedKey?: string }> {
     const limit = options.limit || 20;
     
-    const queryParams: any = {
+    const queryParams: QueryCommandInput = {
       TableName: this.requestsTableName,
       Limit: limit,
       ScanIndexForward: false, // Most recent first

@@ -63,7 +63,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
-    const userEmail = user?.email;
 
     // Parse request body
     let exportRequest: ExportRequest;
@@ -102,13 +101,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       reportData,
       exportRequest.format,
       exportRequest.options || {},
-      currentUserId,
-      userEmail
+      currentUserId
     );
 
     // Handle delivery if requested
     if (exportRequest.delivery) {
-      await handleDelivery(exportResult, exportRequest.delivery, userEmail);
+      await handleDelivery(exportResult, exportRequest.delivery);
     }
 
     return createSuccessResponse(exportResult);
@@ -179,8 +177,7 @@ async function generateExport(
   reportData: Record<string, unknown>,
   format: string,
   options: ExportOptions,
-  userId: string,
-  _userEmail?: string
+  userId: string
 ): Promise<ExportResponse> {
   const exportId = randomUUID();
   const timestamp = new Date().toISOString();
@@ -191,19 +188,19 @@ async function generateExport(
 
   switch (format) {
     case 'csv':
-      fileContent = await generateCSV(reportData, options);
+      fileContent = await generateCSV(reportData);
       contentType = 'text/csv';
       fileExtension = 'csv';
       break;
     
     case 'excel':
-      fileContent = await generateExcel(reportData, options);
+      fileContent = await generateExcel(reportData);
       contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       fileExtension = 'xlsx';
       break;
     
     case 'pdf':
-      fileContent = await generatePDF(reportData, options);
+      fileContent = await generatePDF(reportData);
       contentType = 'application/pdf';
       fileExtension = 'pdf';
       break;
@@ -230,8 +227,7 @@ async function generateExport(
   };
 }
 
-async function generateCSV(reportData: Record<string, unknown>, 
-  _options: ExportOptions): Promise<Buffer> {
+async function generateCSV(reportData: Record<string, unknown>): Promise<Buffer> {
   try {
     let csvContent = '';
     
@@ -278,13 +274,12 @@ async function generateCSV(reportData: Record<string, unknown>,
   }
 }
 
-async function generateExcel(reportData: Record<string, unknown>, 
-  options: ExportOptions): Promise<Buffer> {
+async function generateExcel(reportData: Record<string, unknown>): Promise<Buffer> {
   try {
     // Simplified Excel generation - in production, use a library like ExcelJS
     // For now, return CSV format as Excel isn't fully implemented
     // In production, implement proper Excel generation with formatting
-    const csvBuffer = await generateCSV(reportData, options);
+    const csvBuffer = await generateCSV(reportData);
     return csvBuffer;
   } catch (error) {
     console.error('Error generating Excel:', error);
@@ -292,8 +287,7 @@ async function generateExcel(reportData: Record<string, unknown>,
   }
 }
 
-async function generatePDF(reportData: Record<string, unknown>, 
-  _options: ExportOptions): Promise<Buffer> {
+async function generatePDF(reportData: Record<string, unknown>): Promise<Buffer> {
   try {
     // Simplified PDF generation - in production, use Puppeteer or similar
     let htmlContent = `
@@ -398,12 +392,11 @@ async function generateDownloadUrl(fileName: string, expiresInHours: number): Pr
 
 async function handleDelivery(
   exportResult: ExportResponse,
-  delivery: DeliveryOptions,
-  userEmail?: string
+  delivery: DeliveryOptions
 ): Promise<void> {
   try {
     if (delivery.email && delivery.email.length > 0) {
-      await sendEmailDelivery(exportResult, delivery, userEmail);
+      await sendEmailDelivery(exportResult, delivery);
       exportResult.deliveryStatus = {
         email: 'sent',
         recipients: delivery.email,
@@ -419,8 +412,7 @@ async function handleDelivery(
 
 async function sendEmailDelivery(
   exportResult: ExportResponse,
-  delivery: DeliveryOptions,
-  _userEmail?: string
+  delivery: DeliveryOptions
 ): Promise<void> {
   const fromEmail = process.env.FROM_EMAIL || 'noreply@aerotage.com';
   

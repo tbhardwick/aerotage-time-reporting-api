@@ -85,7 +85,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     switch (action) {
       case 'list':
-        return await listScheduledReports(event, userId, userRole);
+        return await listScheduledReports(event, userId);
       case 'create':
         return await createScheduledReport(event, userId, userRole);
       case 'update':
@@ -137,7 +137,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
     }
 
     // Check if user has access to the report config
-    const hasAccess = await validateReportConfigAccess(scheduleRequest.reportConfigId, userId, userRole);
+    const hasAccess = await validateReportConfigAccess(scheduleRequest.reportConfigId, userId);
     if (!hasAccess) {
       return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have access to this report configuration');
     }
@@ -183,28 +183,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
   }
 }
 
-async function getScheduledReport(scheduleId: string, userId: string, userRole: string): Promise<APIGatewayProxyResult> {
-  try {
-    const scheduledReport = await fetchScheduledReport(scheduleId);
-    
-    if (!scheduledReport) {
-      return createErrorResponse(404, 'SCHEDULE_NOT_FOUND', 'Scheduled report not found');
-    }
-
-    // Check access permissions
-    if (!canAccessSchedule(scheduledReport, userId, userRole)) {
-      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to access this schedule');
-    }
-
-    return createSuccessResponse(scheduledReport);
-
-  } catch (error) {
-    console.error('Error getting scheduled report:', error);
-    throw error;
-  }
-}
-
-async function listScheduledReports(event: APIGatewayProxyEvent, userId: string, userRole: string): Promise<APIGatewayProxyResult> {
+async function listScheduledReports(event: APIGatewayProxyEvent, userId: string): Promise<APIGatewayProxyResult> {
   try {
     const queryParams = event.queryStringParameters || {};
     const enabled = queryParams.enabled === 'true' ? true : queryParams.enabled === 'false' ? false : undefined;
@@ -501,7 +480,7 @@ function generateScheduleExpression(schedule: ScheduleConfig): string {
   }
 }
 
-async function validateReportConfigAccess(reportConfigId: string, userId: string, userRole: string): Promise<boolean> {
+async function validateReportConfigAccess(reportConfigId: string, userId: string): Promise<boolean> {
   // Mock validation - in production, check actual report config access
   return true;
 }
@@ -524,11 +503,4 @@ function canModifySchedule(schedule: ScheduledReport, userId: string, userRole: 
   if (userRole === 'admin') return true;
   
   return false;
-}
-
-// Mock execution function for EventBridge triggers
-async function processScheduledReport(
-  _reportConfigId: string, _userId: string, _userRole: string): Promise<void> {
-  // This function will be implemented in Phase 7 for actual report execution
-  console.log('Would execute scheduled report');
 } 

@@ -420,8 +420,8 @@ async function fetchTimeEntries(dateRange: DateRange, userId: string, userRole: 
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const filters = {
-      dateFrom: dateRange.startDate.split('T')[0],
-      dateTo: dateRange.endDate.split('T')[0],
+      dateFrom: dateRange.startDate?.split('T')[0] || dateRange.startDate,
+      dateTo: dateRange.endDate?.split('T')[0] || dateRange.endDate,
       userId: userRole === 'employee' ? userId : undefined,
     };
 
@@ -731,7 +731,8 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: TimeEntr
         const dayKey = d.toISOString().split('T')[0];
         const dayEntries = timeEntries.filter(entry => {
           if (entry.userId !== user.userId) return false;
-          const entryStartDate: string = entry.startDate || '';
+          const entryStartDate = entry.startTime || entry.startDate;
+          if (!entryStartDate) return false;
           return entryStartDate.startsWith(dayKey);
         });
         
@@ -891,19 +892,23 @@ async function generateForecastingData(timeEntries: TimeEntryData[], projects: P
   const recentRevenue = monthlyRevenue.slice(-3).map(m => m.revenue);
   
   // Simple linear regression for forecasting
-  const avgGrowth = recentRevenue.length > 1 ? 
-    (recentRevenue[recentRevenue.length - 1] - recentRevenue[0]) / (recentRevenue.length - 1) : 0;
+  const hasRecentData = recentRevenue.length >= 2 && 
+                       recentRevenue[0] !== undefined && 
+                       recentRevenue[recentRevenue.length - 1] !== undefined;
+  
+  const projectedRevenue = hasRecentData ? 
+  (recentRevenue[recentRevenue.length - 1] - recentRevenue[0]) / (recentRevenue.length - 1) : 0;
   
   const lastRevenue = recentRevenue[recentRevenue.length - 1] || 0;
-  const nextMonthProjection = lastRevenue + avgGrowth;
-  const nextQuarterProjection = lastRevenue + (avgGrowth * 3);
+  const nextMonthProjection = lastRevenue + projectedRevenue;
+  const nextQuarterProjection = lastRevenue + (projectedRevenue * 3);
   
   return {
     revenueProjection: {
       nextMonth: Math.round(nextMonthProjection),
       nextQuarter: Math.round(nextQuarterProjection),
       confidence: 75,
-      trend: avgGrowth > 0 ? 'increasing' : avgGrowth < 0 ? 'decreasing' : 'stable',
+      trend: projectedRevenue > 0 ? 'increasing' : projectedRevenue < 0 ? 'decreasing' : 'stable',
     },
     utilizationProjection: {
       nextWeek: 82,

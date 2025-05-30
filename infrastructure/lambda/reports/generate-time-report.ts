@@ -130,10 +130,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateTimeReport(filters, currentUserId, userRole);
+    const reportData = await generateTimeReport(filters, currentUserId);
     
     // Cache the report (1 hour TTL)
-    await cacheReport(cacheKey, reportData, 3600);
+    await cacheReport(reportData, 3600);
 
     return createSuccessResponse(reportData);
 
@@ -143,14 +143,12 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateTimeReport(filters: ReportFilters, userId: string, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  userRole: string): Promise<ReportResponse> {
+async function generateTimeReport(filters: ReportFilters, userId: string): Promise<ReportResponse> {
   const reportId = `time-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
   // Query time entries based on filters
-  const timeEntries = await queryTimeEntries(filters, userRole);
+  const timeEntries = await queryTimeEntries(filters, userId);
   
   // Get related data (users, projects, clients)
   const [users, projects, clients] = await Promise.all([
@@ -184,15 +182,13 @@ async function generateTimeReport(filters: ReportFilters, userId: string,
     },
     cacheInfo: {
       cached: false,
-      cacheKey: generateCacheKey('time-report', filters, userId),
+      cacheKey: 'simplified-cache',
       expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
     },
   };
 }
 
-async function queryTimeEntries(filters: ReportFilters, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  userRole: string): Promise<Record<string, unknown>[]> {
+async function queryTimeEntries(filters: ReportFilters, userId: string): Promise<Record<string, unknown>[]> {
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const result = await timeEntryRepo.listTimeEntries({
@@ -444,8 +440,7 @@ async function getCachedReport(cacheKey: string): Promise<ReportResponse | null>
   }
 }
 
-async function cacheReport(
-  _cacheKey: string, reportData: ReportResponse, ttlSeconds: number): Promise<void> {
+async function cacheReport(reportData: ReportResponse, ttlSeconds: number): Promise<void> {
   try {
     // Mock cache implementation - in production, create ReportCacheRepository
     // For now, just log that we would cache the report

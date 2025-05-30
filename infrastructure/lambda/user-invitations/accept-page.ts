@@ -1,8 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { createErrorResponse } from '../shared/response-helper';
 import { InvitationRepository } from '../shared/invitation-repository';
 import { TokenService } from '../shared/token-service';
 import { UserInvitation } from '../shared/types';
+
+// MANDATORY: Use repository pattern instead of direct DynamoDB
+const invitationRepo = new InvitationRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   console.log('Accept invitation page request:', JSON.stringify(event, null, 2));
@@ -21,11 +23,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     try {
-      const repository = new InvitationRepository();
-      
       // Get invitation by token hash
       const tokenHash = TokenService.hashToken(token);
-      const invitation = await repository.getInvitationByTokenHash(tokenHash);
+      const invitation = await invitationRepo.getInvitationByTokenHash(tokenHash);
 
       if (!invitation) {
         return createErrorPage('Invalid invitation', 'This invitation token is not valid. It may have been cancelled or the link may be corrupted.');
@@ -44,7 +44,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       const isExpired = TokenService.isExpired(invitation.expiresAt);
       if (isExpired) {
         // Update invitation status to expired
-        await repository.updateInvitation(invitation.id, {
+        await invitationRepo.updateInvitation(invitation.id, {
           status: 'expired',
         });
         return createErrorPage('Invitation Expired', 'This invitation has expired. Please contact your administrator to request a new invitation.');

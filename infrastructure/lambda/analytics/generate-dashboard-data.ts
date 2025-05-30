@@ -352,11 +352,14 @@ function generateRevenueByMonth(timeEntries: TimeEntryData[]): ChartData[] {
 
   timeEntries.forEach(entry => {
     if (entry.billable && entry.date) {
-      const month = String(entry.date).substring(0, 7); // YYYY-MM
-      const hours = Number(entry.duration || 0) / 3600;
-      const revenue = hours * Number(entry.hourlyRate || 0);
-      
-      monthlyRevenue.set(month, (monthlyRevenue.get(month) || 0) + revenue);
+      const dateStr = String(entry.date || '');
+      if (dateStr.length >= 7) {
+        const month = dateStr.substring(0, 7); // YYYY-MM
+        const hours = Number(entry.duration || 0) / 3600;
+        const revenue = hours * Number(entry.hourlyRate || 0);
+        
+        monthlyRevenue.set(month, (monthlyRevenue.get(month) || 0) + revenue);
+      }
     }
   });
 
@@ -495,7 +498,10 @@ function generateAlerts(kpis: DashboardData['kpis'], trends: DashboardData['tren
   // Overdue projects alert (simplified check)
   const overdueProjects = projects.filter(project => {
     if (project.endDate && project.status === 'active') {
-      return new Date(String(project.endDate)) < new Date();
+      const endDateStr = String(project.endDate || '');
+      if (endDateStr) {
+        return new Date(endDateStr) < new Date();
+      }
     }
     return false;
   });

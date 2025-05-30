@@ -141,10 +141,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateClientReport(filters, userId, userRole);
+    const reportData = await generateClientReport(filters, userId);
     
     // Cache the report (30 minutes TTL for client reports)
-    await cacheReport(cacheKey, reportData, 1800);
+    await cacheReport(reportData, 1800);
 
     return createSuccessResponse(reportData);
 
@@ -155,8 +155,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateClientReport(filters: ClientReportFilters, userId: string, 
-  _userRole: string): Promise<ClientReportResponse> {
+async function generateClientReport(filters: ClientReportFilters, userId: string): Promise<ClientReportResponse> {
   const reportId = `client-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -192,7 +191,7 @@ async function generateClientReport(filters: ClientReportFilters, userId: string
     },
     cacheInfo: {
       cached: false,
-      cacheKey: generateCacheKey('client-report', filters, userId),
+      cacheKey: 'simplified-cache',
       expiresAt: new Date(Date.now() + 1800 * 1000).toISOString(),
     },
   };
@@ -558,8 +557,7 @@ async function getCachedReport(cacheKey: string): Promise<ClientReportResponse |
   }
 }
 
-async function cacheReport(
-  _cacheKey: string, reportData: ClientReportResponse, ttlSeconds: number): Promise<void> {
+async function cacheReport(reportData: ClientReportResponse, ttlSeconds: number): Promise<void> {
   try {
     // Mock cache implementation - in production, create ReportCacheRepository
     // For now, just log that we would cache the report

@@ -98,7 +98,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const summaries = await generateDailySummaries(request, workSchedule, timeEntryRepo);
     
     // Calculate period summary
-    const periodSummary = calculatePeriodSummary(summaries, workSchedule);
+    const periodSummary = calculatePeriodSummary(summaries);
 
     const response: SuccessResponse<DailySummaryResponse> = {
       success: true,
@@ -349,8 +349,7 @@ function calculateTimeGaps(timeEntries: TimeEntry[], daySchedule: DaySchedule | 
   return gaps;
 }
 
-function calculatePeriodSummary(summaries: DailySummary[], 
-  _workSchedule: UserWorkSchedule | null): PeriodSummary {
+function calculatePeriodSummary(summaries: DailySummary[]): PeriodSummary {
   const totalDays = summaries.length;
   const workDays = summaries.filter(s => s.targetHours > 0).length;
   const totalHours = summaries.reduce((sum, s) => sum + s.totalHours, 0);
