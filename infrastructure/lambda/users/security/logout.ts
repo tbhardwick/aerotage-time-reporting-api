@@ -1,9 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId } from '../../shared/auth-helper';
-import { createErrorResponse } from '../../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { 
-  SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -33,22 +32,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Also clean up any expired sessions for this user using repository
     await sessionRepo.cleanupExpiredSessions(currentUserId);
 
-    const response: SuccessResponse<{ message: string; sessionId?: string }> = {
-      success: true,
-      data: {
-        message: 'Logout successful',
-        sessionId,
-      },
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse({ 
+      message: 'Logout successful',
+      sessionId 
+    }, 200);
 
   } catch (error) {
     console.error('Logout error:', error);

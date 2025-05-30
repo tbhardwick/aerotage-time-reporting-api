@@ -1,9 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId } from '../../shared/auth-helper';
-import { createErrorResponse } from '../../shared/response-helper';
+import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { 
-  SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -93,21 +92,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Actually delete the session using repository
     await sessionRepo.deleteSession(sessionId);
 
-    const response: SuccessResponse<{ message: string }> = {
-      success: true,
-      data: {
-        message: 'Session terminated successfully'
-      },
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse({ 
+      message: 'Session terminated successfully'
+    }, 200);
 
   } catch (error) {
     console.error('Terminate session error:', error);

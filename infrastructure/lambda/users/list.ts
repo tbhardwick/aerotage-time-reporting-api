@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { SuccessResponse, User } from '../shared/types';
+import { User } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -46,23 +46,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }
     });
 
-    const response: SuccessResponse<{ users: any[] }> = {
-      success: true,
-      data: {
-        users: filteredUsers,
-      },
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse({ users: filteredUsers }, 200, 'Users retrieved successfully');
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      },
-      body: JSON.stringify(response),
-    };
   } catch (error) {
     console.error('Error listing users:', error);
     

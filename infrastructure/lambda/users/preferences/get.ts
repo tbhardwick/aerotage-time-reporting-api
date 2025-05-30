@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
-import { createErrorResponse } from '../../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { UserRepository } from '../../shared/user-repository';
 import { 
   UserPreferences, 
-  SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -78,19 +77,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: userData.updatedAt || new Date().toISOString(),
     } : DEFAULT_PREFERENCES;
 
-    const response: SuccessResponse<UserPreferences> = {
-      success: true,
-      data: preferences,
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(preferences, 200, 'User preferences retrieved successfully');
 
   } catch (error) {
     console.error('Error getting user preferences:', error);

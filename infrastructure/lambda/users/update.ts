@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { SuccessResponse, User } from '../shared/types';
+import { User } from '../shared/types';
 
 interface UpdateUserRequest {
   name?: string;
@@ -98,22 +98,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Update user
     const updatedUser = await userRepository.updateUser(userId, allowedUpdates);
 
-    const response: SuccessResponse<{ user: User }> = {
-      success: true,
-      data: {
-        user: updatedUser,
-      },
-      message: 'User updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse({ user: updatedUser }, 200, 'User updated successfully');
   } catch (error) {
     console.error('Error updating user:', error);
     

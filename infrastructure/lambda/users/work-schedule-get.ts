@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
 import { 
   UserWorkSchedule,
-  WorkDaySchedule,
-  SuccessResponse
+  WorkDaySchedule
 } from '../shared/types';
 
 const userRepo = new UserRepository();
@@ -37,34 +36,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       // Return default work schedule if none exists
       const defaultSchedule = createDefaultWorkSchedule(targetUserId);
       
-      const response: SuccessResponse<UserWorkSchedule> = {
-        success: true,
-        data: defaultSchedule,
-      };
-
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(response),
-      };
+      return createSuccessResponse(defaultSchedule, 200, 'Default work schedule retrieved');
     }
 
-    const response: SuccessResponse<UserWorkSchedule> = {
-      success: true,
-      data: workSchedule,
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(workSchedule, 200, 'Work schedule retrieved successfully');
 
   } catch (error) {
     console.error('Error getting work schedule:', error);

@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
 import { 
   UserWorkSchedule,
   WorkDaySchedule,
   UpdateWorkScheduleRequest,
-  TimeTrackingErrorCodes,
-  SuccessResponse
+  TimeTrackingErrorCodes
 } from '../shared/types';
 
 const userRepo = new UserRepository();
@@ -77,19 +76,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Save updated schedule using repository
     await userRepo.updateUserWorkSchedule(updatedSchedule);
 
-    const response: SuccessResponse<UserWorkSchedule> = {
-      success: true,
-      data: updatedSchedule,
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(updatedSchedule, 200, 'Work schedule updated successfully');
 
   } catch (error) {
     console.error('Error updating work schedule:', error);

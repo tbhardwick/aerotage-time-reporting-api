@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
-import { SuccessResponse, User } from '../shared/types';
+import { User } from '../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -60,21 +60,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       filteredUser = targetUser;
     }
 
-    const response: SuccessResponse<{ user: any }> = {
-      success: true,
-      data: {
-        user: filteredUser,
-      },
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse({ user: filteredUser }, 200, 'User retrieved successfully');
   } catch (error) {
     console.error('Error getting user:', error);
     

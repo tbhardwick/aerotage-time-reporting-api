@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { UserRepository } from '../shared/user-repository';
 import { 
   CreateUserRequest, 
@@ -78,22 +78,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       invitedBy: currentUserId
     });
 
-    const response: SuccessResponse<User> = {
-      success: true,
-      data: newUser,
-      message: 'User created successfully'
-    };
-
-    return {
-      statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
-      },
-      body: JSON.stringify(response)
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(newUser, 201, 'User created successfully');
 
   } catch (error) {
     console.error('Create user error:', error);

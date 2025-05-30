@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse } from '../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
   TimeEntryFilters, 
   PaginationResponse, 
@@ -121,22 +121,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     console.log(`Retrieved ${result.items.length} time entries`);
 
-    const response: PaginationResponse<TimeEntry> = {
-      success: true,
-      data: {
-        items: result.items,
-        pagination: result.pagination,
-      },
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse({
+      items: result.items,
+      pagination: result.pagination,
+    }, 200, 'Time entries retrieved successfully');
 
   } catch (error) {
     console.error('Error listing time entries:', error);

@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
-import { createErrorResponse } from '../../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { UserRepository } from '../../shared/user-repository';
 import { 
   UpdateUserProfileRequest, 
   UserProfile, 
-  SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
 
@@ -127,20 +126,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: profileData.updatedAt,
     };
 
-    const response: SuccessResponse<UserProfile> = {
-      success: true,
-      data: profile,
-      message: 'Profile updated successfully',
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    return createSuccessResponse(profile, 200, 'Profile updated successfully');
 
   } catch (error) {
     console.error('Error updating user profile:', error);

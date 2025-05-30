@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
-import { createErrorResponse } from '../../shared/response-helper';
+import { createErrorResponse, createSuccessResponse } from '../../shared/response-helper';
 import { UserRepository } from '../../shared/user-repository';
-import { UserProfile, SuccessResponse } from '../../shared/types';
+import { User, UserProfile } from '../../shared/types';
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -42,7 +42,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       jobTitle: userProfile.jobTitle,
       department: userProfile.department,
       hourlyRate: userProfile.hourlyRate,
-      role: userProfile.role,
+      role: userProfile.role as 'employee' | 'admin' | 'manager',
       contactInfo: userProfile.contactInfo,
       startDate: userProfile.startDate,
       isActive: userProfile.isActive,
@@ -50,20 +50,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       updatedAt: userProfile.updatedAt,
     };
 
-    // MANDATORY: Standardized success response format
-    const response: SuccessResponse<UserProfile> = {
-      success: true,
-      data: profile,
-    };
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(response),
-    };
+    // ✅ FIXED: Use standardized response helper
+    return createSuccessResponse(profile, 200, 'User profile retrieved successfully');
 
   } catch (error) {
     console.error('Function error:', error);
