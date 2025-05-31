@@ -12,163 +12,144 @@
 
 This directory contains all operational scripts, testing utilities, and automation tools for the Aerotage Time Reporting API. These scripts support development, testing, deployment, and maintenance workflows.
 
-## 📋 **Available Scripts**
+## 🎯 **PRIMARY TESTING SCRIPT**
 
-### **🧪 API Testing Scripts**
+### **🧪 [test-all-endpoints.js](./test-all-endpoints.js) - COMPREHENSIVE API TESTING**
 
-#### **Core Business Function Tests**
-- **[test-invoices.js](./test-invoices.js)** - Complete invoicing and billing system testing
-- **[test-invoices-quick.js](./test-invoices-quick.js)** - Quick invoice functionality validation
-- **[test-time-entries.js](./test-time-entries.js)** - Time tracking and approval workflow testing
+**⭐ RECOMMENDED**: This is the primary testing script that comprehensively tests all API endpoints across all functional domains.
 
-#### **Phase-Specific Integration Tests**
-- **[test-phase5-endpoints.js](./test-phase5-endpoints.js)** - Project and client management testing
-- **[test-phase6-core.js](./test-phase6-core.js)** - Reporting and analytics core testing
-- **[test-phase6-endpoints.js](./test-phase6-endpoints.js)** - Complete reporting endpoints testing
+```bash
+# Run comprehensive endpoint testing
+node scripts/test-all-endpoints.js
+```
 
-#### **Integration & Bootstrap Tests**
-- **[test-live-bootstrap.js](./test-live-bootstrap.js)** - Live environment bootstrap testing
-- **[test-bootstrap-direct.js](./test-bootstrap-direct.js)** - Direct bootstrap functionality testing
-- **[test-simple-curl.sh](./test-simple-curl.sh)** - Basic API connectivity testing
+**Features:**
+- ✅ **100% Test Coverage**: Tests all major functional domains
+- 🔐 **Authentication Testing**: Validates Cognito token acquisition
+- 📊 **Detailed Reporting**: Comprehensive test results with pass/fail statistics
+- 🎯 **Domain-Specific Testing**: Organized by functional areas
+- 🚀 **Production Ready**: Uses standardized authentication patterns
 
-### **⚙️ Setup & Configuration Scripts**
+**Test Domains Covered:**
+- Authentication & Health
+- User Management & Profiles
+- User Preferences & Sessions
+- Projects & Clients
+- Time Entries & Reports
+- Analytics & Invoices
 
-#### **Environment Setup**
+## 📋 **Utility Scripts**
+
+### **🔐 Authentication & Setup**
+- **[get-cognito-token.js](./get-cognito-token.js)** - MANDATORY authentication helper (used by all test scripts)
 - **[setup-admin-user.sh](./setup-admin-user.sh)** - Admin user creation and configuration
+- **[create-admin-user-record.js](./create-admin-user-record.js)** - Admin user DynamoDB record creation
+- **[create-admin-dynamodb-record.sh](./create-admin-dynamodb-record.sh)** - Admin user database setup
+- **[setup-admin-user-complete.sh](./setup-admin-user-complete.sh)** - Complete admin user setup
 - **[create-test-users-manual.sh](./create-test-users-manual.sh)** - Manual test user creation
 
-#### **Infrastructure Management**
-- **[recreate-time-entries-table.sh](./recreate-time-entries-table.sh)** - Time entries table recreation
-- **[get-api-endpoints.sh](./get-api-endpoints.sh)** - API endpoint discovery and listing
-
-### **🔧 Build & Documentation Scripts**
-
-#### **Documentation Generation**
+### **🔧 Build & Documentation**
 - **[build-openapi.js](./build-openapi.js)** - OpenAPI specification builder
 - **[update-documentation.js](./update-documentation.js)** - Documentation update automation
 - **[update-api-urls.js](./update-api-urls.js)** - API URL configuration updates
+- **[update-openapi-domains.sh](./update-openapi-domains.sh)** - OpenAPI domain updates
 
-### **📊 Test Data & Legacy Files**
-- **[api-outputs.json](./api-outputs.json)** - Legacy API test output data
+### **🌐 Domain & Deployment Management**
+- **[deploy-custom-domain.sh](./deploy-custom-domain.sh)** - Custom domain deployment
+- **[rollback-custom-domain.sh](./rollback-custom-domain.sh)** - Custom domain rollback
+- **[test-domain-setup.sh](./test-domain-setup.sh)** - Domain setup validation
+- **[verify-deployment.sh](./verify-deployment.sh)** - Deployment verification
+- **[update-test-scripts-domains.sh](./update-test-scripts-domains.sh)** - Test script domain updates
+
+### **📊 Analysis & Monitoring**
+- **[analyze-auth-requirements.sh](./analyze-auth-requirements.sh)** - Authentication requirements analysis
+- **[audit-dynamodb-gsi-capacity.sh](./audit-dynamodb-gsi-capacity.sh)** - DynamoDB GSI capacity auditing
+- **[get-api-endpoints.sh](./get-api-endpoints.sh)** - API endpoint discovery and listing
+
+### **🔧 Infrastructure & Maintenance**
+- **[recreate-time-entries-table.sh](./recreate-time-entries-table.sh)** - Time entries table recreation
+- **[integrate-typescript-fixes.sh](./integrate-typescript-fixes.sh)** - TypeScript integration fixes
+- **[fix-test-authentication-conflicts.sh](./fix-test-authentication-conflicts.sh)** - Authentication conflict resolution
+
+### **📊 Configuration & Data**
+- **[api-outputs.json](./api-outputs.json)** - API deployment outputs and configuration
 
 ## 🚀 **Quick Start Guide**
 
-### **Running API Tests**
+### **🎯 Primary Testing Workflow**
 
-#### **Complete Business Function Testing**
 ```bash
-# Test all invoice and billing functionality
-npm run test:invoices
+# 1. Run comprehensive endpoint testing (RECOMMENDED)
+node scripts/test-all-endpoints.js
 
-# Quick invoice functionality check
-npm run test:invoices:quick
+# 2. Build/update OpenAPI documentation
+node scripts/build-openapi.js dev https://time-api-dev.aerotage.com
 
-# Test time tracking and approval workflows
-npm run test:time-entries
-
-# Test all API endpoints
-npm run test:api
+# 3. Verify deployment status
+bash scripts/verify-deployment.sh
 ```
 
-#### **Phase-Specific Testing**
+### **🔧 Setup & Configuration**
+
 ```bash
-# Test project and client management (Phase 5)
-node scripts/test-phase5-endpoints.js
-
-# Test reporting and analytics (Phase 6)
-node scripts/test-phase6-core.js
-node scripts/test-phase6-endpoints.js
-```
-
-#### **Basic Connectivity Testing**
-```bash
-# Quick API connectivity check
-bash scripts/test-simple-curl.sh
-
-# Live environment bootstrap test
-node scripts/test-live-bootstrap.js
-```
-
-### **Environment Setup**
-```bash
-# Set up admin user
-bash scripts/setup-admin-user.sh
-
-# Create test users manually
-bash scripts/create-test-users-manual.sh
+# Set up admin user (if needed)
+bash scripts/setup-admin-user-complete.sh
 
 # Get current API endpoints
 bash scripts/get-api-endpoints.sh
+
+# Update documentation
+node scripts/update-documentation.js
 ```
 
-### **Documentation & Build**
-```bash
-# Build OpenAPI documentation
-npm run build:docs
-# or
-node scripts/build-openapi.js
+### **🌐 Domain Management**
 
-# Update all documentation
-npm run update:docs
-# or
-node scripts/update-documentation.js
+```bash
+# Deploy custom domain
+bash scripts/deploy-custom-domain.sh
+
+# Test domain setup
+bash scripts/test-domain-setup.sh
+
+# Rollback domain (if needed)
+bash scripts/rollback-custom-domain.sh
 ```
 
 ## 📊 **Script Categories**
 
 ### **🎯 By Purpose**
 
-#### **Development & Testing**
-- API endpoint testing and validation
-- Integration testing across business functions
-- Performance and load testing utilities
-- Authentication and security testing
+#### **Primary Testing**
+- **test-all-endpoints.js** - Comprehensive API endpoint testing (RECOMMENDED)
 
-#### **Operations & Maintenance**
-- Environment setup and configuration
-- User management and administration
-- Infrastructure maintenance and updates
-- Documentation generation and updates
+#### **Authentication & Setup**
+- User management and authentication setup
+- Admin user creation and configuration
+- Test user management
 
-#### **Deployment Support**
-- Environment validation and verification
-- Configuration management and updates
-- API endpoint discovery and documentation
-- Build and deployment automation
+#### **Build & Documentation**
+- OpenAPI specification generation
+- Documentation updates and maintenance
+- API URL configuration management
+
+#### **Infrastructure & Deployment**
+- Custom domain management
+- Deployment verification and validation
+- Infrastructure maintenance and monitoring
 
 ### **🔧 By Technology**
 
 #### **Node.js Scripts (.js)**
-- API testing and integration scripts
-- Documentation generation and build tools
-- Configuration management utilities
-- Data processing and validation tools
+- **test-all-endpoints.js** - Primary testing script
+- **get-cognito-token.js** - Authentication helper (MANDATORY for all tests)
+- **build-openapi.js** - Documentation generation
+- **update-documentation.js** - Documentation maintenance
 
 #### **Shell Scripts (.sh)**
 - Environment setup and configuration
 - Infrastructure management commands
+- Domain and deployment management
 - System administration utilities
-- Quick connectivity and validation tests
-
-## 📋 **Script Usage Patterns**
-
-### **Testing Workflow**
-1. **Basic Connectivity**: `bash test-simple-curl.sh`
-2. **Core Functions**: `npm run test:api`
-3. **Specific Features**: `npm run test:invoices`
-4. **Integration**: `node test-live-bootstrap.js`
-
-### **Development Workflow**
-1. **Environment Setup**: `bash setup-admin-user.sh`
-2. **API Testing**: `npm run test:time-entries`
-3. **Documentation**: `npm run build:docs`
-4. **Validation**: `bash get-api-endpoints.sh`
-
-### **Deployment Workflow**
-1. **Pre-deployment**: `node test-bootstrap-direct.js`
-2. **Post-deployment**: `npm run test:api`
-3. **Documentation**: `npm run update:docs`
-4. **Verification**: `bash test-simple-curl.sh`
 
 ## 🔐 **Authentication Requirements**
 
@@ -178,7 +159,7 @@ node scripts/update-documentation.js
 All test scripts MUST use this MANDATORY pattern:
 
 ```javascript
-const { getCognitoToken } = require('./scripts/get-cognito-token');
+const { getCognitoToken } = require('./get-cognito-token');
 
 async function testEndpoints() {
   const authResult = await getCognitoToken('bhardwick@aerotage.com', 'Aerotage*2025');
@@ -197,60 +178,32 @@ const CONFIG = {
   COGNITO_CLIENT_ID: '148r35u6uultp1rmfdu22i8amb',
   COGNITO_USER_POOL_ID: 'us-east-1_EsdlgX9Qg',
   TEST_USER: {
-    email: 'your-email@domain.com',
-    password: 'your-password'
+    email: 'bhardwick@aerotage.com',
+    password: 'Aerotage*2025'
   }
 };
 ```
 
-## 📈 **Performance Expectations**
+## 📈 **Testing Best Practices**
 
-### **Test Execution Times**
-- **Quick Tests**: 30-60 seconds
-- **Complete API Tests**: 2-5 minutes
-- **Phase-Specific Tests**: 1-3 minutes
-- **Integration Tests**: 3-10 minutes
+### **🎯 Recommended Testing Flow**
+1. **Start with comprehensive testing**: `node scripts/test-all-endpoints.js`
+2. **Verify specific functionality** if issues are found
+3. **Update documentation** after changes: `node scripts/build-openapi.js`
+4. **Validate deployment**: `bash scripts/verify-deployment.sh`
 
-### **Success Criteria**
-- **API Response Times**: < 200ms average
-- **Test Pass Rates**: > 95% success rate
-- **Error Handling**: Proper error responses
-- **Authentication**: 100% JWT validation
+### **🔧 Development Workflow**
+1. **Environment Setup**: Use setup scripts for initial configuration
+2. **Primary Testing**: Always use `test-all-endpoints.js` for validation
+3. **Documentation**: Keep OpenAPI docs updated with `build-openapi.js`
+4. **Deployment**: Use domain management scripts for production deployment
 
-## 🐛 **Troubleshooting**
+## 📝 **Notes**
 
-### **Common Issues**
-
-#### **Authentication Failures**
-```bash
-❌ Authentication failed: Invalid credentials
-```
-**Solution**: Verify credentials in script configuration
-
-#### **Network Connectivity**
-```bash
-❌ ENOTFOUND: API endpoint not reachable
-```
-**Solution**: Check API_BASE_URL and network connectivity
-
-#### **Permission Errors**
-```bash
-❌ Insufficient permissions for operation
-```
-**Solution**: Ensure user has appropriate role (admin/manager)
-
-#### **Environment Issues**
-```bash
-❌ Infrastructure not deployed
-```
-**Solution**: Deploy infrastructure with `npm run deploy:dev`
-
-### **Debug Mode**
-Enable detailed logging in scripts:
-```javascript
-// Add to any script for detailed debugging
-console.log('Debug:', JSON.stringify(response, null, 2));
-```
+- **Script Cleanup**: Redundant testing scripts have been removed in favor of the comprehensive `test-all-endpoints.js`
+- **Authentication**: All scripts use the standardized `get-cognito-token.js` helper
+- **Documentation**: OpenAPI documentation is automatically updated with environment-specific URLs
+- **Deployment**: Custom domain management is fully automated through shell scripts
 
 ## 📚 **Related Documentation**
 
