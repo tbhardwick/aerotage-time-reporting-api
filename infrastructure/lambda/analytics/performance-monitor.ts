@@ -368,8 +368,9 @@ async function generateSystemPerformance(timeRange: TimeRange): Promise<SystemPe
     const previousAverage = average * (0.9 + Math.random() * 0.2);
     const changePercent = ((average - previousAverage) / previousAverage) * 100;
     
+    const currentValue = current !== undefined ? Math.round(current * 100) / 100 : 0;
     return {
-      current: Math.round(current * 100) / 100,
+      current: currentValue,
       average: Math.round(average * 100) / 100,
       min: Math.round(min * 100) / 100,
       max: Math.round(max * 100) / 100,
@@ -407,8 +408,9 @@ async function generateApiPerformance(timeRange: TimeRange): Promise<ApiPerforma
     const previousAverage = average * (0.95 + Math.random() * 0.1);
     const changePercent = ((average - previousAverage) / previousAverage) * 100;
     
+    const currentValue = current !== undefined ? Math.round(current * 100) / 100 : 0;
     return {
-      current: Math.round(current * 100) / 100,
+      current: currentValue,
       average: Math.round(average * 100) / 100,
       min: Math.round(min * 100) / 100,
       max: Math.round(max * 100) / 100,
@@ -490,8 +492,9 @@ async function generateDatabasePerformance(timeRange: TimeRange): Promise<Databa
     const previousAverage = average * (0.92 + Math.random() * 0.16);
     const changePercent = ((average - previousAverage) / previousAverage) * 100;
     
+    const currentValue = current !== undefined ? Math.round(current * 100) / 100 : 0;
     return {
-      current: Math.round(current * 100) / 100,
+      current: currentValue,
       average: Math.round(average * 100) / 100,
       min: Math.round(min * 100) / 100,
       max: Math.round(max * 100) / 100,
@@ -583,8 +586,9 @@ async function generateUserExperience(timeRange: TimeRange): Promise<UserExperie
     const previousAverage = average * (0.95 + Math.random() * 0.1);
     const changePercent = ((average - previousAverage) / previousAverage) * 100;
     
+    const currentValue = current !== undefined ? Math.round(current * 100) / 100 : 0;
     return {
-      current: Math.round(current * 100) / 100,
+      current: currentValue,
       average: Math.round(average * 100) / 100,
       min: Math.round(min * 100) / 100,
       max: Math.round(max * 100) / 100,

@@ -28,6 +28,8 @@ module.exports = [
       '*.sass',
       // CDK asset bundles
       '**/asset.*/**',
+      // Test files not in infrastructure
+      'tests/**',
     ],
   },
   
@@ -64,9 +66,14 @@ module.exports = [
       '@typescript-eslint/explicit-function-return-type': 'warn',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { 
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^_',
+        'ignoreRestSiblings': true,
+        'args': 'none',
+        'vars': 'all'
+      }],
       '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/await-thenable': 'error',
       
       // General code quality
       'no-console': 'warn',

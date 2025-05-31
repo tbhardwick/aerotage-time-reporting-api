@@ -129,10 +129,12 @@ function isSessionBootstrapRequest(httpMethod: string, resourcePath: string): bo
 
   for (let i = 0; i < sessionCreationPatterns.length; i++) {
     const pattern = sessionCreationPatterns[i];
-    const matches = pattern.test(resourcePath);
-    
-    if (matches) {
-      return true;
+    if (pattern) {
+      const matches = pattern.test(resourcePath);
+      
+      if (matches) {
+        return true;
+      }
     }
   }
 
@@ -233,4 +235,11 @@ function getResourceForPolicy(methodArn: string): string {
     return `${arnParts[0]}/${arnParts[1]}/*/*`;
   }
   return methodArn;
+}
+
+function matchResourcePattern(pattern: RegExp | undefined, resourcePath: string): boolean {
+  if (!pattern) {
+    return false;
+  }
+  return pattern.test(resourcePath);
 } 

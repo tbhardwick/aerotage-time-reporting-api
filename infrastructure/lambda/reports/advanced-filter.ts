@@ -2,12 +2,9 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
-import { UserRepository } from '../shared/user-repository';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const userRepo = new UserRepository();
 
 interface AdvancedFilterRequest {
   dataSource: 'time-entries' | 'projects' | 'clients' | 'users';
@@ -113,7 +110,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const accessControlledRequest = applyAccessControl(filterRequest, userId, userRole);
 
     // Execute advanced filtering
-    const filteredData = await executeAdvancedFilter(accessControlledRequest, userId);
+    const filteredData = await executeAdvancedFilter(accessControlledRequest);
     
     const executionTime = Date.now() - startTime;
     filteredData.executionTime = executionTime;
@@ -128,6 +125,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 function applyAccessControl(request: AdvancedFilterRequest, userId: string, userRole: string): AdvancedFilterRequest {
+  // Create a new request object to avoid mutating the original
+  const controlledRequest = { ...request, filters: [...request.filters] };
+  
   // Apply role-based filtering
   if (userRole === 'employee') {
     // Employees can only see their own data
@@ -138,14 +138,13 @@ function applyAccessControl(request: AdvancedFilterRequest, userId: string, user
       logicalOperator: 'AND',
     };
     
-    request.filters.push(userFilter);
+    controlledRequest.filters.push(userFilter);
   }
 
-  return request;
+  return controlledRequest;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function executeAdvancedFilter(request: AdvancedFilterRequest, userId: string): Promise<FilteredDataResponse> {
+async function executeAdvancedFilter(request: AdvancedFilterRequest): Promise<FilteredDataResponse> {
   const startTime = Date.now();
   
   const filterId = `filter-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -266,7 +265,12 @@ function applyFilters(data: Record<string, unknown>[], filters: FilterCriteria[]
 }
 
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce((current, key) => current?.[key as keyof typeof current], obj);
+  return path.split('.').reduce((current: unknown, key: string) => {
+    if (current && typeof current === 'object') {
+      return (current as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
 }
 
 function evaluateFilter(value: unknown, filter: FilterCriteria): boolean {
@@ -356,19 +360,29 @@ function applyGrouping(data: Record<string, unknown>[], groupBy: GroupByOptions)
   const groups = new Map<string, Record<string, unknown>[]>();
 
   data.forEach(item => {
-    let groupKey: string;
+    let groupKey: string = 'default';
 
     if (groupBy.dateGrouping && groupBy.fields.length === 1) {
       // Date-based grouping
-      const dateValue = new Date(getNestedValue(item, groupBy.fields[0]) as string);
-      groupKey = formatDateForGrouping(dateValue, groupBy.dateGrouping);
+      const firstField = groupBy.fields[0];
+      if (firstField) {
+        const dateValueStr = getNestedValue(item, firstField);
+        if (typeof dateValueStr === 'string') {
+          const dateValue = new Date(dateValueStr);
+          groupKey = formatDateForGrouping(dateValue, groupBy.dateGrouping);
+        }
+      }
     } else if (groupBy.customGrouping) {
       // Custom range-based grouping
       const value = getNestedValue(item, groupBy.customGrouping.field);
       groupKey = findCustomGroup(value, groupBy.customGrouping.ranges);
     } else {
       // Standard field-based grouping
-      groupKey = groupBy.fields.map(field => getNestedValue(item, field) as string).join('|');
+      const fieldValues = groupBy.fields.map(field => {
+        const value = getNestedValue(item, field);
+        return value != null ? String(value) : '';
+      });
+      groupKey = fieldValues.join('|');
     }
 
     if (!groups.has(groupKey)) {
@@ -387,11 +401,12 @@ function applyGrouping(data: Record<string, unknown>[], groupBy: GroupByOptions)
 function formatDateForGrouping(date: Date, grouping: string): string {
   switch (grouping) {
     case 'day':
-      return date.toISOString().split('T')[0];
+      return date.toISOString().split('T')[0] || '';
     case 'week':
       const weekStart = new Date(date);
       weekStart.setDate(date.getDate() - date.getDay());
-      return `Week of ${weekStart.toISOString().split('T')[0]}`;
+      const weekDateStr = weekStart.toISOString().split('T')[0];
+      return `Week of ${weekDateStr || ''}`;
     case 'month':
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     case 'quarter':
@@ -400,7 +415,7 @@ function formatDateForGrouping(date: Date, grouping: string): string {
     case 'year':
       return String(date.getFullYear());
     default:
-      return date.toISOString().split('T')[0];
+      return date.toISOString().split('T')[0] || '';
   }
 }
 
@@ -455,10 +470,15 @@ function applyAggregations(data: Record<string, unknown>[], aggregations: Aggreg
       case 'median':
         const sortedValues = numericValues.sort((a, b) => a - b);
         const mid = Math.floor(sortedValues.length / 2);
-        results[alias] = sortedValues.length > 0 ? 
-          (sortedValues.length % 2 === 0 ? 
-            (sortedValues[mid - 1] + sortedValues[mid]) / 2 : 
-            sortedValues[mid]) : null;
+        if (sortedValues.length === 0) {
+          results[alias] = null;
+        } else if (sortedValues.length % 2 === 0) {
+          const midVal1 = sortedValues[mid - 1];
+          const midVal2 = sortedValues[mid];
+          results[alias] = (midVal1 !== undefined && midVal2 !== undefined) ? (midVal1 + midVal2) / 2 : null;
+        } else {
+          results[alias] = sortedValues[mid] !== undefined ? sortedValues[mid] : null;
+        }
         break;
       
       case 'percentile':
@@ -543,4 +563,21 @@ function formatOutput(data: Record<string, unknown>[], groupedData: Record<strin
     default:
       return data;
   }
+}
+
+function formatDate(date: Date): string {
+  const dateStr = date.toISOString().split('T')[0];
+  return dateStr || '';
+}
+
+function calculateMedian(sortedValues: number[]): number {
+  const mid = Math.floor(sortedValues.length / 2);
+  if (sortedValues.length % 2 === 0) {
+    const left = sortedValues[mid - 1];
+    const right = sortedValues[mid];
+    if (left !== undefined && right !== undefined) {
+      return (left + right) / 2;
+    }
+  }
+  return sortedValues[mid] || 0;
 } 

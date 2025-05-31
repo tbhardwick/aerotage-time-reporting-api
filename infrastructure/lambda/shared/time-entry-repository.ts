@@ -531,7 +531,7 @@ export class TimeEntryRepository {
       projectId: timer.projectId,
       taskId: timer.taskId,
       description: (timeEntryData?.finalDescription as string) || timer.description,
-      date: timer.startTime.split('T')[0], // Extract date from startTime
+      date: timer.startTime.split('T')[0] || timer.startTime, // Extract date from startTime
       startTime: timer.startTime,
       endTime: now,
       duration,

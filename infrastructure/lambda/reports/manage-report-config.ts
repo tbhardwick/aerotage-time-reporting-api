@@ -29,14 +29,12 @@ interface ReportConfig {
 interface ReportSchedule {
   enabled: boolean;
   frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  time: string; // HH:mm format
   dayOfWeek?: number; // 0-6 for weekly
   dayOfMonth?: number; // 1-31 for monthly
-  time: string; // HH:MM format
-  timezone: string;
-  recipients: string[];
-  format: 'pdf' | 'excel' | 'csv';
   nextRun?: string;
   lastRun?: string;
+  recipients: string[];
 }
 
 interface CreateReportConfigRequest {
@@ -162,7 +160,7 @@ async function createReportConfig(event: APIGatewayProxyEvent, userId: string, u
 
     // Calculate next run time if scheduled
     if (reportConfig.schedule?.enabled) {
-      reportConfig.schedule.nextRun = calculateNextRun(reportConfig.schedule);
+      reportConfig.schedule.nextRun = calculateNextRun(reportConfig.schedule).toISOString();
     }
 
     // Save to database
@@ -185,8 +183,9 @@ async function getReportConfig(reportId: string, userId: string, userRole: strin
     }
 
     // Check access permissions
-    if (!canAccessReport(reportConfig, userId, userRole)) {
-      return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to access this report');
+    const accessControl = applyAccessControl(reportConfig, userId, userRole);
+    if (!accessControl.canAccess) {
+      return createErrorResponse(403, 'ACCESS_DENIED', accessControl.reason || 'You do not have permission to access this report');
     }
 
     return createSuccessResponse(reportConfig);
@@ -269,7 +268,7 @@ async function updateReportConfig(reportId: string, event: APIGatewayProxyEvent,
 
     // Recalculate next run time if schedule was updated
     if (updateData.schedule && updatedConfig.schedule?.enabled) {
-      updatedConfig.schedule.nextRun = calculateNextRun(updatedConfig.schedule);
+      updatedConfig.schedule.nextRun = calculateNextRun(updatedConfig.schedule).toISOString();
     }
 
     // Save updated configuration
@@ -400,22 +399,6 @@ async function deleteReportConfigFromDB(reportId: string): Promise<void> {
 }
 
 // Utility functions
-function canAccessReport(reportConfig: ReportConfig, userId: string, userRole: string): boolean {
-  // Owner can always access
-  if (reportConfig.userId === userId) return true;
-  
-  // Shared reports
-  if (reportConfig.isShared) {
-    // Admins can access all shared reports
-    if (userRole === 'admin') return true;
-    
-    // Check if user is in shared list
-    if (reportConfig.sharedWith?.includes(userId)) return true;
-  }
-  
-  return false;
-}
-
 function canModifyReport(reportConfig: ReportConfig, userId: string, userRole: string): boolean {
   // Owner can always modify
   if (reportConfig.userId === userId) return true;
@@ -426,16 +409,21 @@ function canModifyReport(reportConfig: ReportConfig, userId: string, userRole: s
   return false;
 }
 
-function calculateNextRun(schedule: ReportSchedule): string {
-  const now = new Date();
-  const nextRun = new Date(now);
+function calculateNextRun(schedule: ReportSchedule): Date {
+  const nextRun = new Date();
+  const timeParts = schedule.time.split(':');
+  const hours = parseInt(timeParts[0] || '0', 10);
+  const minutes = parseInt(timeParts[1] || '0', 10);
   
-  // Parse time
-  const [hours, minutes] = schedule.time.split(':').map(Number);
-  nextRun.setHours(hours, minutes, 0, 0);
+  if (!isNaN(hours) && !isNaN(minutes)) {
+    nextRun.setHours(hours, minutes, 0, 0);
+  } else {
+    // Default to midnight if time is invalid
+    nextRun.setHours(0, 0, 0, 0);
+  }
   
-  // If time has passed today, move to next occurrence
-  if (nextRun <= now) {
+  // If the calculated time is in the past, move to next occurrence
+  if (nextRun <= new Date()) {
     switch (schedule.frequency) {
       case 'daily':
         nextRun.setDate(nextRun.getDate() + 1);
@@ -455,5 +443,30 @@ function calculateNextRun(schedule: ReportSchedule): string {
     }
   }
   
-  return nextRun.toISOString();
+  return nextRun;
+}
+
+function applyAccessControl(reportConfig: ReportConfig, userId: string, userRole: string): { canAccess: boolean; reason?: string } {
+  // Owner can always access
+  if (reportConfig.userId === userId) {
+    return { canAccess: true };
+  }
+  
+  // Shared reports
+  if (reportConfig.isShared) {
+    // Admins can access all shared reports
+    if (userRole === 'admin') {
+      return { canAccess: true };
+    }
+    
+    // Check if user is in shared list
+    if (reportConfig.sharedWith?.includes(userId)) {
+      return { canAccess: true };
+    }
+  }
+  
+  return { 
+    canAccess: false, 
+    reason: 'You do not have permission to access this report' 
+  };
 } 

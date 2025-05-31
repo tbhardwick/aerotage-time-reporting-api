@@ -1,14 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
+import { getCurrentUserId } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
-import { UserRepository } from '../shared/user-repository';
 import { createHash } from 'crypto';
 
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const userRepo = new UserRepository();
 
 interface ReportFilters {
   dateRange: {
@@ -85,16 +82,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
+    const defaultStartDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+    const defaultEndDate = new Date().toISOString().split('T')[0]!;
+
     const filters: ReportFilters = {
       dateRange: {
-        startDate: queryParams.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
+        startDate: queryParams.startDate || defaultStartDate,
+        endDate: queryParams.endDate || defaultEndDate,
+        preset: queryParams.preset as "week" | "month" | "quarter" | "year" | undefined,
       },
       users: queryParams.userId ? [queryParams.userId] : undefined,
       projects: queryParams.projectId ? [queryParams.projectId] : undefined,
@@ -108,20 +105,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     // Apply role-based access control
-    if (userRole === 'employee') {
-      // Employees can only see their own data
-      filters.users = [currentUserId];
-    }
+    const accessControlledFilters = applyAccessControl(filters, currentUserId, 'employee');
 
     // Authorization check: Ensure user can access requested data
-    if (filters.users && filters.users.length > 0 && userRole === 'employee') {
-      if (!filters.users.includes(currentUserId)) {
+    if (accessControlledFilters.users && accessControlledFilters.users.length > 0 && 'employee' === 'employee') {
+      if (!accessControlledFilters.users.includes(currentUserId)) {
         return createErrorResponse(403, 'FORBIDDEN', 'You can only access your own time data');
       }
     }
 
     // Generate cache key
-    const cacheKey = generateCacheKey('time-report', filters, currentUserId);
+    const cacheKey = generateCacheKey('time-report', accessControlledFilters);
     
     // Check cache first
     const cachedReport = await getCachedReport(cacheKey);
@@ -130,7 +124,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateTimeReport(filters, currentUserId);
+    const reportData = await generateTimeReport(accessControlledFilters);
     
     // Cache the report (1 hour TTL)
     await cacheReport(reportData, 3600);
@@ -143,30 +137,30 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateTimeReport(filters: ReportFilters, userId: string): Promise<ReportResponse> {
+async function generateTimeReport(filters: ReportFilters): Promise<ReportResponse> {
   const reportId = `time-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
-  // Query time entries based on filters
-  const timeEntries = await queryTimeEntries(filters, userId);
-  
-  // Get related data (users, projects, clients)
+  // Get time entries and related data
+  const timeEntries = await queryTimeEntries(filters);
   const [users, projects, clients] = await Promise.all([
     getUsersData(timeEntries),
     getProjectsData(timeEntries),
     getClientsData(timeEntries),
   ]);
 
-  // Transform and aggregate data
+  // Transform and calculate metrics
   const reportData = transformTimeEntries(timeEntries, users, projects, clients);
   const summary = calculateSummary(reportData);
 
-  // Apply grouping and sorting
-  const groupedData = groupData(reportData, filters.groupBy || 'date');
+  // Apply grouping if specified
+  const groupedData = filters.groupBy ? groupData(reportData, filters.groupBy) : reportData;
+
+  // Apply sorting
   const sortedData = sortData(groupedData, filters.sortBy || 'date', filters.sortOrder || 'desc');
 
   // Apply pagination
-  const paginatedData = applyPagination(sortedData, filters.offset || 0, filters.limit || 100);
+  const paginatedData = applyPagination(sortedData, filters.offset || 0, filters.limit || 50);
 
   return {
     reportId,
@@ -188,13 +182,12 @@ async function generateTimeReport(filters: ReportFilters, userId: string): Promi
   };
 }
 
-async function queryTimeEntries(filters: ReportFilters, userId: string): Promise<Record<string, unknown>[]> {
+async function queryTimeEntries(filters: ReportFilters): Promise<Record<string, unknown>[]> {
   try {
     // Use TimeEntryRepository instead of direct DynamoDB access
     const result = await timeEntryRepo.listTimeEntries({
       dateFrom: filters.dateRange.startDate,
       dateTo: filters.dateRange.endDate,
-      userId: filters.users ? filters.users[0] : undefined,
     });
 
     let entries = result.items as unknown as Record<string, unknown>[];
@@ -382,17 +375,15 @@ function calculateSummary(data: TimeReportDataItem[]): ReportSummary {
   };
 }
 
-function groupData(data: TimeReportDataItem[], 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  groupBy: string): TimeReportDataItem[] {
+function groupData(data: TimeReportDataItem[], groupBy: string): TimeReportDataItem[] {
   // For now, return data as-is. In production, implement proper grouping logic
   return data;
 }
 
 function sortData(data: TimeReportDataItem[], sortBy: string, sortOrder: string): TimeReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: unknown = a[sortBy as keyof TimeReportDataItem];
-    let bValue: unknown = b[sortBy as keyof TimeReportDataItem];
+    let aValue: any = a[sortBy as keyof TimeReportDataItem];
+    let bValue: any = b[sortBy as keyof TimeReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
@@ -424,9 +415,9 @@ function applyPagination(data: TimeReportDataItem[], offset: number, limit: numb
   };
 }
 
-function generateCacheKey(reportType: string, filters: ReportFilters, userId: string): string {
-  const filterString = JSON.stringify({ ...filters, userId });
-  return createHash('md5').update(`${reportType}-${filterString}`).digest('hex');
+function generateCacheKey(reportType: string, filters: ReportFilters): string {
+  const filterString = JSON.stringify(filters);
+  return `${reportType}-${createHash('sha256').update(filterString).digest('hex')}`;
 }
 
 async function getCachedReport(cacheKey: string): Promise<ReportResponse | null> {
@@ -449,4 +440,27 @@ async function cacheReport(reportData: ReportResponse, ttlSeconds: number): Prom
     console.error('Error caching time report:', error);
     // Don't throw - caching failure shouldn't break the report generation
   }
+}
+
+function applyAccessControl(filters: ReportFilters, userId: string, userRole: string): ReportFilters {
+  // Create a new filters object to avoid mutation
+  const controlledFilters = { ...filters };
+  
+  // Apply role-based filtering
+  if (userRole === 'employee') {
+    // Employees can only see their own data
+    controlledFilters.users = [userId];
+  }
+
+  return controlledFilters;
+}
+
+function compareValues(aValue: unknown, bValue: unknown, ascending = false): number {
+  if (typeof aValue === 'number' && typeof bValue === 'number') {
+    return ascending ? aValue - bValue : bValue - aValue;
+  }
+  if (typeof aValue === 'string' && typeof bValue === 'string') {
+    return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+  }
+  return 0;
 } 

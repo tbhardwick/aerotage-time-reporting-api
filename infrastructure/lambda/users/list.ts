@@ -15,9 +15,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
 
-    // Authorization check: only admins and managers can list users
-    if (userRole !== 'admin' && userRole !== 'manager') {
-      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to list users');
+    // Check access permissions
+    const accessControl = applyAccessControl(userRole);
+    if (!accessControl.canAccess) {
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', accessControl.reason || 'You do not have permission to list users');
     }
 
     const userRepository = new UserRepository();
@@ -26,32 +27,49 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const users = await userRepository.getAllUsers();
 
     // Filter sensitive information based on role
-    const filteredUsers = users.map((user: User) => {
-      // Admins can see everything, managers can see basic info
-      if (userRole === 'admin') {
-        return user;
-      } else {
-        // Managers see limited information
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          department: user.department,
-          jobTitle: user.jobTitle,
-          isActive: user.isActive,
-          startDate: user.startDate,
-          createdAt: user.createdAt,
-        };
-      }
-    });
+    const filteredUsers = users.map(user => filterUserData(user, userRole));
 
-    // ✅ FIXED: Use standardized response helper
     return createSuccessResponse({ users: filteredUsers }, 200, 'Users retrieved successfully');
 
   } catch (error) {
     console.error('Error listing users:', error);
-    
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to list users');
   }
-}; 
+};
+
+function applyAccessControl(userRole: string): { canAccess: boolean; reason?: string } {
+  if (userRole === 'admin' || userRole === 'manager') {
+    return { canAccess: true };
+  }
+
+  return {
+    canAccess: false,
+    reason: 'Only managers and admins can list users',
+  };
+}
+
+function filterUserData(user: User, userRole: string): Record<string, unknown> {
+  // Base fields that all roles can see
+  const filteredData: Record<string, unknown> = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    department: user.department,
+    jobTitle: user.jobTitle,
+    isActive: user.isActive,
+    startDate: user.startDate,
+    createdAt: user.createdAt,
+  };
+
+  // Add additional fields for admin users
+  if (userRole === 'admin') {
+    filteredData.hourlyRate = user.hourlyRate;
+    filteredData.permissions = user.permissions;
+    filteredData.contactInfo = user.contactInfo;
+    filteredData.updatedAt = user.updatedAt;
+    filteredData.preferences = user.preferences;
+  }
+
+  return filteredData;
+} 

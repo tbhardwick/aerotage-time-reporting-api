@@ -87,17 +87,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       case 'list':
         return await listScheduledReports(event, userId);
       case 'create':
-        return await createScheduledReport(event, userId, userRole);
+        return await createScheduledReport(event, userId);
       case 'update':
         if (!scheduleId) {
           return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for update');
         }
-        return await updateScheduledReport(scheduleId, event, userId, userRole);
+        return await updateScheduledReport(scheduleId, event, userId);
       case 'delete':
         if (!scheduleId) {
           return createErrorResponse(400, 'MISSING_SCHEDULE_ID', 'Schedule ID is required for delete');
         }
-        return await deleteScheduledReport(scheduleId, userId, userRole);
+        return await deleteScheduledReport(scheduleId, userId);
       default:
         return createErrorResponse(400, 'INVALID_ACTION', 'Invalid action. Supported actions: list, create, update, delete');
     }
@@ -109,7 +109,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function createScheduledReport(event: APIGatewayProxyEvent, userId: string, userRole: string): Promise<APIGatewayProxyResult> {
+async function createScheduledReport(event: APIGatewayProxyEvent, userId: string): Promise<APIGatewayProxyResult> {
   try {
     // Parse request body
     let scheduleRequest: ScheduleReportRequest;
@@ -154,7 +154,7 @@ async function createScheduledReport(event: APIGatewayProxyEvent, userId: string
       enabledStr: enabled ? 'true' : 'false', // For GSI compatibility
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      nextRun: calculateNextRun(scheduleRequest.schedule),
+      nextRun: calculateNextRun(scheduleRequest.schedule).toISOString(),
       runCount: 0,
       failureCount: 0,
     };
@@ -203,7 +203,7 @@ async function listScheduledReports(event: APIGatewayProxyEvent, userId: string)
   }
 }
 
-async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyEvent, userId: string, userRole: string): Promise<APIGatewayProxyResult> {
+async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyEvent, userId: string): Promise<APIGatewayProxyResult> {
   try {
     // Get existing schedule
     const existingSchedule = await fetchScheduledReport(scheduleId);
@@ -213,7 +213,7 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
     }
 
     // Check permissions
-    if (!canModifySchedule(existingSchedule, userId, userRole)) {
+    if (!canModifySchedule(existingSchedule, userId)) {
       return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to modify this schedule');
     }
 
@@ -238,7 +238,7 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
 
     // Recalculate next run if schedule changed
     if (updateData.schedule) {
-      updatedSchedule.nextRun = calculateNextRun(updatedSchedule.schedule);
+      updatedSchedule.nextRun = calculateNextRun(updatedSchedule.schedule).toISOString();
     }
 
     // Update EventBridge rule
@@ -269,7 +269,7 @@ async function updateScheduledReport(scheduleId: string, event: APIGatewayProxyE
   }
 }
 
-async function deleteScheduledReport(scheduleId: string, userId: string, userRole: string): Promise<APIGatewayProxyResult> {
+async function deleteScheduledReport(scheduleId: string, userId: string): Promise<APIGatewayProxyResult> {
   try {
     // Get existing schedule
     const existingSchedule = await fetchScheduledReport(scheduleId);
@@ -279,7 +279,7 @@ async function deleteScheduledReport(scheduleId: string, userId: string, userRol
     }
 
     // Check permissions
-    if (!canModifySchedule(existingSchedule, userId, userRole)) {
+    if (!canModifySchedule(existingSchedule, userId)) {
       return createErrorResponse(403, 'ACCESS_DENIED', 'You do not have permission to delete this schedule');
     }
 
@@ -425,16 +425,21 @@ async function deleteEventBridgeRule(ruleName: string): Promise<void> {
 }
 
 // Utility functions
-function calculateNextRun(schedule: ScheduleConfig): string {
-  const now = new Date();
-  const nextRun = new Date(now);
+function calculateNextRun(schedule: ScheduleConfig): Date {
+  const nextRun = new Date();
+  const timeParts = schedule.time.split(':');
+  const hours = parseInt(timeParts[0] || '0', 10);
+  const minutes = parseInt(timeParts[1] || '0', 10);
   
-  // Parse time
-  const [hours, minutes] = schedule.time.split(':').map(Number);
-  nextRun.setHours(hours, minutes, 0, 0);
+  if (!isNaN(hours) && !isNaN(minutes)) {
+    nextRun.setHours(hours, minutes, 0, 0);
+  } else {
+    // Default to midnight if time is invalid
+    nextRun.setHours(0, 0, 0, 0);
+  }
   
-  // If time has passed today, move to next occurrence
-  if (nextRun <= now) {
+  // If the calculated time is in the past, move to next occurrence
+  if (nextRun <= new Date()) {
     switch (schedule.frequency) {
       case 'daily':
         nextRun.setDate(nextRun.getDate() + 1);
@@ -454,7 +459,7 @@ function calculateNextRun(schedule: ScheduleConfig): string {
     }
   }
   
-  return nextRun.toISOString();
+  return nextRun;
 }
 
 function generateScheduleExpression(schedule: ScheduleConfig): string {
@@ -462,7 +467,9 @@ function generateScheduleExpression(schedule: ScheduleConfig): string {
     return `cron(${schedule.customCron})`;
   }
 
-  const [hours, minutes] = schedule.time.split(':').map(Number);
+  const timeParts = schedule.time.split(':');
+  const hours = parseInt(timeParts[0] || '0', 10);
+  const minutes = parseInt(timeParts[1] || '0', 10);
 
   switch (schedule.frequency) {
     case 'daily':
@@ -485,22 +492,6 @@ async function validateReportConfigAccess(reportConfigId: string, userId: string
   return true;
 }
 
-function canAccessSchedule(schedule: ScheduledReport, userId: string, userRole: string): boolean {
-  // Owner can always access
-  if (schedule.userId === userId) return true;
-  
-  // Admins can access all schedules
-  if (userRole === 'admin') return true;
-  
-  return false;
-}
-
-function canModifySchedule(schedule: ScheduledReport, userId: string, userRole: string): boolean {
-  // Owner can always modify
-  if (schedule.userId === userId) return true;
-  
-  // Admins can modify any schedule
-  if (userRole === 'admin') return true;
-  
-  return false;
+function canModifySchedule(schedule: ScheduledReport, userId: string): boolean {
+  return schedule.userId === userId;
 } 

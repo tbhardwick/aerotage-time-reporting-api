@@ -6,6 +6,21 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
+interface OpenApiSpec {
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+    description: string;
+  };
+  servers: Array<{
+    url: string;
+    description: string;
+  }>;
+  paths?: Record<string, unknown>;
+  components?: Record<string, unknown>;
+}
+
 export interface DocumentationStackProps extends cdk.StackProps {
   stage: string;
   apiGatewayUrl: string;
@@ -116,7 +131,7 @@ export class DocumentationStack extends cdk.Stack {
     });
   }
 
-  private loadOpenApiSpec(apiGatewayUrl: string): any {
+  private loadOpenApiSpec(apiGatewayUrl: string): OpenApiSpec {
     // This will be replaced with the actual OpenAPI spec
     // For now, return a basic structure that will be updated by the deployment
     return {

@@ -93,6 +93,13 @@ cdk.context.json
 *.template.json
 *.template.yaml
 
+# Prevent accidental .js files in TypeScript source directories (✅ CRITICAL)
+infrastructure/lib/*.js
+infrastructure/lib/**/*.js
+infrastructure/bin/*.js
+infrastructure/lambda/**/*.js
+!infrastructure/lambda/**/*.test.js
+
 # Terraform
 *.tfstate
 *.tfstate.*

@@ -149,18 +149,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 };
 
 function getClientIP(event: APIGatewayProxyEvent): string {
-  // Try to get real IP from various headers (CloudFront, ALB, etc.)
-  const xForwardedFor = event.headers['X-Forwarded-For'] || event.headers['x-forwarded-for'];
-  if (xForwardedFor) {
-    return xForwardedFor.split(',')[0].trim();
+  const xForwardedFor = event.headers['X-Forwarded-For'];
+  if (!xForwardedFor) {
+    return event.requestContext.identity.sourceIp || 'unknown';
   }
-  
-  const xRealIP = event.headers['X-Real-IP'] || event.headers['x-real-ip'];
-  if (xRealIP) {
-    return xRealIP;
-  }
-  
-  return event.requestContext.identity?.sourceIp || 'unknown';
+  return xForwardedFor.split(',')[0]?.trim() || 'unknown';
 }
 
 async function getLocationFromIP(ipAddress: string): Promise<{ country: string; region: string; city: string } | undefined> {

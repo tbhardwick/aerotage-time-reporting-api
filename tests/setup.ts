@@ -39,28 +39,72 @@ jest.doMock('@aws-sdk/client-s3', () => ({
   DeleteObjectCommand: jest.fn(),
 }));
 
-// Global test utilities
-declare global {
-  // eslint-disable-next-line no-var
-  var mockApiGatewayEvent: (options?: any) => any;
-  // eslint-disable-next-line no-var
-  var mockLambdaContext: any;
+// Define types for global test utilities
+interface ApiGatewayEventOptions {
+  httpMethod?: string;
+  path?: string;
+  headers?: Record<string, string>;
+  queryStringParameters?: Record<string, string> | null;
+  pathParameters?: Record<string, string> | null;
+  body?: string | null;
+  requestContext?: {
+    authorizer?: Record<string, unknown> | null;
+    requestId?: string;
+  };
 }
 
-global.mockApiGatewayEvent = (options: any = {}) => ({
-  httpMethod: options.httpMethod || 'GET',
-  path: options.path || '/',
-  headers: options.headers || {},
-  queryStringParameters: options.queryStringParameters || null,
-  pathParameters: options.pathParameters || null,
-  body: options.body || null,
+interface ApiGatewayEvent {
+  httpMethod: string;
+  path: string;
+  headers: Record<string, string>;
+  queryStringParameters: Record<string, string> | null;
+  pathParameters: Record<string, string> | null;
+  body: string | null;
   requestContext: {
-    authorizer: options.authorizer || null,
-    requestId: 'test-request-id',
-    ...options.requestContext,
-  },
-  ...options,
-});
+    authorizer: Record<string, unknown> | null;
+    requestId: string;
+  };
+}
+
+interface LambdaContext {
+  callbackWaitsForEmptyEventLoop: boolean;
+  functionName: string;
+  functionVersion: string;
+  invokedFunctionArn: string;
+  memoryLimitInMB: string;
+  awsRequestId: string;
+  logGroupName: string;
+  logStreamName: string;
+  getRemainingTimeInMillis: () => number;
+  done: jest.Mock;
+  fail: jest.Mock;
+  succeed: jest.Mock;
+}
+
+// Extend global namespace
+declare global {
+  var mockApiGatewayEvent: (options?: ApiGatewayEventOptions) => ApiGatewayEvent;
+  var mockLambdaContext: LambdaContext;
+}
+
+// Implement global test utilities
+global.mockApiGatewayEvent = (options: ApiGatewayEventOptions = {}) => {
+  const requestContext = {
+    authorizer: options.requestContext?.authorizer || null,
+    requestId: options.requestContext?.requestId || 'test-request-id',
+  };
+
+  return {
+    httpMethod: options.httpMethod || 'GET',
+    path: options.path || '/',
+    headers: options.headers || {},
+    queryStringParameters: options.queryStringParameters || null,
+    pathParameters: options.pathParameters || null,
+    body: options.body || null,
+    requestContext,
+    ...options,
+  } as ApiGatewayEvent;
+};
 
 global.mockLambdaContext = {
   callbackWaitsForEmptyEventLoop: false,
@@ -90,4 +134,7 @@ global.console = {
 // Clean up after each test
 afterEach(() => {
   jest.clearAllMocks();
-}); 
+});
+
+// Export an empty object to make this file a module
+export {}; 

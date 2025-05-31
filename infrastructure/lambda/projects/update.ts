@@ -23,11 +23,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Parse request body
-    let requestBody;
+    let requestBody: Record<string, unknown>;
     try {
+      if (!event.body) {
+        throw new Error('Request body is missing');
+      }
       requestBody = JSON.parse(event.body);
     } catch {
-      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Invalid request body');
     }
 
     // Validate request
@@ -57,7 +60,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Admins can update any project (no additional restrictions)
 
     // If client is being changed, verify the new client exists and is active
-    if (requestBody.clientId && requestBody.clientId !== existingProject.clientId) {
+    if (requestBody.clientId && typeof requestBody.clientId === 'string' && requestBody.clientId !== existingProject.clientId) {
       const client = await clientRepository.getClientById(requestBody.clientId);
       if (!client) {
         return createErrorResponse(404, 'CLIENT_NOT_FOUND', 'The specified client does not exist');

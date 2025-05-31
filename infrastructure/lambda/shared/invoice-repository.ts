@@ -22,6 +22,8 @@ import {
   RecordPaymentRequest
 } from './types';
 
+type DynamoDBExpressionValue = string | number | boolean | null | undefined;
+
 export interface InvoiceListResult {
   invoices: Invoice[];
   total: number;
@@ -69,7 +71,8 @@ export class InvoiceRepository {
     const invoiceNumber = await this.generateInvoiceNumber();
     
     // Calculate dates
-    const issueDate = invoiceData.issueDate || new Date().toISOString().split('T')[0];
+    const issueDateStr = invoiceData.issueDate || new Date().toISOString().split('T')[0];
+    const issueDate = issueDateStr || new Date().toISOString().split('T')[0]!;
     const dueDate = invoiceData.dueDate || this.calculateDueDate(issueDate, invoiceData.paymentTerms || 'Net 30');
     
     // Create line items from time entries if provided
@@ -226,7 +229,7 @@ export class InvoiceRepository {
     // Build update expression dynamically
     const updateExpressions: string[] = [];
     const expressionAttributeNames: Record<string, string> = {};
-    const expressionAttributeValues: Record<string, any> = {};
+    const expressionAttributeValues: Record<string, DynamoDBExpressionValue> = {};
 
     if (updates.status !== undefined) {
       updateExpressions.push('#status = :status');
@@ -368,7 +371,7 @@ export class InvoiceRepository {
     const items = result.Items || [];
 
     // Convert DynamoDB items to Invoice objects
-    let invoices = items.map(item => this.mapDynamoItemToInvoice(item as InvoiceDynamoItem));
+    let invoices = items.map((item: any) => this.mapDynamoItemToInvoice(item as InvoiceDynamoItem));
 
     // Apply additional filters
     invoices = this.applyInvoiceFilters(invoices, filters);
@@ -427,13 +430,6 @@ export class InvoiceRepository {
     };
 
     const dynamoItem: PaymentDynamoItem = {
-      PK: `PAYMENT#${paymentId}`,
-      SK: `PAYMENT#${paymentId}`,
-      GSI1PK: `INVOICE#${invoiceId}`,
-      GSI1SK: `PAYMENT#${paymentData.paymentDate}#${paymentId}`,
-      GSI2PK: `STATUS#completed`,
-      GSI2SK: `PAYMENT#${paymentData.paymentDate}#${paymentId}`,
-      
       id: paymentId,
       invoiceId,
       amount: paymentData.amount,
@@ -503,7 +499,7 @@ export class InvoiceRepository {
       },
     }));
 
-    return ((result as any).Items || []).map(item => this.mapDynamoItemToPayment(item as PaymentDynamoItem));
+    return ((result as any).Items || []).map((item: any) => this.mapDynamoItemToPayment(item as PaymentDynamoItem));
   }
 
   // ===========================
@@ -535,21 +531,20 @@ export class InvoiceRepository {
    * Calculate due date based on payment terms
    */
   private calculateDueDate(issueDate: string, paymentTerms: string): string {
-    const issue = new Date(issueDate);
-    let daysToAdd = 30; // Default to 30 days
-
-    if (paymentTerms.includes('Net ')) {
-      const days = parseInt(paymentTerms.replace('Net ', ''));
-      if (!isNaN(days)) {
-        daysToAdd = days;
-      }
-    } else if (paymentTerms === 'Due on receipt') {
-      daysToAdd = 0;
+    const dueDate = new Date(issueDate);
+    const terms = paymentTerms.toLowerCase();
+    
+    if (terms.startsWith('net')) {
+      const termsParts = terms.split(' ');
+      const daysStr = termsParts[1];
+      const days = daysStr ? parseInt(daysStr, 10) : 30;
+      dueDate.setDate(dueDate.getDate() + (isNaN(days) ? 30 : days));
+    } else if (terms === 'due on receipt') {
+      dueDate.setDate(dueDate.getDate() + 7); // Default to 7 days for due on receipt
     }
-
-    const dueDate = new Date(issue);
-    dueDate.setDate(dueDate.getDate() + daysToAdd);
-    return dueDate.toISOString().split('T')[0];
+    
+    const dueDateStr = dueDate.toISOString().split('T')[0];
+    return dueDateStr || issueDate;
   }
 
   /**
@@ -573,7 +568,8 @@ export class InvoiceRepository {
         break;
     }
     
-    return start.toISOString().split('T')[0];
+    const nextDateStr = start.toISOString().split('T')[0];
+    return nextDateStr || config.startDate;
   }
 
   /**
@@ -719,7 +715,7 @@ export class InvoiceRepository {
       clientName: item.clientName,
       projectIds: JSON.parse(item.projectIds || '[]'),
       timeEntryIds: JSON.parse(item.timeEntryIds || '[]'),
-      status: item.status as any,
+      status: item.status as 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled' | 'refunded',
       
       issueDate: item.issueDate,
       dueDate: item.dueDate,
@@ -776,7 +772,7 @@ export class InvoiceRepository {
       paymentMethod: item.paymentMethod,
       reference: item.reference,
       notes: item.notes,
-      status: item.status as any,
+      status: item.status as 'pending' | 'completed' | 'failed' | 'refunded',
       externalPaymentId: item.externalPaymentId,
       processorFee: item.processorFee,
       createdAt: item.createdAt,

@@ -134,7 +134,7 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
   const workSchedule = await userRepo.getUserWorkSchedule(request.userId!);
 
   // Get daily summaries for the week
-  const dailySummaries = await getDailySummariesForWeek(request.userId!, weekStart, weekEnd, workSchedule);
+  const dailySummaries = await getDailySummariesForWeek(request.userId!, weekStart, weekEnd, workSchedule as UserWorkSchedule | null);
 
   // Calculate weekly totals
   const weeklyTotals = calculateWeeklyTotals(dailySummaries);
@@ -152,7 +152,12 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
   }
 
   return {
-    weekInfo,
+    weekInfo: {
+      weekStartDate: weekInfo.weekStartDate,
+      weekEndDate: weekInfo.weekEndDate!,
+      weekNumber: weekInfo.weekNumber,
+      year: weekInfo.year,
+    },
     dailySummaries,
     weeklyTotals,
     patterns,
@@ -174,14 +179,14 @@ async function getDailySummariesForWeek(
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     
     // Get time entries for this date using repository
-    const timeEntries = await getTimeEntriesForDate(userId, dateStr);
+    const timeEntries = await getTimeEntriesForDate(userId, dateStr!);
     
     // Get work schedule for this day
     const daySchedule = workSchedule?.schedule[dayOfWeek as keyof typeof workSchedule.schedule];
     const targetHours = daySchedule?.targetHours || 8;
     
     // Calculate basic daily summary (without gaps for performance)
-    const summary = calculateBasicDailySummary(dateStr, dayOfWeek, timeEntries, targetHours);
+    const summary = calculateBasicDailySummary(dateStr!, dayOfWeek, timeEntries, targetHours);
     summaries.push(summary);
   }
 
@@ -296,7 +301,7 @@ async function calculateWeeklyProjectDistribution(
   
   for (let date = new Date(weekStart); date <= weekEnd; date.setDate(date.getDate() + 1)) {
     const dateStr = date.toISOString().split('T')[0];
-    const entries = await getTimeEntriesForDate(userId, dateStr);
+    const entries = await getTimeEntriesForDate(userId, dateStr!);
     allEntries.push(...entries);
   }
 
@@ -354,7 +359,7 @@ async function getWeeklyComparison(userId: string, currentWeekStart: Date): Prom
   
   for (let date = new Date(previousWeekStart); date <= previousWeekEnd; date.setDate(date.getDate() + 1)) {
     const dateStr = date.toISOString().split('T')[0];
-    const entries = await getTimeEntriesForDate(userId, dateStr);
+    const entries = await getTimeEntriesForDate(userId, dateStr!);
     previousWeekEntries.push(...entries);
   }
 

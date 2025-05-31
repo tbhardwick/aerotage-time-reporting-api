@@ -76,7 +76,7 @@ interface Alert {
 }
 
 interface DashboardRequest {
-  period: 'day' | 'week' | 'month' | 'quarter' | 'year';
+  period: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'last30';
   metrics?: string[];
   compareWith?: 'previous' | 'year';
 }
@@ -95,13 +95,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
     const dashboardRequest: DashboardRequest = {
-      period: (queryParams.period as 'day' | 'week' | 'month' | 'quarter' | 'year') || 'month',
+      period: (queryParams.period as 'day' | 'week' | 'month' | 'quarter' | 'year' | 'last30') || 'month',
       metrics: queryParams.metrics ? queryParams.metrics.split(',') : undefined,
       compareWith: queryParams.compareWith as 'previous' | 'year' | undefined,
     };
 
     // Validate period
-    const validPeriods = ['day', 'week', 'month', 'quarter', 'year'];
+    const validPeriods = ['day', 'week', 'month', 'quarter', 'year', 'last30'];
     if (!validPeriods.includes(dashboardRequest.period)) {
       return createErrorResponse(400, 'INVALID_PERIOD', `Invalid period. Must be one of: ${validPeriods.join(', ')}`);
     }
@@ -142,9 +142,9 @@ async function generateDashboardData(request: DashboardRequest, userId: string, 
     previousPeriodData,
   ] = await Promise.all([
     getTimeEntriesData(dateRange, dataFilter),
-    getProjectsData(dataFilter),
-    getClientsData(dataFilter),
-    request.compareWith ? getPreviousPeriodData(request.period, dataFilter) : Promise.resolve(null),
+    getProjectsData(),
+    getClientsData(),
+    request.compareWith ? getPreviousPeriodData() : Promise.resolve(null),
   ]);
 
   // Calculate KPIs
@@ -154,7 +154,7 @@ async function generateDashboardData(request: DashboardRequest, userId: string, 
   const trends = calculateTrends(kpis, previousPeriodData);
 
   // Generate chart data
-  const charts = generateChartData(timeEntries, projects, clients, request.period);
+  const charts = generateChartData(timeEntries, projects, clients);
 
   // Generate alerts
   const alerts = generateAlerts(kpis, trends, projects);
@@ -171,8 +171,14 @@ async function generateDashboardData(request: DashboardRequest, userId: string, 
 
 function getDateRange(period: string): { startDate: string; endDate: string } {
   const now = new Date();
-  const endDate = now.toISOString().split('T')[0];
-  let startDate: string = endDate; // Default to same day
+  const endDateStr = now.toISOString().split('T')[0];
+  
+  if (!endDateStr) {
+    throw new Error('Failed to generate end date');
+  }
+  
+  const endDate = endDateStr;
+  let startDate = endDate; // Default to same day
 
   switch (period) {
     case 'day':
@@ -180,25 +186,40 @@ function getDateRange(period: string): { startDate: string; endDate: string } {
       break;
     case 'week':
       const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - 7);
-      startDate = weekStart.toISOString().split('T')[0];
+      weekStart.setDate(now.getDate() - now.getDay());
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+      if (weekStartStr) {
+        startDate = weekStartStr;
+      }
       break;
     case 'month':
-      const monthStart = new Date(now);
-      monthStart.setDate(1);
-      startDate = monthStart.toISOString().split('T')[0];
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthStartStr = monthStart.toISOString().split('T')[0];
+      if (monthStartStr) {
+        startDate = monthStartStr;
+      }
       break;
     case 'quarter':
-      const quarterStart = new Date(now);
-      quarterStart.setMonth(Math.floor(now.getMonth() / 3) * 3, 1);
-      startDate = quarterStart.toISOString().split('T')[0];
+      const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+      const quarterStartStr = quarterStart.toISOString().split('T')[0];
+      if (quarterStartStr) {
+        startDate = quarterStartStr;
+      }
       break;
     case 'year':
       const yearStart = new Date(now.getFullYear(), 0, 1);
-      startDate = yearStart.toISOString().split('T')[0];
+      const yearStartStr = yearStart.toISOString().split('T')[0];
+      if (yearStartStr) {
+        startDate = yearStartStr;
+      }
       break;
-    default:
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    case 'last30':
+      const last30Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const last30StartStr = last30Start.toISOString().split('T')[0];
+      if (last30StartStr) {
+        startDate = last30StartStr;
+      }
+      break;
   }
 
   return { startDate, endDate };
@@ -221,8 +242,7 @@ async function getTimeEntriesData(dateRange: { startDate: string; endDate: strin
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getProjectsData(filter: Record<string, unknown>): Promise<ProjectData[]> {
+async function getProjectsData(): Promise<ProjectData[]> {
   try {
     // Mock projects data - in production, create ProjectRepository
     const mockProjects = [
@@ -238,8 +258,7 @@ async function getProjectsData(filter: Record<string, unknown>): Promise<Project
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getClientsData(filter: Record<string, unknown>): Promise<ClientData[]> {
+async function getClientsData(): Promise<ClientData[]> {
   try {
     // Mock clients data - in production, create ClientRepository
     const mockClients = [
@@ -255,8 +274,7 @@ async function getClientsData(filter: Record<string, unknown>): Promise<ClientDa
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getPreviousPeriodData(period: string, filter: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+async function getPreviousPeriodData(): Promise<Record<string, unknown> | null> {
   // Get data from previous period for trend calculation
   // This is a simplified implementation - in production, implement proper period calculation
   return null;
@@ -325,8 +343,7 @@ function calculateTrends(currentKPIs: DashboardData['kpis'], previousData: Recor
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function generateChartData(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[], period: string): DashboardData['charts'] {
+function generateChartData(timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[]): DashboardData['charts'] {
   // Revenue by month (simplified - group by month)
   const revenueByMonth = generateRevenueByMonth(timeEntries);
   

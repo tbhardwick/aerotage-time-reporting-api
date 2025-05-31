@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { 
@@ -17,9 +17,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -81,34 +78,8 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   
   if (xForwardedFor) {
     // X-Forwarded-For can contain multiple IPs, take the first (original client)
-    return xForwardedFor.split(',')[0].trim();
+    return xForwardedFor.split(',')[0]?.trim() || 'unknown';
   }
   
   return xRealIP || cfConnectingIP || sourceIP || 'unknown';
-}
-
-/**
- * Invalidate specific sessions by their IDs
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function invalidateSpecificSessions(sessionIds: string[]): Promise<void> {
-  try {
-    await sessionRepo.invalidateSpecificSessions(sessionIds);
-  } catch (error) {
-    console.error(`Error invalidating specific sessions:`, error);
-    throw error;
-  }
-}
-
-/**
- * Invalidate all active sessions for a user
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function invalidateAllUserSessions(userId: string): Promise<void> {
-  try {
-    await sessionRepo.invalidateAllUserSessions(userId);
-  } catch (error) {
-    console.error(`Error invalidating sessions for user ${userId}:`, error);
-    throw error;
-  }
 } 

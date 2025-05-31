@@ -20,21 +20,23 @@ export class DomainStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DomainStackProps) {
     super(scope, id, props);
 
-    const { stage, hostedZoneName, restApi } = props;
+    const { stage, restApi } = props;
 
-    // Define the API subdomain based on stage
-    const apiSubdomain = stage === 'prod' ? 'time-api' : `time-api-${stage}`;
-    this.domainName = `${apiSubdomain}.${hostedZoneName}`;
-    this.apiUrl = `https://${this.domainName}`;
+    const domainName = stage === 'prod' ? 'aerotage.com' : 'dev.aerotage.com';
+    const apiDomainName = `api.${domainName}`;
 
-    // Look up the existing hosted zone
-    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-      domainName: hostedZoneName,
+    this.domainName = domainName;
+    this.apiUrl = `https://${apiDomainName}`;
+
+    // Create hosted zone
+    const hostedZone = new route53.HostedZone(this, 'HostedZone', {
+      zoneName: domainName,
+      comment: `Aerotage Time Reporting API ${stage} environment`,
     });
 
     // Create SSL certificate for the API domain
     const certificate = new acm.Certificate(this, 'ApiCertificate', {
-      domainName: this.domainName,
+      domainName: apiDomainName,
       validation: acm.CertificateValidation.fromDns(hostedZone),
       certificateName: `aerotage-time-api-cert-${stage}`,
     });
@@ -43,7 +45,7 @@ export class DomainStack extends cdk.Stack {
 
     // Create custom domain for API Gateway
     const customDomain = new apigateway.DomainName(this, 'ApiCustomDomain', {
-      domainName: this.domainName,
+      domainName: apiDomainName,
       certificate: certificate,
       endpointType: apigateway.EndpointType.REGIONAL,
       securityPolicy: apigateway.SecurityPolicy.TLS_1_2,
@@ -58,7 +60,7 @@ export class DomainStack extends cdk.Stack {
     // Create Route 53 record to point to the custom domain
     new route53.ARecord(this, 'ApiAliasRecord', {
       zone: hostedZone,
-      recordName: apiSubdomain,
+      recordName: apiDomainName,
       target: route53.RecordTarget.fromAlias(
         new route53Targets.ApiGatewayDomain(customDomain)
       ),
@@ -67,7 +69,7 @@ export class DomainStack extends cdk.Stack {
 
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'ApiDomainName', {
-      value: this.domainName,
+      value: apiDomainName,
       description: 'Custom domain name for the API',
       exportName: `ApiDomainName-${stage}`,
     });

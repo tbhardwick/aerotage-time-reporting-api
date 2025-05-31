@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { 
@@ -18,9 +18,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;

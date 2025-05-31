@@ -110,12 +110,13 @@ export class InvitationRepository {
   /**
    * Gets an invitation by ID
    */
-  async getInvitationById(id: string): Promise<UserInvitation | null> {
+  async getInvitationById(invitationId: string): Promise<UserInvitation | null> {
     const command = new GetItemCommand({
       TableName: this.tableName,
       Key: marshall({
-        id, // Use the actual partition key name from table schema
-      }, { removeUndefinedValues: true }),
+        PK: `INVITATION#${invitationId}`,
+        SK: 'METADATA',
+      }),
     });
 
     try {
@@ -124,7 +125,12 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Item) as Record<string, unknown>);
+      const unmarshalledItem = unmarshall(result.Item);
+      if (!unmarshalledItem) {
+        return null;
+      }
+
+      return this.mapDynamoItemToInvitation(unmarshalledItem as Record<string, unknown>);
     } catch (error) {
       console.error('Error getting invitation by ID:', error);
       throw new Error('Failed to get invitation');
@@ -150,7 +156,12 @@ export class InvitationRepository {
         return null;
       }
 
-      return this.mapDynamoItemToInvitation(unmarshall(result.Items[0]) as Record<string, unknown>);
+      const firstItem = result.Items[0];
+      if (!firstItem) {
+        return null;
+      }
+
+      return this.mapDynamoItemToInvitation(unmarshall(firstItem) as Record<string, unknown>);
     } catch (error) {
       console.error('Error getting invitation by token hash:', error);
       throw new Error('Failed to get invitation');

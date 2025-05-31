@@ -102,25 +102,28 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
+    const defaultStartDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+    const defaultEndDate = new Date().toISOString().split('T')[0]!;
+
     const filters: ProjectReportFilters = {
       dateRange: {
-        startDate: queryParams.startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
+        startDate: queryParams.startDate || defaultStartDate,
+        endDate: queryParams.endDate || defaultEndDate,
+        preset: queryParams.preset as "week" | "month" | "quarter" | "year" | undefined,
       },
       projectIds: queryParams.projectId ? [queryParams.projectId] : undefined,
       clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
       status: queryParams.status ? queryParams.status.split(',') : undefined,
       includeMetrics: queryParams.includeMetrics === 'true',
-      groupBy: (queryParams.groupBy as 'project' | 'client' | 'status' | 'date') || 'project',
-      sortBy: queryParams.sortBy || 'actualHours',
+      groupBy: (queryParams.groupBy as 'project' | 'date' | 'client') || 'project',
+      sortBy: queryParams.sortBy || 'totalHours',
       sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
       limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
     };
 
     // Generate cache key
-    const cacheKey = generateCacheKey('project-report', filters, userId);
+    const cacheKey = generateCacheKey('project-report', filters);
     
     // Check cache first
     const cachedReport = await getCachedReport(cacheKey);
@@ -130,7 +133,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateProjectReport(filters, userId, userRole);
+    const reportData = await generateProjectReport(filters);
     
     // Cache the report (30 minutes TTL for project reports)
     await cacheReport(reportData, 1800);
@@ -144,9 +147,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateProjectReport(filters: ProjectReportFilters, userId: string, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  userRole: string): Promise<ProjectReportResponse> {
+async function generateProjectReport(filters: ProjectReportFilters): Promise<ProjectReportResponse> {
   const reportId = `project-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -279,7 +280,6 @@ async function transformProjectData(
   projects: Record<string, unknown>[],
   timeEntries: Record<string, unknown>[],
   clients: Map<string, Record<string, unknown>>,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filters: ProjectReportFilters
 ): Promise<ProjectReportDataItem[]> {
   // Group time entries by project
@@ -328,7 +328,7 @@ async function transformProjectData(
 
     // Check status flags
     const isOverBudget = actualCost > budgetCost;
-    const isOverdue = project.endDate && new Date(project.endDate as string) < new Date() && project.status === 'active';
+    const isOverdue = Boolean(project.endDate && new Date(project.endDate as string) < new Date() && project.status === 'active');
 
     // Get recent activity
     const recentActivity = getRecentActivity(projectTimeEntries);
@@ -388,7 +388,7 @@ function getRecentActivity(timeEntries: Record<string, unknown>[]): string {
   const sortedEntries = timeEntries.sort((a, b) => (b.date as string).localeCompare(a.date as string));
   const mostRecent = sortedEntries[0];
   
-  const daysSince = Math.floor((Date.now() - new Date(mostRecent.date as string).getTime()) / (24 * 60 * 60 * 1000));
+  const daysSince = Math.floor((Date.now() - new Date(mostRecent?.date as string).getTime()) / (24 * 60 * 60 * 1000));
   
   if (daysSince === 0) return 'Active today';
   if (daysSince === 1) return 'Active yesterday';
@@ -436,8 +436,8 @@ function calculateProjectSummary(data: ProjectReportDataItem[]): ProjectReportSu
 
 function sortProjectData(data: ProjectReportDataItem[], sortBy: string, sortOrder: string): ProjectReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: unknown = a[sortBy as keyof ProjectReportDataItem];
-    let bValue: unknown = b[sortBy as keyof ProjectReportDataItem];
+    let aValue: any = a[sortBy as keyof ProjectReportDataItem];
+    let bValue: any = b[sortBy as keyof ProjectReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
@@ -469,9 +469,9 @@ function applyPagination(data: ProjectReportDataItem[], offset: number, limit: n
   };
 }
 
-function generateCacheKey(reportType: string, filters: ProjectReportFilters, userId: string): string {
-  const filterString = JSON.stringify({ ...filters, userId });
-  return createHash('md5').update(`${reportType}-${filterString}`).digest('hex');
+function generateCacheKey(reportType: string, filters: ProjectReportFilters): string {
+  const filterString = JSON.stringify(filters);
+  return `${reportType}-${createHash('sha256').update(filterString).digest('hex')}`;
 }
 
 async function getCachedReport(cacheKey: string): Promise<ProjectReportResponse | null> {

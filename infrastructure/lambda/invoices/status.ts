@@ -1,14 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
-import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
+import { createErrorResponse } from '../shared/response-helper';
 import { 
   Invoice,
   Payment,
-  RecordPaymentRequest,
-  InvoiceErrorCodes
+  RecordPaymentRequest
 } from '../shared/types';
-import { ValidationService } from '../shared/validation';
 import { InvoiceRepository } from '../shared/invoice-repository';
+
+const invoiceRepository = new InvoiceRepository();
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -21,119 +21,127 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
 
-    // Get invoice ID from path parameters
+    // Extract invoice ID from path parameters
     const invoiceId = event.pathParameters?.id;
     if (!invoiceId) {
-      return createErrorResponse(400, 'MISSING_PARAMETER', 'Invoice ID is required');
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Invoice ID is required');
     }
 
     // Parse request body
-    const requestBody = JSON.parse(event.body || '{}');
-    
-    // Determine the operation type
-    const operation = requestBody.operation || 'updateStatus';
-    
-    const invoiceRepository = new InvoiceRepository();
+    if (!event.body) {
+      return createErrorResponse(400, 'INVALID_REQUEST', 'Request body is required');
+    }
 
-    // Check if invoice exists
+    const requestBody = JSON.parse(event.body);
+    const operation = requestBody.operation as 'updateStatus' | 'recordPayment';
+
+    // Get existing invoice
     const existingInvoice = await invoiceRepository.getInvoiceById(invoiceId);
     if (!existingInvoice) {
-      return createErrorResponse(404, InvoiceErrorCodes.INVOICE_NOT_FOUND, 'Invoice not found');
+      return createErrorResponse(404, 'INVOICE_NOT_FOUND', 'Invoice not found');
     }
 
-    // Role-based access control
-    if (userRole === 'employee') {
-      // Employees have limited status update permissions - only for invoices they created
-      if (existingInvoice.createdBy !== currentUserId) {
-        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update status for invoices you created');
-      }
-      // Employees can only update to specific statuses (cannot record payments)
-      if (operation === 'recordPayment') {
-        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You do not have permission to record payments');
-      }
-      const allowedEmployeeStatuses = ['draft', 'sent'];
-      if (requestBody.status && !allowedEmployeeStatuses.includes(requestBody.status)) {
-        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', `You can only set status to: ${allowedEmployeeStatuses.join(', ')}`);
-      }
-    } else if (userRole === 'manager') {
-      // Managers can update status for their managed projects/clients
-      // TODO: Implement team/project association check when user teams are implemented
-      // For now, allow managers to update any invoice status and record payments
+    // Apply access control
+    const accessControl = applyAccessControl(existingInvoice, currentUserId, userRole, operation, requestBody.status);
+    if (!accessControl.canAccess) {
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', accessControl.reason || 'You do not have permission to update this invoice');
     }
-    // Admins can update any invoice status and record payments (no additional restrictions)
 
     let updatedInvoice: Invoice;
     let payment: Payment | null = null;
 
-    if (operation === 'recordPayment') {
-      // Validate payment request
-      const validation = ValidationService.validateRecordPaymentRequest(requestBody);
-      if (!validation.isValid) {
-        return createErrorResponse(400, 'VALIDATION_ERROR', validation.errors.join(', '));
-      }
-
-      // Record the payment
-      payment = await invoiceRepository.recordPayment(invoiceId, requestBody as RecordPaymentRequest, currentUserId);
-      
-      // Get the updated invoice (payment recording may have updated the status)
-      updatedInvoice = await invoiceRepository.getInvoiceById(invoiceId) as Invoice;
+    if (operation === 'updateStatus') {
+      updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, { status: requestBody.status });
     } else {
-      // Simple status update
-      if (!requestBody.status) {
-        return createErrorResponse(400, 'VALIDATION_ERROR', 'Status is required');
-      }
-
-      const allowedStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded'];
-      if (!allowedStatuses.includes(requestBody.status)) {
-        return createErrorResponse(400, 'VALIDATION_ERROR', `Status must be one of: ${allowedStatuses.join(', ')}`);
-      }
-
-      // Check business rules for status transitions
-      const canTransition = validateStatusTransition(existingInvoice.status, requestBody.status);
-      if (!canTransition.allowed) {
-        return createErrorResponse(400, 'INVALID_STATUS_TRANSITION', canTransition.reason || 'Invalid status transition');
-      }
-
-      // Update the invoice status
-      const changes: Record<string, unknown> = {
-        status: requestBody.status,
-        updatedAt: new Date().toISOString(),
+      // Record payment
+      const paymentRequest: RecordPaymentRequest = {
+        amount: requestBody.amount,
+        paymentDate: requestBody.paymentDate,
+        paymentMethod: requestBody.paymentMethod,
+        reference: requestBody.reference,
+        notes: requestBody.notes,
+        externalPaymentId: requestBody.externalPaymentId,
+        processorFee: requestBody.processorFee
       };
-      updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, changes);
+      payment = await invoiceRepository.recordPayment(invoiceId, paymentRequest, currentUserId);
+      updatedInvoice = await invoiceRepository.getInvoiceById(invoiceId) as Invoice;
     }
 
-    const responseData: Record<string, unknown> = {
-      invoice: updatedInvoice,
+    const response = {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify({
+        success: true,
+        data: {
+          invoice: updatedInvoice,
+          payment,
+        },
+      }),
     };
 
-    if (payment) {
-      responseData.payment = payment;
-    }
-
-    const message = operation === 'recordPayment' ? 'Payment recorded successfully' : 'Invoice status updated successfully';
-    
-    // ✅ FIXED: Use standardized response helper
-    return createSuccessResponse(responseData, 200, message);
+    return response;
 
   } catch (error) {
     console.error('Error updating invoice status:', error);
-    
-    // Handle specific business logic errors
-    if (error instanceof Error) {
-      if (error.message.includes('Invoice not found')) {
-        return createErrorResponse(404, InvoiceErrorCodes.INVOICE_NOT_FOUND, 'Invoice not found');
-      }
-      if (error.message.includes('Payment amount exceeds invoice total')) {
-        return createErrorResponse(400, InvoiceErrorCodes.PAYMENT_EXCEEDS_INVOICE, 'Payment amount exceeds invoice total');
-      }
-      if (error.message.includes('Payment already recorded')) {
-        return createErrorResponse(400, InvoiceErrorCodes.PAYMENT_ALREADY_RECORDED, 'Payment has already been recorded');
-      }
-    }
-    
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to update invoice status');
   }
 };
+
+function applyAccessControl(
+  invoice: Invoice,
+  currentUserId: string,
+  userRole: string,
+  operation: 'updateStatus' | 'recordPayment',
+  newStatus?: string
+): { canAccess: boolean; reason?: string } {
+  // Check basic access permissions
+  if (userRole === 'employee') {
+    // Employees have limited status update permissions - only for invoices they created
+    if (invoice.createdBy !== currentUserId) {
+      return {
+        canAccess: false,
+        reason: 'You can only update status for invoices you created',
+      };
+    }
+
+    // Employees cannot record payments
+    if (operation === 'recordPayment') {
+      return {
+        canAccess: false,
+        reason: 'You do not have permission to record payments',
+      };
+    }
+
+    // Employees can only update to specific statuses
+    const allowedEmployeeStatuses = ['draft', 'sent'];
+    if (newStatus && !allowedEmployeeStatuses.includes(newStatus)) {
+      return {
+        canAccess: false,
+        reason: `You can only set status to: ${allowedEmployeeStatuses.join(', ')}`,
+      };
+    }
+  } else if (userRole === 'manager') {
+    // TODO: Implement team/project association check when user teams are implemented
+    // For now, allow managers to update any invoice status and record payments
+  }
+  // Admins can update any invoice status and record payments (no additional restrictions)
+
+  // Validate status transition if this is a status update
+  if (operation === 'updateStatus' && newStatus) {
+    const validation = validateStatusTransition(invoice.status, newStatus);
+    if (!validation.allowed) {
+      return {
+        canAccess: false,
+        reason: validation.reason,
+      };
+    }
+  }
+
+  return { canAccess: true };
+}
 
 /**
  * Validates status transitions based on business rules

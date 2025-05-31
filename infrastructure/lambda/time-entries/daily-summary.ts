@@ -164,7 +164,7 @@ async function generateDailySummaries(
     const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     
     // Get time entries for this date using repository pattern
-    const timeEntries = await getTimeEntriesForDate(request.userId!, dateStr, timeEntryRepo);
+    const timeEntries = await getTimeEntriesForDate(request.userId!, dateStr!, timeEntryRepo);
     
     // Get work schedule for this day
     const daySchedule = workSchedule?.schedule[dayOfWeek as keyof typeof workSchedule.schedule];
@@ -172,11 +172,15 @@ async function generateDailySummaries(
     
     // Calculate summary
     const summary = await calculateDailySummary(
-      dateStr,
+      dateStr!,
       dayOfWeek,
       timeEntries,
       targetHours,
-      daySchedule,
+      daySchedule ? {
+        targetHours: daySchedule.targetHours,
+        start: daySchedule.start,
+        end: daySchedule.end
+      } : null,
       request.includeGaps || false
     );
     
@@ -299,8 +303,8 @@ function calculateWorkingHours(timeEntries: TimeEntry[]): {
     return { firstEntry: null, lastEntry: null, totalSpan: null };
   }
 
-  const firstEntry = sortedEntries[0].startTime!.substring(11, 16); // Extract HH:MM
-  const lastEntry = sortedEntries[sortedEntries.length - 1].endTime?.substring(11, 16) || firstEntry;
+  const firstEntry = sortedEntries[0]?.startTime?.substring(11, 16) || '00:00'; // Extract HH:MM
+  const lastEntry = sortedEntries[sortedEntries.length - 1]?.endTime?.substring(11, 16) || firstEntry;
 
   // Calculate span
   const firstTime = new Date(`2000-01-01T${firstEntry}:00`);
@@ -329,8 +333,10 @@ function calculateTimeGaps(timeEntries: TimeEntry[], daySchedule: DaySchedule | 
 
   // Find gaps between entries
   for (let i = 0; i < sortedEntries.length - 1; i++) {
-    const currentEnd = sortedEntries[i].endTime!.substring(11, 16);
-    const nextStart = sortedEntries[i + 1].startTime!.substring(11, 16);
+    const currentEnd = sortedEntries[i]?.endTime?.substring(11, 16);
+    const nextStart = sortedEntries[i + 1]?.startTime?.substring(11, 16);
+    
+    if (!currentEnd || !nextStart) continue;
     
     const currentEndTime = new Date(`2000-01-01T${currentEnd}:00`);
     const nextStartTime = new Date(`2000-01-01T${nextStart}:00`);

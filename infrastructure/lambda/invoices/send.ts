@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { 
-  SendInvoiceRequest,
   InvoiceErrorCodes
 } from '../shared/types';
 import { InvoiceRepository } from '../shared/invoice-repository';
@@ -15,8 +14,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
+    const userRole = getAuthenticatedUser(event)?.role || 'employee';
 
     // Get invoice ID from path parameters
     const invoiceId = event.pathParameters?.id;
@@ -25,7 +23,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Parse request body
-    const requestBody = JSON.parse(event.body || '{}');
     
     // Validation will be handled by the repository method
     
@@ -63,11 +60,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // 4. Update invoice status and sent timestamp
 
     // For now, just update the invoice status to 'sent'
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _sendData = requestBody as SendInvoiceRequest; // Store for future email implementation
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _now = new Date().toISOString(); // Store for future timestamp tracking
-    
     const updatedInvoice = await invoiceRepository.updateInvoice(invoiceId, {
       status: 'sent',
     });

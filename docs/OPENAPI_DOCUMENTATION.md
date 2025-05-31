@@ -13,7 +13,7 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 ## 📍 **Live Documentation URLs**
 
 ### **Development Environment**
-- **Documentation URL**: https://djfreip4iwrq0.cloudfront.net
+- **Documentation URL**: https://d3v11sebghzupb.cloudfront.net/
 - **API Base URL**: https://time-api-dev.aerotage.com/
 
 ### **Production Environment** (When deployed)
@@ -24,7 +24,7 @@ The Aerotage Time Reporting API now features a comprehensive OpenAPI (Swagger) d
 
 ### **Infrastructure Components**
 1. **S3 Bucket**: `aerotage-api-docs-dev` - Hosts static documentation files
-2. **CloudFront Distribution**: `E2OTETJI5CMZ09` - Global CDN for fast access
+2. **CloudFront Distribution**: `d3v11sebghzupb` - Global CDN for fast access
 3. **Swagger UI**: Latest version (5.10.3) with custom styling
 4. **OpenAPI Specification**: YAML source converted to JSON for deployment
 

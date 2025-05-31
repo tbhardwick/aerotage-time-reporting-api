@@ -2,6 +2,24 @@ import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, UpdateComm
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { User } from './types';
 
+type DynamoDBExpressionValue = string | number | boolean | null | undefined | { [key: string]: unknown };
+
+interface WorkSchedule {
+  userId: string;
+  schedule: {
+    monday?: { start: string; end: string };
+    tuesday?: { start: string; end: string };
+    wednesday?: { start: string; end: string };
+    thursday?: { start: string; end: string };
+    friday?: { start: string; end: string };
+    saturday?: { start: string; end: string };
+    sunday?: { start: string; end: string };
+  };
+  timezone: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateUserData {
   email: string;
   name: string;
@@ -143,7 +161,7 @@ export class UserRepository {
         return null;
       }
 
-      return this.mapDynamoItemToUser(result.Items[0]);
+      return this.mapDynamoItemToUser(result.Items[0] as Record<string, DynamoDBExpressionValue>);
     } catch (error) {
       console.error('Error getting user by email:', error);
       throw new Error('Failed to get user');
@@ -181,7 +199,7 @@ export class UserRepository {
     // Build update expression
     const updateExpressions: string[] = [];
     const expressionAttributeNames: Record<string, string> = {};
-    const expressionAttributeValues: Record<string, any> = {};
+    const expressionAttributeValues: Record<string, DynamoDBExpressionValue> = {};
 
     Object.entries(updates).forEach(([key, value]) => {
       if (key !== 'id' && key !== 'createdAt' && value !== undefined) {
@@ -234,7 +252,7 @@ export class UserRepository {
   /**
    * Gets a user work schedule
    */
-  async getUserWorkSchedule(userId: string): Promise<any | null> {
+  async getUserWorkSchedule(userId: string): Promise<WorkSchedule | null> {
     try {
       const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE;
       if (!USER_WORK_SCHEDULES_TABLE) {
@@ -256,50 +274,42 @@ export class UserRepository {
         return null;
       }
 
-      return {
-        userId: result.Item.userId,
-        schedule: JSON.parse(result.Item.schedule),
-        timezone: result.Item.timezone,
-        weeklyTargetHours: result.Item.weeklyTargetHours,
-        createdAt: result.Item.createdAt,
-        updatedAt: result.Item.updatedAt,
-      };
+      return result.Item as WorkSchedule;
     } catch (error) {
       console.error('Error getting user work schedule:', error);
-      return null;
+      throw new Error('Failed to get user work schedule');
     }
   }
 
   /**
    * Updates a user work schedule
    */
-  async updateUserWorkSchedule(schedule: any): Promise<void> {
+  async updateUserWorkSchedule(schedule: WorkSchedule): Promise<void> {
     try {
       const USER_WORK_SCHEDULES_TABLE = process.env.USER_WORK_SCHEDULES_TABLE;
       if (!USER_WORK_SCHEDULES_TABLE) {
         throw new Error('USER_WORK_SCHEDULES_TABLE environment variable not set');
       }
 
-      const item = {
-        PK: `USER#${schedule.userId}`,
-        SK: 'WORK_SCHEDULE',
-        userId: schedule.userId,
-        schedule: JSON.stringify(schedule.schedule),
-        timezone: schedule.timezone,
-        weeklyTargetHours: schedule.weeklyTargetHours,
-        createdAt: schedule.createdAt,
-        updatedAt: schedule.updatedAt,
+      const now = new Date().toISOString();
+      const updatedSchedule = {
+        ...schedule,
+        updatedAt: now,
       };
 
       const command = new PutCommand({
         TableName: USER_WORK_SCHEDULES_TABLE,
-        Item: item,
+        Item: {
+          PK: `USER#${schedule.userId}`,
+          SK: 'WORK_SCHEDULE',
+          ...updatedSchedule,
+        },
       });
 
       await this.docClient.send(command);
     } catch (error) {
       console.error('Error updating user work schedule:', error);
-      throw new Error('Failed to update work schedule');
+      throw new Error('Failed to update user work schedule');
     }
   }
 
@@ -313,39 +323,34 @@ export class UserRepository {
   /**
    * Maps DynamoDB item to User object
    */
-  private mapDynamoItemToUser(item: Record<string, any>): User {
-    // Helper function to safely parse JSON or return object if already parsed
-    const safeJsonParse = (value: any, defaultValue: any) => {
+  private mapDynamoItemToUser(item: Record<string, DynamoDBExpressionValue>): User {
+    const safeJsonParse = <T>(value: string | undefined, defaultValue: T): T => {
       if (!value) return defaultValue;
-      if (typeof value === 'string') {
-        try {
-          return JSON.parse(value);
-        } catch (error) {
-          console.warn('Failed to parse JSON:', value, error);
-          return defaultValue;
-        }
+      try {
+        return JSON.parse(value) as T;
+      } catch {
+        return defaultValue;
       }
-      return value; // Already an object
     };
 
     return {
-      id: item.id,
-      email: item.email,
-      name: item.name,
-      role: item.role,
-      department: item.department,
-      jobTitle: item.jobTitle,
-      hourlyRate: item.hourlyRate,
-      permissions: safeJsonParse(item.permissions, { features: [], projects: [] }),
-      invitationId: item.invitationId,
-      invitedBy: item.invitedBy,
-      isActive: item.isActive,
-      startDate: item.startDate,
-      preferences: safeJsonParse(item.preferences, { theme: 'light', notifications: true, timezone: 'UTC' }),
-      contactInfo: safeJsonParse(item.contactInfo, undefined),
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      createdBy: item.createdBy,
+      id: item.id as string,
+      email: item.email as string,
+      name: item.name as string,
+      role: item.role as 'admin' | 'manager' | 'employee',
+      department: item.department as string | undefined,
+      jobTitle: item.jobTitle as string | undefined,
+      hourlyRate: item.hourlyRate as number | undefined,
+      permissions: safeJsonParse(item.permissions as string | undefined, { features: [], projects: [] }),
+      invitationId: item.invitationId as string | undefined,
+      invitedBy: item.invitedBy as string | undefined,
+      isActive: item.isActive as boolean,
+      startDate: item.startDate as string,
+      preferences: safeJsonParse(item.preferences as string | undefined, { theme: 'light', notifications: true, timezone: 'UTC' }),
+      contactInfo: safeJsonParse(item.contactInfo as string | undefined, undefined),
+      createdAt: item.createdAt as string,
+      updatedAt: item.updatedAt as string,
+      createdBy: item.createdBy as string,
     };
   }
 } 

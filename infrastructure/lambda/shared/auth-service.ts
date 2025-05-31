@@ -117,15 +117,16 @@ export class AuthService {
    * Validates JWT token signature and expiration
    */
   private static async validateJwtToken(token: string): Promise<AuthValidationResult> {
-    return new Promise((resolve): void => {
+    return new Promise((resolve, reject): void => {
       const getKey = (header: jwt.JwtHeader, callback: (err: Error | null, key?: string) => void): void => {
-        this.jwksClient.getSigningKey(header.kid as string, (err: Error | null, key: jwksClient.SigningKey) => {
+        this.jwksClient.getSigningKey(header.kid as string, (err: Error | null, key?: jwksClient.SigningKey) => {
           if (err) {
-            console.error('Error getting signing key:', err);
-            callback(err);
-            return;
+            return reject(err);
           }
-          const signingKey = key?.getPublicKey();
+          if (!key) {
+            return reject(new Error('Unable to find signing key'));
+          }
+          const signingKey = key.getPublicKey();
           callback(null, signingKey);
         });
       };

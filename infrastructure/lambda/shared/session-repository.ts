@@ -1,6 +1,64 @@
 import { DynamoDBDocumentClient, QueryCommand, DeleteCommand, UpdateCommand, GetCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
+interface SessionLocation {
+  city: string;
+  country: string;
+}
+
+interface FormattedSession {
+  id: string;
+  ipAddress: string;
+  userAgent: string;
+  loginTime: string;
+  lastActivity: string;
+  isCurrent: boolean;
+  location?: SessionLocation;
+}
+
+interface UserSecuritySettings {
+  sessionTimeout: number;
+  allowMultipleSessions: boolean;
+  maxFailedAttempts: number;
+  lockoutDuration: number;
+  passwordHistorySize: number;
+  requirePasswordChange: boolean;
+  lastPasswordChange: string;
+  failedLoginAttempts: number;
+  lockedUntil?: string;
+  accountLockedUntil?: string;
+  createdAt: string;
+  twoFactorEnabled: boolean;
+  requirePasswordChangeEvery: number;
+  passwordLastChanged: string;
+  twoFactorSecret?: string;
+  backupCodes?: string[];
+}
+
+interface SessionData {
+  sessionId: string;
+  userId: string;
+  isActive: boolean;
+  expiresAt: string;
+  lastActivity: string;
+  loginTime: string;
+  userAgent: string;
+  ipAddress: string;
+  sessionTimeout: number;
+  locationData?: string | SessionLocation;
+}
+
+interface SecuritySettingsUpdate {
+  sessionTimeout?: number;
+  allowMultipleSessions?: boolean;
+  maxFailedAttempts?: number;
+  lockoutDuration?: number;
+  passwordHistorySize?: number;
+  requirePasswordChange?: boolean;
+  twoFactorEnabled?: boolean;
+  requirePasswordChangeEvery?: number;
+}
+
 export interface UserSession {
   sessionId: string;
   userId: string;
@@ -11,6 +69,7 @@ export interface UserSession {
   userAgent: string;
   ipAddress: string;
   sessionTimeout: number;
+  locationData?: string | SessionLocation;
 }
 
 export interface SessionValidationResult {
@@ -189,7 +248,7 @@ export class SessionRepository {
         return bTime - aTime;
       });
 
-      return matchingSessions[0];
+      return matchingSessions[0] || null;
     } catch (error) {
       console.error('Error finding current session:', error);
       return null;
@@ -230,17 +289,17 @@ export class SessionRepository {
   /**
    * Get formatted sessions for a user (for UI display)
    */
-  async getFormattedSessionsForUser(userId: string, currentUserAgent: string, currentIP: string, currentSessionId?: string): Promise<any[]> {
+  async getFormattedSessionsForUser(userId: string, currentUserAgent: string, currentIP: string, currentSessionId?: string): Promise<FormattedSession[]> {
     try {
       const rawSessions = await this.getActiveSessionsForUser(userId);
 
       // Transform to UI format
       const sessions = rawSessions.map(item => {
         // Parse location data if it exists
-        let location: { city: string; country: string } | undefined;
-        if ((item as any).locationData) {
+        let location: SessionLocation | undefined;
+        if (item.locationData) {
           try {
-            const locationData = (item as any).locationData;
+            const locationData = item.locationData;
             location = typeof locationData === 'string' 
               ? JSON.parse(locationData) 
               : locationData;
@@ -278,7 +337,7 @@ export class SessionRepository {
           });
           
           // The most recently active matching session is the current one
-          identifiedCurrentSession = matchingSessions[0].id;
+          identifiedCurrentSession = matchingSessions[0]?.id || null;
         }
       }
       
@@ -528,7 +587,7 @@ export class SessionRepository {
   /**
    * Create a new session
    */
-  async createSession(sessionData: any): Promise<void> {
+  async createSession(sessionData: SessionData): Promise<void> {
     try {
       const command = new PutCommand({
         TableName: this.userSessionsTableName,
@@ -545,7 +604,7 @@ export class SessionRepository {
   /**
    * Get user security settings
    */
-  async getUserSecuritySettings(userId: string): Promise<{ sessionTimeout: number; allowMultipleSessions: boolean }> {
+  async getUserSecuritySettings(userId: string): Promise<UserSecuritySettings> {
     try {
       const USER_SECURITY_SETTINGS_TABLE = process.env.USER_SECURITY_SETTINGS_TABLE;
       if (!USER_SECURITY_SETTINGS_TABLE) {
@@ -553,6 +612,16 @@ export class SessionRepository {
         return {
           sessionTimeout: 480, // 8 hours
           allowMultipleSessions: true,
+          maxFailedAttempts: 5,
+          lockoutDuration: 15 * 60 * 1000, // 15 minutes
+          passwordHistorySize: 5,
+          requirePasswordChange: true,
+          lastPasswordChange: new Date().toISOString(),
+          failedLoginAttempts: 0,
+          createdAt: new Date().toISOString(),
+          twoFactorEnabled: false,
+          requirePasswordChangeEvery: 0,
+          passwordLastChanged: new Date().toISOString(),
         };
       }
 
@@ -568,10 +637,23 @@ export class SessionRepository {
       const result = await this.docClient.send(command);
       
       if (result.Items && result.Items.length > 0) {
-        const settings = result.Items[0];
+        const settings = result.Items[0] as any;
         return {
-          sessionTimeout: settings.sessionTimeout || 480, // Default 8 hours
-          allowMultipleSessions: settings.allowMultipleSessions !== false, // Default true
+          sessionTimeout: settings?.sessionTimeout || 480, // Default 8 hours
+          allowMultipleSessions: settings?.allowMultipleSessions !== false, // Default true
+          maxFailedAttempts: settings?.maxFailedAttempts || 5,
+          lockoutDuration: settings?.lockoutDuration || (15 * 60 * 1000), // Default 15 minutes
+          passwordHistorySize: settings?.passwordHistorySize || 5,
+          requirePasswordChange: settings?.requirePasswordChange !== false, // Default true
+          lastPasswordChange: settings?.lastPasswordChange || new Date().toISOString(),
+          failedLoginAttempts: settings?.failedLoginAttempts || 0,
+          lockedUntil: settings?.lockedUntil,
+          createdAt: settings?.createdAt || new Date().toISOString(),
+          twoFactorEnabled: settings?.twoFactorEnabled !== false,
+          requirePasswordChangeEvery: settings?.requirePasswordChangeEvery || 0,
+          passwordLastChanged: settings?.passwordLastChanged || new Date().toISOString(),
+          twoFactorSecret: settings?.twoFactorSecret,
+          backupCodes: settings?.backupCodes,
         };
       }
     } catch (error) {
@@ -582,6 +664,16 @@ export class SessionRepository {
     return {
       sessionTimeout: 480, // 8 hours
       allowMultipleSessions: true,
+      maxFailedAttempts: 5,
+      lockoutDuration: 15 * 60 * 1000, // 15 minutes
+      passwordHistorySize: 5,
+      requirePasswordChange: true,
+      lastPasswordChange: new Date().toISOString(),
+      failedLoginAttempts: 0,
+      createdAt: new Date().toISOString(),
+      twoFactorEnabled: false,
+      requirePasswordChangeEvery: 0,
+      passwordLastChanged: new Date().toISOString(),
     };
   }
 
@@ -732,12 +824,25 @@ export class SessionRepository {
   /**
    * Get user security settings by user ID
    */
-  async getUserSecuritySettingsById(userId: string): Promise<any> {
+  async getUserSecuritySettingsById(userId: string): Promise<UserSecuritySettings> {
     try {
       const USER_SECURITY_SETTINGS_TABLE = process.env.USER_SECURITY_SETTINGS_TABLE;
       if (!USER_SECURITY_SETTINGS_TABLE) {
         console.warn('USER_SECURITY_SETTINGS_TABLE not configured');
-        return null;
+        return {
+          sessionTimeout: 480, // 8 hours
+          allowMultipleSessions: true,
+          maxFailedAttempts: 5,
+          lockoutDuration: 15 * 60 * 1000, // 15 minutes
+          passwordHistorySize: 5,
+          requirePasswordChange: true,
+          lastPasswordChange: new Date().toISOString(),
+          failedLoginAttempts: 0,
+          createdAt: new Date().toISOString(),
+          twoFactorEnabled: false,
+          requirePasswordChangeEvery: 0,
+          passwordLastChanged: new Date().toISOString(),
+        };
       }
 
       const command = new GetCommand({
@@ -746,10 +851,36 @@ export class SessionRepository {
       });
 
       const result = await this.docClient.send(command);
-      return result.Item || null;
+      return result.Item as UserSecuritySettings || {
+        sessionTimeout: 480, // 8 hours
+        allowMultipleSessions: true,
+        maxFailedAttempts: 5,
+        lockoutDuration: 15 * 60 * 1000, // 15 minutes
+        passwordHistorySize: 5,
+        requirePasswordChange: true,
+        lastPasswordChange: new Date().toISOString(),
+        failedLoginAttempts: 0,
+        createdAt: new Date().toISOString(),
+        twoFactorEnabled: false,
+        requirePasswordChangeEvery: 0,
+        passwordLastChanged: new Date().toISOString(),
+      };
     } catch (error) {
       console.error('Error getting security settings:', error);
-      return null;
+      return {
+        sessionTimeout: 480, // 8 hours
+        allowMultipleSessions: true,
+        maxFailedAttempts: 5,
+        lockoutDuration: 15 * 60 * 1000, // 15 minutes
+        passwordHistorySize: 5,
+        requirePasswordChange: true,
+        lastPasswordChange: new Date().toISOString(),
+        failedLoginAttempts: 0,
+        createdAt: new Date().toISOString(),
+        twoFactorEnabled: false,
+        requirePasswordChangeEvery: 0,
+        passwordLastChanged: new Date().toISOString(),
+      };
     }
   }
 
@@ -771,15 +902,8 @@ export class SessionRepository {
       
       const settings = {
         userId,
-        twoFactorEnabled: false,
-        sessionTimeout: 480, // 8 hours
-        allowMultipleSessions: true,
-        requirePasswordChangeEvery: 0, // Never
-        failedLoginAttempts: 0,
-        createdAt: existingSettings?.createdAt || now,
-        ...existingSettings, // Keep existing settings
+        ...existingSettings, // Keep existing settings first
         passwordLastChanged: now, // Update this field
-        updatedAt: now, // Update timestamp
       };
 
       await this.docClient.send(new PutCommand({
@@ -807,7 +931,6 @@ export class SessionRepository {
         ...existingSettings,
         failedLoginAttempts: 0,
         accountLockedUntil: undefined, // Remove lockout
-        updatedAt: new Date().toISOString(),
       };
 
       await this.docClient.send(new PutCommand({
@@ -822,43 +945,43 @@ export class SessionRepository {
   /**
    * Update user security settings
    */
-  async updateUserSecuritySettings(userId: string, updates: any): Promise<any> {
+  async updateUserSecuritySettings(userId: string, updates: SecuritySettingsUpdate): Promise<UserSecuritySettings> {
     try {
       const USER_SECURITY_SETTINGS_TABLE = process.env.USER_SECURITY_SETTINGS_TABLE;
       if (!USER_SECURITY_SETTINGS_TABLE) {
         throw new Error('USER_SECURITY_SETTINGS_TABLE not configured');
       }
 
-      // Get existing settings
-      const existingSettings = await this.getUserSecuritySettingsById(userId);
       const now = new Date().toISOString();
-
-      // Merge with existing settings or create new ones
-      const updatedSettings = {
-        userId,
-        twoFactorEnabled: updates.twoFactorEnabled ?? existingSettings?.twoFactorEnabled ?? false,
-        sessionTimeout: updates.sessionTimeout ?? existingSettings?.sessionTimeout ?? 480,
-        allowMultipleSessions: updates.allowMultipleSessions ?? existingSettings?.allowMultipleSessions ?? true,
-        requirePasswordChangeEvery: updates.requirePasswordChangeEvery ?? existingSettings?.requirePasswordChangeEvery ?? 0,
-        passwordLastChanged: existingSettings?.passwordLastChanged || now,
-        failedLoginAttempts: existingSettings?.failedLoginAttempts || 0,
-        twoFactorSecret: existingSettings?.twoFactorSecret,
-        backupCodes: existingSettings?.backupCodes,
-        accountLockedUntil: existingSettings?.accountLockedUntil,
-        createdAt: existingSettings?.createdAt || now,
-        updatedAt: now,
+      const settings: UserSecuritySettings = {
+        twoFactorEnabled: updates.twoFactorEnabled ?? false,
+        sessionTimeout: updates.sessionTimeout ?? 480,
+        allowMultipleSessions: updates.allowMultipleSessions ?? true,
+        requirePasswordChangeEvery: updates.requirePasswordChangeEvery ?? 0,
+        passwordLastChanged: now,
+        failedLoginAttempts: 0,
+        maxFailedAttempts: updates.maxFailedAttempts ?? 5,
+        lockoutDuration: updates.lockoutDuration ?? (15 * 60 * 1000),
+        passwordHistorySize: updates.passwordHistorySize ?? 5,
+        requirePasswordChange: updates.requirePasswordChange ?? false,
+        lastPasswordChange: now,
+        createdAt: now
       };
 
-      // Save updated settings
-      await this.docClient.send(new PutCommand({
+      const command = new PutCommand({
         TableName: USER_SECURITY_SETTINGS_TABLE,
-        Item: updatedSettings,
-      }));
+        Item: {
+          userId,
+          ...settings,
+          updatedAt: now
+        }
+      });
 
-      return updatedSettings;
+      await this.docClient.send(command);
+      return settings;
     } catch (error) {
-      console.error('Error updating user security settings:', error);
-      throw new Error('Failed to update security settings');
+      console.error('Error updating security settings:', error);
+      throw error;
     }
   }
 } 

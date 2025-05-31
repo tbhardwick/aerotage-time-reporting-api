@@ -114,11 +114,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
+    const defaultStartDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+    const defaultEndDate = new Date().toISOString().split('T')[0]!;
+
     const filters: ClientReportFilters = {
       dateRange: {
-        startDate: queryParams.startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate: queryParams.endDate || new Date().toISOString().split('T')[0],
-        preset: queryParams.preset as 'week' | 'month' | 'quarter' | 'year' | undefined,
+        startDate: queryParams.startDate || defaultStartDate,
+        endDate: queryParams.endDate || defaultEndDate,
+        preset: queryParams.preset as "week" | "month" | "quarter" | "year" | undefined,
       },
       clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
       includeProjects: queryParams.includeProjects === 'true',
@@ -131,7 +134,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
     // Generate cache key
-    const cacheKey = generateCacheKey('client-report', filters, userId);
+    const cacheKey = generateCacheKey(filters);
     
     // Check cache first
     const cachedReport = await getCachedReport(cacheKey);
@@ -141,7 +144,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Generate new report
-    const reportData = await generateClientReport(filters, userId);
+    const reportData = await generateClientReport(filters);
     
     // Cache the report (30 minutes TTL for client reports)
     await cacheReport(reportData, 1800);
@@ -155,7 +158,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-async function generateClientReport(filters: ClientReportFilters, userId: string): Promise<ClientReportResponse> {
+async function generateClientReport(filters: ClientReportFilters): Promise<ClientReportResponse> {
   const reportId = `client-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const generatedAt = new Date().toISOString();
 
@@ -188,11 +191,6 @@ async function generateClientReport(filters: ClientReportFilters, userId: string
       hasMore: paginatedData.hasMore,
       totalCount: sortedData.length,
       nextCursor: paginatedData.nextCursor,
-    },
-    cacheInfo: {
-      cached: false,
-      cacheKey: 'simplified-cache',
-      expiresAt: new Date(Date.now() + 1800 * 1000).toISOString(),
     },
   };
 }
@@ -421,7 +419,7 @@ function getProjectLastActivity(timeEntries: Record<string, unknown>[]): string 
   if (timeEntries.length === 0) return '';
   
   const sortedEntries = timeEntries.sort((a, b) => (b.date as string).localeCompare(a.date as string));
-  return sortedEntries[0].date as string;
+  return sortedEntries[0]?.date as string || '';
 }
 
 function calculateInvoiceData(invoices: Record<string, unknown>[]): ClientInvoiceData {
@@ -435,11 +433,11 @@ function calculateInvoiceData(invoices: Record<string, unknown>[]): ClientInvoic
 
   // Get last invoice date
   const sortedInvoices = invoices.sort((a, b) => (b.issueDate as string)?.localeCompare(a.issueDate as string) || 0);
-  const lastInvoiceDate = sortedInvoices.length > 0 ? (sortedInvoices[0].issueDate as string) : '';
+  const lastInvoiceDate = sortedInvoices.length > 0 ? (sortedInvoices[0]?.issueDate as string) : '';
 
   // Calculate next invoice due (simplified - 30 days from last invoice)
   const nextInvoiceDue = lastInvoiceDate ? 
-    new Date(new Date(lastInvoiceDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : '';
+    new Date(new Date(lastInvoiceDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]! : '';
 
   return {
     totalInvoiced: Math.round(totalInvoiced * 100) / 100,
@@ -492,6 +490,9 @@ function calculateClientSummary(data: ClientReportDataItem[]): ClientReportSumma
   const sortedByRevenue = [...data].sort((a, b) => b.totalRevenue - a.totalRevenue);
   const sortedByHours = [...data].sort((a, b) => b.totalHours - a.totalHours);
 
+  const topClientByRevenue = sortedByRevenue.length > 0 ? (sortedByRevenue[0]?.clientName || 'N/A') : 'N/A';
+  const topClientByHours = sortedByHours.length > 0 ? (sortedByHours[0]?.clientName || 'N/A') : 'N/A';
+
   return {
     totalClients,
     activeClients,
@@ -499,8 +500,8 @@ function calculateClientSummary(data: ClientReportDataItem[]): ClientReportSumma
     totalHours: Math.round(totalHours * 100) / 100,
     averageRevenuePerClient: Math.round(averageRevenuePerClient * 100) / 100,
     averageHoursPerClient: Math.round(averageHoursPerClient * 100) / 100,
-    topClientByRevenue: sortedByRevenue.length > 0 ? sortedByRevenue[0].clientName : 'N/A',
-    topClientByHours: sortedByHours.length > 0 ? sortedByHours[0].clientName : 'N/A',
+    topClientByRevenue,
+    topClientByHours,
     totalOutstanding: Math.round(totalOutstanding * 100) / 100,
     averageProfitability: Math.round(averageProfitability * 100) / 100,
   };
@@ -508,8 +509,8 @@ function calculateClientSummary(data: ClientReportDataItem[]): ClientReportSumma
 
 function sortClientData(data: ClientReportDataItem[], sortBy: string, sortOrder: string): ClientReportDataItem[] {
   return data.sort((a, b) => {
-    let aValue: unknown = a[sortBy as keyof ClientReportDataItem];
-    let bValue: unknown = b[sortBy as keyof ClientReportDataItem];
+    let aValue: any = a[sortBy as keyof ClientReportDataItem];
+    let bValue: any = b[sortBy as keyof ClientReportDataItem];
     
     if (typeof aValue === 'string') {
       aValue = aValue.toLowerCase();
@@ -541,9 +542,9 @@ function applyPagination(data: ClientReportDataItem[], offset: number, limit: nu
   };
 }
 
-function generateCacheKey(reportType: string, filters: ClientReportFilters, userId: string): string {
-  const filterString = JSON.stringify({ ...filters, userId });
-  return createHash('md5').update(`${reportType}-${filterString}`).digest('hex');
+function generateCacheKey(filters: ClientReportFilters): string {
+  const filterString = JSON.stringify(filters);
+  return createHash('sha256').update(filterString).digest('hex');
 }
 
 async function getCachedReport(cacheKey: string): Promise<ClientReportResponse | null> {

@@ -50,7 +50,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   
   if (xForwardedFor) {
     // X-Forwarded-For can contain multiple IPs, take the first (original client)
-    return xForwardedFor.split(',')[0].trim();
+    return xForwardedFor.split(',')[0]?.trim() || 'unknown';
   }
   
   return xRealIP || cfConnectingIP || sourceIP || 'unknown';

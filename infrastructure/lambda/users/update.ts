@@ -51,39 +51,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const updateData: UpdateUserRequest = JSON.parse(event.body);
 
-    // Authorization check: users can only update their own basic data unless they're admin
-    if (userId !== currentUserId && userRole !== 'admin') {
-      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You can only update your own user data');
-    }
-
-    // Role-based field restrictions
-    const allowedUpdates: Partial<User> = {};
-
-    if (userRole === 'admin') {
-      // Admins can update everything
-      if (updateData.name !== undefined) allowedUpdates.name = updateData.name;
-      if (updateData.role !== undefined) allowedUpdates.role = updateData.role;
-      if (updateData.department !== undefined) allowedUpdates.department = updateData.department;
-      if (updateData.jobTitle !== undefined) allowedUpdates.jobTitle = updateData.jobTitle;
-      if (updateData.hourlyRate !== undefined) allowedUpdates.hourlyRate = updateData.hourlyRate;
-      if (updateData.isActive !== undefined) allowedUpdates.isActive = updateData.isActive;
-      if (updateData.permissions !== undefined) allowedUpdates.permissions = updateData.permissions;
-      if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
-      if (updateData.contactInfo !== undefined) allowedUpdates.contactInfo = updateData.contactInfo;
-    } else if (userId === currentUserId) {
-      // Users can update their own basic information
-      if (updateData.name !== undefined) allowedUpdates.name = updateData.name;
-      if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
-      if (updateData.contactInfo !== undefined) allowedUpdates.contactInfo = updateData.contactInfo;
-      
-      // Users cannot update their own role, permissions, or hourly rate
-      if (updateData.role !== undefined || updateData.permissions !== undefined || updateData.hourlyRate !== undefined) {
-        return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'You cannot update role, permissions, or hourly rate');
-      }
+    // Apply access control and get allowed updates
+    const accessControl = applyAccessControl(updateData, userId, currentUserId, userRole);
+    if (!accessControl.canAccess) {
+      return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', accessControl.reason || 'You do not have permission to update this user');
     }
 
     // Validate that there are updates to make
-    if (Object.keys(allowedUpdates).length === 0) {
+    if (Object.keys(accessControl.allowedUpdates).length === 0) {
       return createErrorResponse(400, 'INVALID_REQUEST', 'No valid updates provided');
     }
 
@@ -95,13 +70,63 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(404, 'USER_NOT_FOUND', 'User not found');
     }
 
-    // Update user
-    const updatedUser = await userRepository.updateUser(userId, allowedUpdates);
+    // Update user with allowed fields
+    const updatedUser = await userRepository.updateUser(userId, accessControl.allowedUpdates);
 
-    return createSuccessResponse({ user: updatedUser }, 200, 'User updated successfully');
+    return createSuccessResponse(updatedUser);
+
   } catch (error) {
     console.error('Error updating user:', error);
-    
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
+    return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to update user');
   }
 };
+
+function applyAccessControl(
+  updateData: UpdateUserRequest,
+  targetUserId: string,
+  currentUserId: string,
+  userRole: string
+): { canAccess: boolean; reason?: string; allowedUpdates: Partial<User> } {
+  // Check basic access permissions
+  if (targetUserId !== currentUserId && userRole !== 'admin') {
+    return {
+      canAccess: false,
+      reason: 'You can only update your own user data',
+      allowedUpdates: {},
+    };
+  }
+
+  const allowedUpdates: Partial<User> = {};
+
+  if (userRole === 'admin') {
+    // Admins can update everything
+    if (updateData.name !== undefined) allowedUpdates.name = updateData.name;
+    if (updateData.role !== undefined) allowedUpdates.role = updateData.role;
+    if (updateData.department !== undefined) allowedUpdates.department = updateData.department;
+    if (updateData.jobTitle !== undefined) allowedUpdates.jobTitle = updateData.jobTitle;
+    if (updateData.hourlyRate !== undefined) allowedUpdates.hourlyRate = updateData.hourlyRate;
+    if (updateData.isActive !== undefined) allowedUpdates.isActive = updateData.isActive;
+    if (updateData.permissions !== undefined) allowedUpdates.permissions = updateData.permissions;
+    if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
+    if (updateData.contactInfo !== undefined) allowedUpdates.contactInfo = updateData.contactInfo;
+  } else if (targetUserId === currentUserId) {
+    // Users can update their own basic information
+    if (updateData.name !== undefined) allowedUpdates.name = updateData.name;
+    if (updateData.preferences !== undefined) allowedUpdates.preferences = updateData.preferences;
+    if (updateData.contactInfo !== undefined) allowedUpdates.contactInfo = updateData.contactInfo;
+
+    // Check for restricted fields
+    if (updateData.role !== undefined || updateData.permissions !== undefined || updateData.hourlyRate !== undefined) {
+      return {
+        canAccess: false,
+        reason: 'You cannot update role, permissions, or hourly rate',
+        allowedUpdates: {},
+      };
+    }
+  }
+
+  return {
+    canAccess: true,
+    allowedUpdates,
+  };
+}

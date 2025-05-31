@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getCurrentUserId, getAuthenticatedUser } from '../../shared/auth-helper';
+import { getCurrentUserId } from '../../shared/auth-helper';
 import { createErrorResponse } from '../../shared/response-helper';
 import { SessionRepository } from '../../shared/session-repository';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,12 @@ import {
   SuccessResponse, 
   ProfileSettingsErrorCodes 
 } from '../../shared/types';
+
+interface SessionCreationRequest {
+  userAgent?: string;
+  loginTime?: string;
+  ipAddress?: string;
+}
 
 const sessionRepo = new SessionRepository();
 
@@ -18,9 +24,6 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (!currentUserId) {
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const user = getAuthenticatedUser(event);
 
     // Extract user ID from path parameters
     const userId = event.pathParameters?.id;
@@ -114,6 +117,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       locationData: location ? JSON.stringify(location) : undefined,
       createdAt: currentTime,
       updatedAt: currentTime,
+      sessionTimeout: securitySettings.sessionTimeout, // Add the missing sessionTimeout property
     };
 
     // Save session using repository
@@ -150,7 +154,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 };
 
-function validateSessionCreationRequest(body: any): { isValid: boolean; message: string } {
+function validateSessionCreationRequest(body: SessionCreationRequest): { isValid: boolean; message: string } {
   // userAgent is required
   if (!body.userAgent || typeof body.userAgent !== 'string') {
     return { isValid: false, message: 'userAgent is required and must be a string' };
@@ -198,7 +202,7 @@ function getClientIP(event: APIGatewayProxyEvent): string {
   
   if (xForwardedFor) {
     // X-Forwarded-For can contain multiple IPs, take the first (original client)
-    return xForwardedFor.split(',')[0].trim();
+    return xForwardedFor.split(',')[0]?.trim() || 'unknown';
   }
   
   return xRealIP || cfConnectingIP || sourceIP || 'unknown';
@@ -215,10 +219,10 @@ async function getLocationFromIP(ipAddress: string): Promise<{ city: string; cou
     const response = await fetch(`http://ip-api.com/json/${ipAddress}?fields=status,city,country`);
     const data = await response.json();
     
-    if (data.status === 'success' && data.city && data.country) {
+    if ((data as any).status === 'success' && (data as any).city && (data as any).country) {
       return {
-        city: data.city,
-        country: data.country
+        city: (data as any).city,
+        country: (data as any).country
       };
     }
   } catch (error) {

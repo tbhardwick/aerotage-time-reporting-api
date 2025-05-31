@@ -306,6 +306,19 @@ export class AnalyticsRepository {
       '30d': 30 * 24 * 60 * 60 * 1000,
     };
     
-    return ranges[timeRange] || ranges['24h'];
+    const result = ranges[timeRange];
+    return result !== undefined ? result : (ranges['24h'] || 24 * 60 * 60 * 1000);
+  }
+
+  private getTimeRangeInHours(timeRange: string): number {
+    const ranges: Record<string, number> = {
+      '1h': 1,
+      '24h': 24,
+      '7d': 24 * 7,
+      '30d': 24 * 30,
+      '90d': 24 * 90,
+    };
+    const result = ranges[timeRange];
+    return result !== undefined ? result : (ranges['24h'] || 24);
   }
 } 

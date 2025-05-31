@@ -33,17 +33,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, 'VALIDATION_ERROR', 'Offset must be non-negative');
     }
 
-    // Role-based access control
-    if (userRole === 'employee') {
-      // Employees can only see active clients
-      filters.isActive = true;
-    }
+    // Apply role-based access control
+    const accessControlledFilters = applyAccessControl(filters, userRole);
 
     // MANDATORY: Use repository pattern instead of direct DynamoDB
     const clientRepository = new ClientRepository();
 
     // Get clients with pagination
-    const result = await clientRepository.listClients(filters);
+    const result = await clientRepository.listClients(accessControlledFilters);
 
     const responseData = {
       items: result.clients,
@@ -62,3 +59,16 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
+
+function applyAccessControl(filters: ClientFilters, userRole: string): ClientFilters {
+  // Create a new filters object to avoid mutation
+  const controlledFilters = { ...filters };
+  
+  // Apply role-based filtering
+  if (userRole === 'employee') {
+    // Employees can only see active clients
+    controlledFilters.isActive = true;
+  }
+
+  return controlledFilters;
+}

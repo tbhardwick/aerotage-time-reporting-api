@@ -47,8 +47,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, ProfileSettingsErrorCodes.INVALID_PROFILE_DATA, 'Request body is required');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { currentPassword, newPassword }: ChangePasswordRequest = JSON.parse(event.body);
+    const { newPassword }: ChangePasswordRequest = JSON.parse(event.body);
 
     // Validate password requirements
     const passwordValidation = validatePassword(newPassword);

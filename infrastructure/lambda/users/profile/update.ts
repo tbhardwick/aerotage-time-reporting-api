@@ -119,7 +119,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         emergencyContact: profileData.contactInfo.emergencyContact,
       } : undefined,
       profilePicture: profileData.profilePicture,
-      startDate: profileData.startDate,
+      startDate: profileData.startDate || currentTimestamp.split('T')[0]!,
       lastLogin: profileData.lastLogin,
       isActive: profileData.isActive,
       createdAt: profileData.createdAt,

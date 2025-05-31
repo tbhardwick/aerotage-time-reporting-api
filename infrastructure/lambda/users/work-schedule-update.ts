@@ -65,7 +65,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     // Get existing work schedule or create default using repository
-    let existingSchedule = await userRepo.getUserWorkSchedule(targetUserId);
+    let existingSchedule: UserWorkSchedule | null = await userRepo.getUserWorkSchedule(targetUserId) as UserWorkSchedule | null;
     if (!existingSchedule) {
       existingSchedule = createDefaultWorkSchedule(targetUserId);
     }
@@ -74,7 +74,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const updatedSchedule = applyUpdates(existingSchedule, updateRequest);
 
     // Save updated schedule using repository
-    await userRepo.updateUserWorkSchedule(updatedSchedule);
+    await userRepo.updateUserWorkSchedule(updatedSchedule as any);
 
     return createSuccessResponse(updatedSchedule, 200, 'Work schedule updated successfully');
 

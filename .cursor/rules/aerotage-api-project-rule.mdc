@@ -154,6 +154,45 @@ const createLambdaFunction = (name: string, handler: string, description: string
 - ❌ Direct Cognito calls outside shared helpers
 - ❌ Manual JWT validation
 
+## 🔨 MANDATORY Build Process Rules
+
+### CRITICAL: Build Commands Must Run from Correct Directory
+```bash
+# ✅ CORRECT - Always run from infrastructure directory
+cd infrastructure
+npm run build
+
+# ✅ CORRECT - Infrastructure-specific builds
+cd infrastructure && npm run deploy:dev
+cd infrastructure && npm run synth
+
+# ❌ FORBIDDEN - Never run TypeScript build from root
+npm run build  # This compiles to wrong location!
+
+# ❌ FORBIDDEN - Never run tsc from lib/ directory
+cd infrastructure/lib && tsc *.ts  # Creates .js files in source!
+```
+
+### Build Directory Structure
+```
+✅ CORRECT:
+infrastructure/
+├── lib/*.ts          # Source TypeScript files
+├── dist/lib/*.js     # Compiled output (gitignored)
+└── tsconfig.json     # outDir: "./dist"
+
+❌ FORBIDDEN:
+infrastructure/
+├── lib/*.ts          # Source files
+├── lib/*.js          # ❌ Dual implementations!
+```
+
+### AI Assistant Rules for Builds
+- **ALWAYS** `cd infrastructure` before running build commands
+- **NEVER** run `npm run build` from project root for infrastructure
+- **VERIFY** working directory before executing build commands
+- **DELETE** any `.js` files found in `infrastructure/lib/` or `infrastructure/bin/`
+
 ## 📂 Functional Domain Structure
 ```
 infrastructure/lambda/
@@ -198,6 +237,8 @@ When implementing new functionality:
 6. No dual TypeScript/JavaScript implementations exist
 7. Follows domain-specific folder structure
 8. IAM permissions properly scoped to function needs
+9. **Build commands run from `infrastructure/` directory only**
+10. **No `.js` files exist in `infrastructure/lib/` or `infrastructure/bin/`**
 
 ---
 

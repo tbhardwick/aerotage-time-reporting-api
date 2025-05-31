@@ -328,7 +328,7 @@ async function generateEnhancedDashboard(
   const [timeEntries, projects, clients, users] = await Promise.all([
     fetchTimeEntries(dateRange, userId, userRole),
     fetchProjects(userId, userRole),
-    fetchClients(userId, userRole),
+    fetchClients(),
     fetchUsers(userId, userRole),
   ]);
 
@@ -343,7 +343,7 @@ async function generateEnhancedDashboard(
   // Generate real-time data if requested
   let realTimeData: RealTimeMetrics | undefined;
   if (request.realTime) {
-    realTimeData = await generateRealTimeMetrics(userId, userRole);
+    realTimeData = await generateRealTimeMetrics();
   }
 
   // Generate forecasting data if requested
@@ -456,8 +456,7 @@ async function fetchProjects(userId: string, userRole: string): Promise<ProjectD
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function fetchClients(_userId: string, _userRole: string): Promise<ClientData[]> {
+async function fetchClients(): Promise<ClientData[]> {
   try {
     // Mock clients data - in production, create ClientRepository
     const mockClients = [
@@ -511,7 +510,7 @@ async function generateWidget(
 
   switch (widget.type) {
     case 'kpi':
-      data = generateKPIData(widget.config.metric!, timeEntries, projects, clients);
+      data = generateKPIData(widget.config.metric!, timeEntries, projects);
       metadata.trend = calculateTrend(data.current as number, data.previous as number);
       metadata.changePercent = calculateChangePercent(data.current as number, data.previous as number);
       metadata.status = getKPIStatus(data.current as number, widget.config.target, widget.config.threshold);
@@ -538,7 +537,7 @@ async function generateWidget(
       break;
 
     case 'trend':
-      data = generateTrendData(widget.config, timeEntries, projects, dateRange);
+      data = generateTrendData(widget.config, timeEntries);
       metadata.trend = data.trend as 'up' | 'down' | 'stable';
       metadata.changePercent = data.changePercent as number;
       break;
@@ -556,8 +555,7 @@ async function generateWidget(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function generateKPIData(metric: string, timeEntries: TimeEntryData[], projects: ProjectData[], _clients: ClientData[]): Record<string, unknown> {
+function generateKPIData(metric: string, timeEntries: TimeEntryData[], projects: ProjectData[]): Record<string, unknown> {
   switch (metric) {
     case 'revenue':
       const totalRevenue = timeEntries
@@ -647,7 +645,7 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: TimeEntryD
   switch (config.metric) {
     case 'revenue':
       if (config.groupBy === 'month') {
-        const monthlyData = groupByMonth(timeEntries, _dateRange);
+        const monthlyData = groupByMonth(timeEntries);
         return {
           type: config.chartType || 'line',
           labels: monthlyData.map(d => d.month),
@@ -685,8 +683,7 @@ function generateChartData(config: WidgetSpecificConfig, timeEntries: TimeEntryD
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function generateTableData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], projects: ProjectData[], _clients: ClientData[]): Record<string, unknown> {
+function generateTableData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], projects: ProjectData[], clients: ClientData[]): Record<string, unknown> {
   switch (config.metric) {
     case 'top_projects':
       const projectHours = projects.map(project => {
@@ -733,7 +730,10 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: TimeEntr
           if (entry.userId !== user.userId) return false;
           const entryStartDate = entry.startTime || entry.startDate;
           if (!entryStartDate) return false;
-          return entryStartDate.startsWith(dayKey);
+          if (entryStartDate && dayKey) {
+            return entryStartDate.startsWith(dayKey);
+          }
+          return false;
         });
         
         const dayHours = dayEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
@@ -741,11 +741,14 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: TimeEntr
         // Ensure we always have a valid string for the y-axis
         const userLabel: string = user.name || user.email || user.userId || 'Unknown User';
         
-        heatmapData.push({
-          x: d.toISOString().split('T')[0],
-          y: userLabel,
-          value: dayHours,
-        });
+        const dateStr = d.toISOString().split('T')[0];
+        if (dateStr) {
+          heatmapData.push({
+            x: dateStr,
+            y: userLabel,
+            value: dayHours,
+          });
+        }
       }
     });
 
@@ -762,34 +765,23 @@ function generateHeatmapData(config: WidgetSpecificConfig, timeEntries: TimeEntr
   return { data: [] };
 }
 
- 
-function generateTrendData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[], _projects: ProjectData[], _dateRange: DateRange): Record<string, unknown> {
-  const weeklyData = groupByWeek(timeEntries, _dateRange);
-  const values = weeklyData.map(d => d.value);
+function generateTrendData(config: WidgetSpecificConfig, timeEntries: TimeEntryData[]): Record<string, unknown> {
+  const { metric } = config;
+  const trendData = groupByWeek(timeEntries);
   
-  if (values.length < 2) {
-    return { trend: 'stable', changePercent: 0, data: weeklyData };
-  }
-
-  const firstHalf = values.slice(0, Math.floor(values.length / 2));
-  const secondHalf = values.slice(Math.floor(values.length / 2));
-  
-  const firstAvg = firstHalf.reduce((sum, v) => sum + v, 0) / firstHalf.length;
-  const secondAvg = secondHalf.reduce((sum, v) => sum + v, 0) / secondHalf.length;
-  
-  const changePercent = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
-  const trend = changePercent > 5 ? 'up' : changePercent < -5 ? 'down' : 'stable';
-
   return {
-    trend,
-    changePercent: Math.round(changePercent),
-    data: weeklyData,
-    forecast: generateSimpleForecast(values),
+    labels: trendData.map(d => d.week),
+    datasets: [{
+      label: metric || 'Value',
+      data: trendData.map(d => d.value),
+      fill: false,
+      borderColor: '#4CAF50',
+      tension: 0.1
+    }]
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function groupByMonth(timeEntries: TimeEntryData[], dateRange: DateRange): Array<{ month: string; hours: number; revenue: number }> {
+function groupByMonth(timeEntries: TimeEntryData[]): Array<{ month: string; hours: number; revenue: number }> {
   const months = new Map<string, { month: string; hours: number; revenue: number }>();
   
   timeEntries.forEach(entry => {
@@ -811,8 +803,7 @@ function groupByMonth(timeEntries: TimeEntryData[], dateRange: DateRange): Array
   return Array.from(months.values()).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function groupByWeek(timeEntries: TimeEntryData[], dateRange: DateRange): Array<{ week: string; value: number }> {
+function groupByWeek(timeEntries: TimeEntryData[]): Array<{ week: string; value: number }> {
   const weeks = new Map<string, { week: string; value: number }>();
   
   timeEntries.forEach(entry => {
@@ -822,13 +813,14 @@ function groupByWeek(timeEntries: TimeEntryData[], dateRange: DateRange): Array<
     weekStart.setDate(date.getDate() - date.getDay());
     const weekKey = weekStart.toISOString().split('T')[0];
     
-    if (!weeks.has(weekKey)) {
-      weeks.set(weekKey, { week: weekKey, value: 0 });
-    }
-    
-    const weekData = weeks.get(weekKey);
-    if (weekData) {
-      weekData.value += Number(entry.hours || 0);
+    if (weekKey) {
+      if (!weeks.has(weekKey)) {
+        weeks.set(weekKey, { week: weekKey, value: 0 });
+      }
+      const weekData = weeks.get(weekKey);
+      if (weekData) {
+        weekData.value += Number(entry.hours || 0);
+      }
     }
   });
 
@@ -859,66 +851,68 @@ function generateDashboardSummary(timeEntries: TimeEntryData[], projects: Projec
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function generateRealTimeMetrics(_userId: string, _userRole: string): Promise<RealTimeMetrics> {
-  // Mock real-time data - in production, this would query live sessions and current activities
+async function generateRealTimeMetrics(): Promise<RealTimeMetrics> {
+  // In a real implementation, this would fetch live data
   return {
-    activeUsers: 12,
-    currentSessions: 8,
-    todayHours: 45.5,
-    todayRevenue: 3420,
-    liveProjects: 6,
-    recentActivities: [
-      {
-        userId: 'user1',
-        userName: 'John Doe',
-        action: 'Started timer',
-        timestamp: new Date(Date.now() - 300000).toISOString(),
-        details: { project: 'Website Redesign' },
-      },
-      {
-        userId: 'user2',
-        userName: 'Jane Smith',
-        action: 'Completed task',
-        timestamp: new Date(Date.now() - 600000).toISOString(),
-        details: { task: 'Database optimization' },
-      },
-    ],
+    activeUsers: 0,
+    currentSessions: 0,
+    todayHours: 0,
+    todayRevenue: 0,
+    liveProjects: 0,
+    recentActivities: []
   };
 }
 
 async function generateForecastingData(timeEntries: TimeEntryData[], projects: ProjectData[], dateRange: DateRange): Promise<ForecastingData> {
-  const monthlyRevenue = groupByMonth(timeEntries, dateRange);
+  const monthlyRevenue = groupByMonth(timeEntries);
   const recentRevenue = monthlyRevenue.slice(-3).map(m => m.revenue);
   
   // Simple linear regression for forecasting
-  const hasRecentData = recentRevenue.length >= 2 && 
-                       recentRevenue[0] !== undefined && 
-                       recentRevenue[recentRevenue.length - 1] !== undefined;
-  
-  const projectedRevenue = hasRecentData ? 
-  (recentRevenue[recentRevenue.length - 1] - recentRevenue[0]) / (recentRevenue.length - 1) : 0;
-  
-  const lastRevenue = recentRevenue[recentRevenue.length - 1] || 0;
-  const nextMonthProjection = lastRevenue + projectedRevenue;
-  const nextQuarterProjection = lastRevenue + (projectedRevenue * 3);
-  
+  const recentRevenueLength = recentRevenue.length;
+  if (recentRevenueLength > 1) {
+    const firstValue = recentRevenue[0];
+    const lastValue = recentRevenue[recentRevenueLength - 1];
+    if (firstValue !== undefined && lastValue !== undefined) {
+      const projectedRevenue = (lastValue - firstValue) / (recentRevenueLength - 1);
+      const nextMonthProjection = lastValue + projectedRevenue;
+      const nextQuarterProjection = lastValue + (projectedRevenue * 3);
+      
+      return {
+        revenueProjection: {
+          nextMonth: Math.round(nextMonthProjection),
+          nextQuarter: Math.round(nextQuarterProjection),
+          confidence: 75,
+          trend: projectedRevenue > 0 ? 'increasing' : projectedRevenue < 0 ? 'decreasing' : 'stable',
+        },
+        utilizationProjection: {
+          nextWeek: 82,
+          nextMonth: 78,
+          confidence: 68,
+        },
+        projectCompletion: {
+          onTimeProjects: projects.filter(p => p.status === 'completed' && !p.isOverdue).length,
+          delayedProjects: projects.filter(p => p.isOverdue).length,
+          averageDelay: 3.2, // days
+        },
+      };
+    }
+  }
   return {
     revenueProjection: {
-      nextMonth: Math.round(nextMonthProjection),
-      nextQuarter: Math.round(nextQuarterProjection),
-      confidence: 75,
-      trend: projectedRevenue > 0 ? 'increasing' : projectedRevenue < 0 ? 'decreasing' : 'stable',
+      nextMonth: 0,
+      nextQuarter: 0,
+      confidence: 0,
+      trend: 'stable',
     },
     utilizationProjection: {
-      nextWeek: 82,
-      nextMonth: 78,
-      confidence: 68,
+      nextWeek: 0,
+      nextMonth: 0,
+      confidence: 0,
     },
     projectCompletion: {
-      onTimeProjects: projects.filter(p => p.status === 'completed' && !p.isOverdue).length,
-      delayedProjects: projects.filter(p => p.isOverdue).length,
-      averageDelay: 3.2, // days
+      onTimeProjects: 0,
+      delayedProjects: 0,
+      averageDelay: 0,
     },
   };
 }
@@ -1017,21 +1011,4 @@ function getGaugeStatus(value: number, target?: number, threshold?: number): 'go
   if (threshold && value < threshold) return 'critical';
   if (target && value < target) return 'warning';
   return 'good';
-}
-
-function generateSimpleForecast(values: number[]): number[] {
-  if (values.length < 2) return [];
-  
-  const firstValue = values[0];
-  const lastValue = values[values.length - 1];
-  
-  if (firstValue === undefined || lastValue === undefined) return [];
-  
-  const trend = (lastValue - firstValue) / (values.length - 1);
-  
-  return [
-    lastValue + trend,
-    lastValue + (trend * 2),
-    lastValue + (trend * 3),
-  ];
 } 
