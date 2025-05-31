@@ -45,6 +45,22 @@ export class EmailChangeRepository {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 
     const item: EmailChangeRequestDynamoItem = {
+      // Primary key pattern
+      PK: `EMAIL_CHANGE_REQUEST#${id}`,
+      SK: `EMAIL_CHANGE_REQUEST#${id}`,
+      
+      // GSI1 - User index
+      GSI1PK: `USER#${userId}`,
+      GSI1SK: `EMAIL_CHANGE_REQUEST#${now}`,
+      
+      // GSI2 - Status index  
+      GSI2PK: `STATUS#pending_verification`,
+      GSI2SK: `EMAIL_CHANGE_REQUEST#${now}`,
+      
+      // GSI3 - Current email verification token
+      GSI3PK: `CURRENT_TOKEN#${currentEmailToken}`,
+      
+      // Actual data fields
       id,
       userId,
       currentEmail,
@@ -85,7 +101,8 @@ export class EmailChangeRepository {
     const result = await this.dynamoClient.send(new GetCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
     }));
 
@@ -103,18 +120,31 @@ export class EmailChangeRepository {
 
   // Get email change request by token
   async getEmailChangeRequestByToken(token: string, tokenType: 'current' | 'new'): Promise<EmailChangeRequest | null> {
-    const indexName = tokenType === 'current' ? 'VerificationTokenIndexV2' : 'NewEmailVerificationTokenIndexV2';
-    const fieldName = tokenType === 'current' ? 'currentEmailVerificationToken' : 'newEmailVerificationToken';
-
-    const result = await this.dynamoClient.send(new QueryCommand({
-      TableName: this.requestsTableName,
-      IndexName: indexName,
-      KeyConditionExpression: `${fieldName} = :token`,
-      ExpressionAttributeValues: {
-        ':token': token,
-      },
-      Limit: 1,
-    }));
+    let result;
+    
+    if (tokenType === 'current') {
+      // Query GSI3 for current email verification token
+      result = await this.dynamoClient.send(new QueryCommand({
+        TableName: this.requestsTableName,
+        IndexName: 'VerificationTokenIndexV2',
+        KeyConditionExpression: 'GSI3PK = :tokenKey',
+        ExpressionAttributeValues: {
+          ':tokenKey': `CURRENT_TOKEN#${token}`,
+        },
+        Limit: 1,
+      }));
+    } else {
+      // Query GSI4 for new email verification token
+      result = await this.dynamoClient.send(new QueryCommand({
+        TableName: this.requestsTableName,
+        IndexName: 'NewEmailVerificationTokenIndexV2',
+        KeyConditionExpression: 'newEmailVerificationToken = :token',
+        ExpressionAttributeValues: {
+          ':token': token,
+        },
+        Limit: 1,
+      }));
+    }
 
     if (!result.Items || result.Items.length === 0) {
       return null;
@@ -131,26 +161,35 @@ export class EmailChangeRepository {
     const limit = filters?.limit || 10;
     const offset = filters?.offset || 0;
 
-    let keyConditionExpression = 'userId = :userId';
-    const expressionAttributeValues: Record<string, string> = {
-      ':userId': userId,
-    };
+    let result;
 
-    // Add status filter if provided
     if (filters?.status) {
-      keyConditionExpression = '#status = :status';
-      expressionAttributeValues[':status'] = filters.status;
+      // Query by status using GSI2
+      result = await this.dynamoClient.send(new QueryCommand({
+        TableName: this.requestsTableName,
+        IndexName: 'StatusIndexV2',
+        KeyConditionExpression: 'GSI2PK = :statusKey',
+        FilterExpression: 'userId = :userId',
+        ExpressionAttributeValues: {
+          ':statusKey': `STATUS#${filters.status}`,
+          ':userId': userId,
+        },
+        ScanIndexForward: filters?.sortOrder !== 'desc',
+        Limit: limit + offset,
+      }));
+    } else {
+      // Query by user using GSI1
+      result = await this.dynamoClient.send(new QueryCommand({
+        TableName: this.requestsTableName,
+        IndexName: 'UserIndexV2',
+        KeyConditionExpression: 'GSI1PK = :userKey',
+        ExpressionAttributeValues: {
+          ':userKey': `USER#${userId}`,
+        },
+        ScanIndexForward: filters?.sortOrder !== 'desc',
+        Limit: limit + offset,
+      }));
     }
-
-    const result = await this.dynamoClient.send(new QueryCommand({
-      TableName: this.requestsTableName,
-      IndexName: filters?.status ? 'StatusIndex' : 'UserIndex',
-      KeyConditionExpression: keyConditionExpression,
-      ExpressionAttributeNames: filters?.status ? { '#status': 'status' } : undefined,
-      ExpressionAttributeValues: expressionAttributeValues,
-      ScanIndexForward: filters?.sortOrder !== 'asc',
-      Limit: limit + offset, // Get more items to handle offset
-    }));
 
     const items = result.Items || [];
     const paginatedItems = items.slice(offset, offset + limit);
@@ -172,14 +211,11 @@ export class EmailChangeRepository {
     for (const status of activeStatuses) {
       const result = await this.dynamoClient.send(new QueryCommand({
         TableName: this.requestsTableName,
-        IndexName: 'StatusIndex',
-        KeyConditionExpression: '#status = :status',
+        IndexName: 'StatusIndexV2',
+        KeyConditionExpression: 'GSI2PK = :statusKey',
         FilterExpression: 'userId = :userId',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
         ExpressionAttributeValues: {
-          ':status': status,
+          ':statusKey': `STATUS#${status}`,
           ':userId': userId,
         },
         Limit: 1,
@@ -240,7 +276,8 @@ export class EmailChangeRepository {
       await this.dynamoClient.send(new UpdateCommand({
         TableName: this.requestsTableName,
         Key: {
-          id: requestId,
+          PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+          SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
         },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: expressionAttributeValues,
@@ -272,7 +309,8 @@ export class EmailChangeRepository {
       await this.dynamoClient.send(new UpdateCommand({
         TableName: this.requestsTableName,
         Key: {
-          id: requestId,
+          PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+          SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
         },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: expressionAttributeValues,
@@ -311,7 +349,8 @@ export class EmailChangeRepository {
     await this.dynamoClient.send(new UpdateCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
       UpdateExpression: 'SET #status = :status, approvedBy = :approvedBy, approvedAt = :approvedAt',
       ExpressionAttributeNames: {
@@ -350,7 +389,8 @@ export class EmailChangeRepository {
     await this.dynamoClient.send(new UpdateCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
       UpdateExpression: 'SET #status = :status, rejectedBy = :rejectedBy, rejectedAt = :rejectedAt, rejectionReason = :rejectionReason',
       ExpressionAttributeNames: {
@@ -389,7 +429,8 @@ export class EmailChangeRepository {
     await this.dynamoClient.send(new UpdateCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
       UpdateExpression: 'SET #status = :status, cancelledBy = :cancelledBy, cancelledAt = :cancelledAt',
       ExpressionAttributeNames: {
@@ -425,7 +466,8 @@ export class EmailChangeRepository {
     await this.dynamoClient.send(new UpdateCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
       UpdateExpression: 'SET #status = :status, completedAt = :completedAt',
       ExpressionAttributeNames: {
@@ -464,7 +506,8 @@ export class EmailChangeRepository {
     await this.dynamoClient.send(new UpdateCommand({
       TableName: this.requestsTableName,
       Key: {
-        id: requestId,
+        PK: `EMAIL_CHANGE_REQUEST#${requestId}`,
+        SK: `EMAIL_CHANGE_REQUEST#${requestId}`,
       },
       UpdateExpression: `SET ${tokenField} = :token, verificationTokensExpiresAt = :expiresAt`,
       ExpressionAttributeValues: {
@@ -494,6 +537,19 @@ export class EmailChangeRepository {
     const now = new Date().toISOString();
 
     const item: EmailChangeAuditLogDynamoItem = {
+      // Primary key pattern
+      PK: `AUDIT_LOG#${id}`,
+      SK: `AUDIT_LOG#${id}`,
+      
+      // GSI1 - Request index
+      GSI1PK: `REQUEST#${requestId}`,
+      GSI1SK: `AUDIT_LOG#${now}`,
+      
+      // GSI2 - Action index
+      GSI2PK: `ACTION#${action}`,
+      GSI2SK: `AUDIT_LOG#${now}`,
+      
+      // Actual data fields
       id,
       requestId,
       action,
@@ -514,10 +570,10 @@ export class EmailChangeRepository {
   async getAuditLogForRequest(requestId: string): Promise<EmailChangeAuditLog[]> {
     const result = await this.dynamoClient.send(new QueryCommand({
       TableName: this.auditLogTableName,
-      IndexName: 'RequestIndex',
-      KeyConditionExpression: 'requestId = :requestId',
+      IndexName: 'RequestIndexV2',
+      KeyConditionExpression: 'GSI1PK = :requestKey',
       ExpressionAttributeValues: {
-        ':requestId': requestId,
+        ':requestKey': `REQUEST#${requestId}`,
       },
       ScanIndexForward: true, // Chronological order
     }));
@@ -589,6 +645,8 @@ export class EmailChangeRepository {
     limit?: number;
     lastEvaluatedKey?: string;
     includeCompleted?: boolean;
+    sortBy?: string;
+    sortOrder?: string;
   }): Promise<{ requests: EmailChangeRequest[]; lastEvaluatedKey?: string }> {
     const limit = options.limit || 20;
     
@@ -610,36 +668,39 @@ export class EmailChangeRepository {
     let result;
 
     if (options.userId) {
-      // Query by user
-      queryParams.IndexName = 'UserIndex';
-      queryParams.KeyConditionExpression = 'userId = :userId';
+      // Query by user using GSI1
+      queryParams.IndexName = 'UserIndexV2';
+      queryParams.KeyConditionExpression = 'GSI1PK = :userKey';
       queryParams.ExpressionAttributeValues = {
-        ':userId': options.userId,
+        ':userKey': `USER#${options.userId}`,
       };
+      queryParams.ExpressionAttributeNames = {};
+
+      const filterExpressions: string[] = [];
 
       if (options.status) {
-        queryParams.FilterExpression = '#status = :status';
-        queryParams.ExpressionAttributeNames = { '#status': 'status' };
+        filterExpressions.push('#status = :status');
+        queryParams.ExpressionAttributeNames['#status'] = 'status';
         queryParams.ExpressionAttributeValues[':status'] = options.status;
       }
 
       if (!options.includeCompleted) {
-        const filterExpression = queryParams.FilterExpression 
-          ? `${queryParams.FilterExpression} AND #status <> :completed`
-          : '#status <> :completed';
-        queryParams.FilterExpression = filterExpression;
-        queryParams.ExpressionAttributeNames = { '#status': 'status' };
+        filterExpressions.push('#status <> :completed');
+        queryParams.ExpressionAttributeNames['#status'] = 'status';
         queryParams.ExpressionAttributeValues[':completed'] = 'completed';
+      }
+
+      if (filterExpressions.length > 0) {
+        queryParams.FilterExpression = filterExpressions.join(' AND ');
       }
 
       result = await this.dynamoClient.send(new QueryCommand(queryParams));
     } else if (options.status) {
-      // Query by status
-      queryParams.IndexName = 'StatusIndex';
-      queryParams.KeyConditionExpression = '#status = :status';
-      queryParams.ExpressionAttributeNames = { '#status': 'status' };
+      // Query by status using GSI2
+      queryParams.IndexName = 'StatusIndexV2';
+      queryParams.KeyConditionExpression = 'GSI2PK = :statusKey';
       queryParams.ExpressionAttributeValues = {
-        ':status': options.status,
+        ':statusKey': `STATUS#${options.status}`,
       };
 
       result = await this.dynamoClient.send(new QueryCommand(queryParams));
@@ -659,6 +720,44 @@ export class EmailChangeRepository {
     const requests = (result.Items || []).map(item => 
       this.mapDynamoItemToEmailChangeRequest(item as EmailChangeRequestDynamoItem)
     );
+
+    // Apply client-side sorting if specified
+    if (options.sortBy) {
+      requests.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (options.sortBy) {
+          case 'requestedAt':
+            aValue = new Date(a.requestedAt);
+            bValue = new Date(b.requestedAt);
+            break;
+          case 'status':
+            aValue = a.status;
+            bValue = b.status;
+            break;
+          case 'currentEmail':
+            aValue = a.currentEmail;
+            bValue = b.currentEmail;
+            break;
+          case 'newEmail':
+            aValue = a.newEmail;
+            bValue = b.newEmail;
+            break;
+          default:
+            aValue = a.requestedAt;
+            bValue = b.requestedAt;
+        }
+
+        if (aValue < bValue) {
+          return options.sortOrder === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return options.sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
 
     let lastEvaluatedKey: string | undefined;
     if (result.LastEvaluatedKey) {

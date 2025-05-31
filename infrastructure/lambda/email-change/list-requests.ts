@@ -33,7 +33,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status,
       limit = '20',
       lastEvaluatedKey,
-      includeCompleted = 'false'
+      includeCompleted = 'false',
+      sortBy,
+      sortOrder
     } = queryParams;
 
     // Determine which user's requests to retrieve
@@ -64,11 +66,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createErrorResponse(400, 'INVALID_REQUEST', `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
 
+    // Validate sortBy parameter
+    const validSortFields = ['requestedAt', 'status', 'currentEmail', 'newEmail'];
+    if (sortBy && !validSortFields.includes(sortBy)) {
+      return createErrorResponse(400, 'INVALID_REQUEST', `Invalid sortBy field. Must be one of: ${validSortFields.join(', ')}`);
+    }
+
+    // Validate sortOrder parameter
+    const validSortOrders = ['asc', 'desc'];
+    if (sortOrder && !validSortOrders.includes(sortOrder)) {
+      return createErrorResponse(400, 'INVALID_REQUEST', `Invalid sortOrder. Must be one of: ${validSortOrders.join(', ')}`);
+    }
+
     console.log('🔍 Retrieving email change requests...', {
       targetUserId,
       status,
       limit: limitNum,
-      includeCompleted: includeCompleted === 'true'
+      includeCompleted: includeCompleted === 'true',
+      sortBy,
+      sortOrder
     });
 
     // Get email change requests
@@ -77,7 +93,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       status,
       limit: limitNum,
       lastEvaluatedKey,
-      includeCompleted: includeCompleted === 'true'
+      includeCompleted: includeCompleted === 'true',
+      sortBy,
+      sortOrder
     });
 
     // If admin is viewing all requests, enrich with user information

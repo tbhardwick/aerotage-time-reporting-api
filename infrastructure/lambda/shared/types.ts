@@ -1850,6 +1850,25 @@ export enum EmailChangeErrorCodes {
 
 // DynamoDB Item Types
 export interface EmailChangeRequestDynamoItem {
+  // Primary key pattern
+  PK: string; // "EMAIL_CHANGE_REQUEST#{id}"
+  SK: string; // "EMAIL_CHANGE_REQUEST#{id}"
+  
+  // GSI1 - User index
+  GSI1PK: string; // "USER#{userId}"
+  GSI1SK: string; // "EMAIL_CHANGE_REQUEST#{requestedAt}"
+  
+  // GSI2 - Status index
+  GSI2PK: string; // "STATUS#{status}"
+  GSI2SK: string; // "EMAIL_CHANGE_REQUEST#{requestedAt}"
+  
+  // GSI3 - Current email verification token
+  GSI3PK?: string; // "CURRENT_TOKEN#{currentEmailVerificationToken}"
+  
+  // GSI4 - New email verification token (using existing field name)
+  newEmailVerificationToken?: string;
+  
+  // Actual data fields
   id: string;
   userId: string;
   currentEmail: string;
@@ -1861,7 +1880,6 @@ export interface EmailChangeRequestDynamoItem {
   currentEmailVerified: boolean;
   newEmailVerified: boolean;
   currentEmailVerificationToken?: string;
-  newEmailVerificationToken?: string;
   verificationTokensExpiresAt?: string;
   
   approvedBy?: string;
@@ -1883,6 +1901,19 @@ export interface EmailChangeRequestDynamoItem {
 }
 
 export interface EmailChangeAuditLogDynamoItem {
+  // Primary key pattern
+  PK: string; // "AUDIT_LOG#{id}"
+  SK: string; // "AUDIT_LOG#{id}"
+  
+  // GSI1 - Request index
+  GSI1PK: string; // "REQUEST#{requestId}"
+  GSI1SK: string; // "AUDIT_LOG#{performedAt}"
+  
+  // GSI2 - Action index
+  GSI2PK: string; // "ACTION#{action}"
+  GSI2SK: string; // "AUDIT_LOG#{performedAt}"
+  
+  // Actual data fields
   id: string;
   requestId: string;
   action: string;
