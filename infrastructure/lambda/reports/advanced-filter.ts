@@ -3,6 +3,18 @@ import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
 
@@ -72,11 +84,20 @@ interface FilteredDataResponse {
   generatedAt: string;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   const startTime = Date.now();
   
   try {
-    console.log('Advanced filter request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Advanced filter request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
 
     // Extract user info from authorizer context
     const userId = getCurrentUserId(event);
@@ -84,41 +105,123 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userRole = user?.role || 'employee';
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/advanced-filter', 'POST', 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'advanced-filter', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    // Parse request body
-    let filterRequest: AdvancedFilterRequest;
-    try {
-      filterRequest = JSON.parse(event.body || '{}');
-    } catch {
-      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
-    }
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
 
-    // Validate required fields
-    if (!filterRequest.dataSource || !filterRequest.filters) {
-      return createErrorResponse(400, 'MISSING_REQUIRED_FIELDS', 'dataSource and filters are required');
-    }
+    // Parse and validate request body with tracing
+    const filterRequest = await businessTracer.traceBusinessOperation(
+      'parse-filter-request',
+      'reports',
+      async () => {
+        let request: AdvancedFilterRequest;
+        try {
+          request = JSON.parse(event.body || '{}');
+        } catch {
+          throw new Error('Invalid JSON in request body');
+        }
 
-    // Validate data source
-    const validDataSources = ['time-entries', 'projects', 'clients', 'users'];
-    if (!validDataSources.includes(filterRequest.dataSource)) {
-      return createErrorResponse(400, 'INVALID_DATA_SOURCE', `Data source must be one of: ${validDataSources.join(', ')}`);
-    }
+        // Validate required fields
+        if (!request.dataSource || !request.filters) {
+          throw new Error('dataSource and filters are required');
+        }
 
-    // Apply role-based access control
-    const accessControlledRequest = applyAccessControl(filterRequest, userId, userRole);
+        // Validate data source
+        const validDataSources = ['time-entries', 'projects', 'clients', 'users'];
+        if (!validDataSources.includes(request.dataSource)) {
+          throw new Error(`Data source must be one of: ${validDataSources.join(', ')}`);
+        }
 
-    // Execute advanced filtering
-    const filteredData = await executeAdvancedFilter(accessControlledRequest);
+        return request;
+      }
+    );
+
+    logger.info('Advanced filter request parsed and validated', { 
+      userId,
+      userRole,
+      dataSource: filterRequest.dataSource,
+      filterCount: filterRequest.filters.length,
+      hasGroupBy: !!filterRequest.groupBy,
+      hasAggregations: !!filterRequest.aggregations,
+      hasSorting: !!filterRequest.sorting,
+      hasPagination: !!filterRequest.pagination,
+      outputFormat: filterRequest.outputFormat
+    });
+
+    // Apply role-based access control with tracing
+    const accessControlledRequest = await businessTracer.traceBusinessOperation(
+      'apply-access-control',
+      'reports',
+      async () => {
+        return applyAccessControl(filterRequest, userId, userRole);
+      }
+    );
+
+    // Execute advanced filtering with tracing
+    const filteredData = await businessTracer.traceBusinessOperation(
+      'execute-advanced-filter',
+      'reports',
+      async () => {
+        return await executeAdvancedFilter(accessControlledRequest);
+      }
+    );
     
     const executionTime = Date.now() - startTime;
     filteredData.executionTime = executionTime;
 
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/advanced-filter', 'POST', 200, executionTime);
+    businessLogger.logBusinessOperation('filter', 'advanced-filter', userId, true, { 
+      userRole,
+      dataSource: filterRequest.dataSource,
+      filterCount: filterRequest.filters.length,
+      resultCount: filteredData.resultCount,
+      hasGroupBy: !!filterRequest.groupBy,
+      hasAggregations: !!filterRequest.aggregations,
+      executionTime: filteredData.executionTime
+    });
+
+    logger.info('Advanced filter executed successfully', { 
+      userId,
+      userRole,
+      filterId: filteredData.filterId,
+      dataSource: filteredData.dataSource,
+      resultCount: filteredData.resultCount,
+      executionTime: filteredData.executionTime
+    });
+
     return createSuccessResponse(filteredData);
 
   } catch (error) {
-    console.error('Error in advanced filtering:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/reports/advanced-filter', 'POST', 500, responseTime);
+    businessLogger.logError(error as Error, 'advanced-filter', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error in advanced filtering', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Handle specific business logic errors
+    if (error instanceof Error) {
+      if (error.message.includes('Invalid JSON in request body')) {
+        return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+      }
+      if (error.message.includes('dataSource and filters are required')) {
+        return createErrorResponse(400, 'MISSING_REQUIRED_FIELDS', 'dataSource and filters are required');
+      }
+      if (error.message.includes('Data source must be one of:')) {
+        return createErrorResponse(400, 'INVALID_DATA_SOURCE', error.message);
+      }
+    }
     
     return createErrorResponse(500, 'FILTER_FAILED', 'Failed to execute advanced filter');
   }
@@ -580,4 +683,10 @@ function calculateMedian(sortedValues: number[]): number {
     }
   }
   return sortedValues[mid] || 0;
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

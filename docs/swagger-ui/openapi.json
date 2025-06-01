@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Aerotage Time Reporting API",
-    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 31, 2025 at 11:57:37 AM",
-    "version": "1.0.0-dev-2025-05-31T15-57-37",
+    "description": "Comprehensive time tracking and project management API for Aerotage.\n\n## Authentication\nThis API uses AWS Cognito for authentication. All endpoints (except public invitation endpoints) require JWT authentication.\n\n### Authentication Flow\n1. **Sign Up/Login**: Use AWS Cognito SDK to authenticate users\n2. **Get JWT Token**: Extract the JWT token from Cognito session\n3. **API Requests**: Include JWT token in Authorization header: `Bearer {token}`\n4. **Session Management**: Create backend session records for tracking\n\n### Cognito Configuration\n- **User Pool ID**: `us-east-1_EsdlgX9Qg`\n- **App Client ID**: `148r35u6uultp1rmfdu22i8amb`\n- **Identity Pool ID**: `us-east-1:d79776bb-4b8e-4654-a10a-a45b1adaa787`\n- **Region**: `us-east-1`\n\n### Authentication Endpoints\nWhile authentication is handled by AWS Cognito, this API provides session management endpoints:\n- `POST /users/{id}/sessions` - Create session record after Cognito login\n- `GET /users/{id}/sessions` - List active sessions\n- `DELETE /users/{id}/sessions/{sessionId}` - Terminate session (deletes from database)\n- `POST /logout` - Complete logout with session cleanup\n- `PUT /users/{id}/password` - Change password (requires current password)\n\n## Base URL\n- Development: `https://time-api-dev.aerotage.com/`\n- Staging: `https://time-api-staging.aerotage.com/`\n- Production: `https://time-api.aerotage.com/`\n\n\n**Environment:** DEV\n**Last Updated:** May 31, 2025 at 08:14:04 PM",
+    "version": "1.0.0-dev-2025-06-01T00-14-04",
     "contact": {
       "name": "Aerotage Support",
       "email": "support@aerotage.com"
@@ -660,6 +660,84 @@
             "description": "When the entry was last updated"
           }
         }
+      },
+      "TimerSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique timer session identifier",
+            "example": "timer_1234567890_abc123"
+          },
+          "userId": {
+            "type": "string",
+            "description": "User who owns this timer session"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Associated project ID"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "Optional task ID within the project"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of work being performed",
+            "example": "Backend API development"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the timer was started (ISO datetime)",
+            "example": "2024-01-15T09:30:00.000Z"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether the timer is currently running",
+            "example": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags for categorizing the work",
+            "example": [
+              "development",
+              "backend",
+              "api"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about the work",
+            "example": "Working on user authentication endpoints"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the timer session was created",
+            "example": "2024-01-15T09:30:00.000Z"
+          }
+        }
+      },
+      "TimerSessionWithElapsed": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TimerSession"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "elapsedMinutes": {
+                "type": "integer",
+                "description": "Minutes elapsed since timer started",
+                "example": 45
+              }
+            }
+          }
+        ]
       },
       "Invoice": {
         "type": "object",
@@ -6560,6 +6638,273 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/timer/start": {
+      "post": {
+        "tags": [
+          "Time Tracking"
+        ],
+        "summary": "Start timer",
+        "description": "Start a new timer session for time tracking",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "projectId",
+                  "description"
+                ],
+                "properties": {
+                  "projectId": {
+                    "type": "string",
+                    "description": "Project ID for this timer session",
+                    "example": "proj_123456789"
+                  },
+                  "taskId": {
+                    "type": "string",
+                    "description": "Optional task ID within the project",
+                    "example": "task_987654321"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Description of work being performed",
+                    "example": "Backend API development"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Tags for categorizing the work",
+                    "example": [
+                      "development",
+                      "backend",
+                      "api"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional notes about the work",
+                    "example": "Working on user authentication endpoints"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Timer started successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TimerSession"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Timer started successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Timer already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "TIMER_ALREADY_RUNNING"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "A timer is already running for this user"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/timer/stop": {
+      "post": {
+        "tags": [
+          "Time Tracking"
+        ],
+        "summary": "Stop timer",
+        "description": "Stop the active timer and create a time entry",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "timeEntryData": {
+                    "type": "object",
+                    "description": "Optional data to override timer defaults",
+                    "properties": {
+                      "isBillable": {
+                        "type": "boolean",
+                        "description": "Override billable status"
+                      },
+                      "hourlyRate": {
+                        "type": "number",
+                        "format": "float",
+                        "description": "Override hourly rate"
+                      },
+                      "finalDescription": {
+                        "type": "string",
+                        "description": "Final description for the time entry"
+                      },
+                      "finalTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Final tags for the time entry"
+                      },
+                      "finalNotes": {
+                        "type": "string",
+                        "description": "Final notes for the time entry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Timer stopped and time entry created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TimeEntry"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Timer stopped and time entry created successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No active timer found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "NO_ACTIVE_TIMER"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "No active timer found for this user"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/timer/status": {
+      "get": {
+        "tags": [
+          "Time Tracking"
+        ],
+        "summary": "Get timer status",
+        "description": "Get the current timer status and elapsed time",
+        "responses": {
+          "200": {
+            "description": "Timer status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/TimerSessionWithElapsed"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Active timer found"
+                    }
+                  }
                 }
               }
             }

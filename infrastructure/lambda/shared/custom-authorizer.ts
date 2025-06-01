@@ -6,36 +6,98 @@ import {
 } from 'aws-lambda';
 import { AuthService } from './auth-service';
 
-export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<APIGatewayAuthorizerResult> => {
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from './powertools-logger';
+import { tracer, businessTracer } from './powertools-tracer';
+import { metrics, businessMetrics } from './powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
+const lambdaHandler = async (event: APIGatewayTokenAuthorizerEvent): Promise<APIGatewayAuthorizerResult> => {
+  const startTime = Date.now();
 
   try {
-    // Extract token from the authorization token
-    const token = AuthService.extractBearerToken(event.authorizationToken);
+    // Add request context to logger and tracer
+    const requestId = `auth-${Date.now()}`;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, 'AUTHORIZER', event.methodArn);
+
+    logger.info('Custom authorizer request started', {
+      requestId,
+      methodArn: event.methodArn,
+      type: event.type,
+    });
+
+    // Extract token from the authorization token with tracing
+    const token = await businessTracer.traceBusinessOperation(
+      'extract-bearer-token',
+      'auth',
+      async () => {
+        return AuthService.extractBearerToken(event.authorizationToken);
+      }
+    );
     
     if (!token) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 401, responseTime);
+      metrics.addMetric('AuthorizationFailure', MetricUnit.Count, 1);
+      businessLogger.logAuth('unknown', 'authorize', false, { reason: 'no_bearer_token' });
       throw new Error('Unauthorized - No valid Bearer token');
     }
 
-    // Parse method ARN to extract HTTP method and resource path
-    const { httpMethod, resourcePath } = parseMethodArn(event.methodArn);
+    // Parse method ARN to extract HTTP method and resource path with tracing
+    const { httpMethod, resourcePath } = await businessTracer.traceBusinessOperation(
+      'parse-method-arn',
+      'auth',
+      async () => {
+        return parseMethodArn(event.methodArn);
+      }
+    );
 
-    // Check if this is a session bootstrap request
-    const isBootstrap = isSessionBootstrapRequest(httpMethod, resourcePath);
+    // Check if this is a session bootstrap request with tracing
+    const isBootstrap = await businessTracer.traceBusinessOperation(
+      'check-bootstrap-request',
+      'auth',
+      async () => {
+        return isSessionBootstrapRequest(httpMethod, resourcePath);
+      }
+    );
     
     if (isBootstrap) {
+      logger.info('Processing bootstrap request', { httpMethod, resourcePath });
       
       // Step 3a: Check FORCE_BOOTSTRAP mode
       const forceBootstrap = process.env.FORCE_BOOTSTRAP;
       
       if (forceBootstrap === 'true') {
         
-        const jwtResult = await AuthService.validateJwtOnly(token);
+        const jwtResult = await businessTracer.traceBusinessOperation(
+          'validate-jwt-force-bootstrap',
+          'auth',
+          async () => {
+            return await AuthService.validateJwtOnly(token);
+          }
+        );
         
         if (!jwtResult.isValid) {
+          const responseTime = Date.now() - startTime;
+          businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 401, responseTime);
+          metrics.addMetric('AuthorizationFailure', MetricUnit.Count, 1);
+          businessLogger.logAuth(jwtResult.userId || 'unknown', 'authorize', false, { reason: 'jwt_validation_failed', mode: 'force_bootstrap' });
           throw new Error('Unauthorized - JWT validation failed');
         }
 
         const userId = jwtResult.userId!;
+        const responseTime = Date.now() - startTime;
+
+        businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 200, responseTime);
+        metrics.addMetric('AuthorizationSuccess', MetricUnit.Count, 1);
+        businessLogger.logAuth(userId, 'authorize', true, { mode: 'force_bootstrap', httpMethod, resourcePath });
 
         const policy = generatePolicy(userId, 'Allow', getResourceForPolicy(event.methodArn), jwtResult.userClaims, {
           bootstrap: 'true',
@@ -45,41 +107,92 @@ export const handler = async (event: APIGatewayTokenAuthorizerEvent): Promise<AP
       }
       
       // Step 3b: Normal bootstrap flow - JWT validation
-      const jwtResult = await AuthService.validateJwtOnly(token);
+      const jwtResult = await businessTracer.traceBusinessOperation(
+        'validate-jwt-bootstrap',
+        'auth',
+        async () => {
+          return await AuthService.validateJwtOnly(token);
+        }
+      );
 
       if (!jwtResult.isValid) {
+        const responseTime = Date.now() - startTime;
+        businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 401, responseTime);
+        metrics.addMetric('AuthorizationFailure', MetricUnit.Count, 1);
+        businessLogger.logAuth(jwtResult.userId || 'unknown', 'authorize', false, { reason: 'jwt_validation_failed', mode: 'bootstrap' });
         throw new Error('Unauthorized - JWT validation failed');
       }
 
       const userId = jwtResult.userId!;
+      const responseTime = Date.now() - startTime;
 
       // Step 3c: Allow session creation regardless of existing sessions
       // Users should be able to create multiple sessions (e.g., different devices/browsers)
+      businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 200, responseTime);
+      metrics.addMetric('AuthorizationSuccess', MetricUnit.Count, 1);
+      businessLogger.logAuth(userId, 'authorize', true, { mode: 'bootstrap', httpMethod, resourcePath });
+
       const policy = generatePolicy(userId, 'Allow', getResourceForPolicy(event.methodArn), jwtResult.userClaims, {
         bootstrap: 'true',
         reason: 'session_creation_allowed'
       });
       return policy;
     } else {
+      logger.info('Processing normal authentication request', { httpMethod, resourcePath });
     }
 
-    // Normal validation: Require both valid JWT and active sessions
-    const authResult = await AuthService.validateAuthentication(token);
+    // Normal validation: Require both valid JWT and active sessions with tracing
+    const authResult = await businessTracer.traceBusinessOperation(
+      'validate-full-authentication',
+      'auth',
+      async () => {
+        return await AuthService.validateAuthentication(token);
+      }
+    );
     
     if (!authResult.isValid) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 401, responseTime);
+      metrics.addMetric('AuthorizationFailure', MetricUnit.Count, 1);
+      businessLogger.logAuth(authResult.userId || 'unknown', 'authorize', false, { reason: 'authentication_validation_failed', httpMethod, resourcePath });
       throw new Error('Unauthorized - Authentication validation failed');
     }
 
     const userId = authResult.userId!;
     const userClaims = authResult.userClaims;
-
+    const responseTime = Date.now() - startTime;
 
     // Generate policy allowing access to all resources in this API
     const policy = generatePolicy(userId, 'Allow', getResourceForPolicy(event.methodArn), userClaims);
     
+    businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 200, responseTime);
+    metrics.addMetric('AuthorizationSuccess', MetricUnit.Count, 1);
+    businessLogger.logAuth(userId, 'authorize', true, { httpMethod, resourcePath, userRole: userClaims?.['custom:role'] || 'employee' });
+
+    logger.info('Authorization successful', { 
+      userId,
+      httpMethod,
+      resourcePath,
+      userRole: userClaims?.['custom:role'] || 'employee',
+      responseTime 
+    });
+    
     return policy;
 
-  } catch {
+  } catch (error) {
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/authorizer', 'AUTHORIZER', 403, responseTime);
+    metrics.addMetric('AuthorizationFailure', MetricUnit.Count, 1);
+    businessLogger.logError(error as Error, 'custom-authorizer', 'unknown');
+
+    logger.error('Authorization failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      methodArn: event.methodArn,
+      responseTime
+    });
+
     // Return deny policy
     const denyPolicy = generatePolicy('unauthorized', 'Deny', event.methodArn);
     return denyPolicy;
@@ -243,3 +356,9 @@ function matchResourcePattern(pattern: RegExp | undefined, resourcePath: string)
   }
   return pattern.test(resourcePath);
 } 
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

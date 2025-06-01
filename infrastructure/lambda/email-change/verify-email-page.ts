@@ -3,66 +3,209 @@ import { EmailChangeRepository } from '../shared/email-change-repository';
 import { TokenService } from '../shared/token-service';
 import { EmailChangeRequest } from '../shared/types';
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Email verification page request:', JSON.stringify(event, null, 2));
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
 
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    // Get token and type from query parameters
-    const token = event.queryStringParameters?.token;
-    const emailType = event.queryStringParameters?.type;
-    
-    if (!token || !emailType) {
-      return createErrorPage('Missing Parameters', 'The email verification link appears to be invalid. Please check the link in your email or contact your administrator.');
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Email verification page request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+      path: event.path,
+      queryStringParameters: event.queryStringParameters
+    });
+
+    // Get token and type from query parameters with tracing
+    const parameterValidation = await businessTracer.traceBusinessOperation(
+      'validate-verification-parameters',
+      'email-change',
+      async () => {
+        const token = event.queryStringParameters?.token;
+        const emailType = event.queryStringParameters?.type;
+        
+        if (!token || !emailType) {
+          return { isValid: false, reason: 'missing_parameters' };
+        }
+
+        if (emailType !== 'current' && emailType !== 'new') {
+          return { isValid: false, reason: 'invalid_email_type' };
+        }
+
+        // Validate token format
+        if (!TokenService.validateTokenFormat(token)) {
+          return { isValid: false, reason: 'invalid_token_format' };
+        }
+
+                 return { isValid: true, token, emailType: emailType as 'current' | 'new' };
+      }
+    );
+
+    if (!parameterValidation.isValid) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 400, responseTime);
+      businessLogger.logBusinessOperation('view', 'email-verification-page', 'anonymous', false, { 
+        reason: parameterValidation.reason
+      });
+
+      if (parameterValidation.reason === 'missing_parameters') {
+        return createErrorPage('Missing Parameters', 'The email verification link appears to be invalid. Please check the link in your email or contact your administrator.');
+      } else if (parameterValidation.reason === 'invalid_email_type') {
+        return createErrorPage('Invalid Email Type', 'The email verification link has an invalid type parameter. Please check the link in your email.');
+      } else {
+        return createErrorPage('Invalid Verification Token', 'The verification token format is invalid. Please check the link in your email or contact your administrator.');
+      }
     }
 
-    if (emailType !== 'current' && emailType !== 'new') {
-      return createErrorPage('Invalid Email Type', 'The email verification link has an invalid type parameter. Please check the link in your email.');
-    }
+    const { token, emailType } = parameterValidation;
 
-    // Validate token format
-    if (!TokenService.validateTokenFormat(token)) {
-      return createErrorPage('Invalid Verification Token', 'The verification token format is invalid. Please check the link in your email or contact your administrator.');
-    }
+    logger.info('Email verification parameters validated', { 
+      tokenPresent: true,
+      tokenLength: token!.length,
+      emailType
+    });
 
-    try {
-      const repository = new EmailChangeRepository();
+    // Get email change request by token with tracing
+    const requestResult = await businessTracer.traceDatabaseOperation(
+      'get-email-change-request-by-token',
+      'email-change',
+      async () => {
+        try {
+          const repository = new EmailChangeRepository();
+          const emailChangeRequest = await repository.getRequestByVerificationToken(token!, emailType!);
+          return { emailChangeRequest, error: null };
+        } catch (dbError) {
+          return { emailChangeRequest: null, error: dbError };
+        }
+      }
+    );
+
+    if (requestResult.error) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 500, responseTime);
+      businessLogger.logError(requestResult.error as Error, 'email-verification-page-db', 'anonymous');
       
-      // Get email change request by token
-      const emailChangeRequest = await repository.getRequestByVerificationToken(token, emailType);
-
-      if (!emailChangeRequest) {
-        return createErrorPage('Invalid Verification Link', 'This email verification token is not valid. It may have expired or the link may be corrupted.');
-      }
-
-      // Check if already verified
-      const isCurrentEmail = emailType === 'current';
-      const isAlreadyVerified = isCurrentEmail 
-        ? emailChangeRequest.currentEmailVerified 
-        : emailChangeRequest.newEmailVerified;
-
-      if (isAlreadyVerified) {
-        return createSuccessPage('Email Already Verified', `This ${emailType} email address has already been verified. The email change process will continue automatically.`);
-      }
-
-      // Check if request is expired or cancelled
-      if (emailChangeRequest.status === 'cancelled') {
-        return createErrorPage('Request Cancelled', 'This email change request has been cancelled. Please contact your administrator if you believe this is an error.');
-      }
-
-      if (emailChangeRequest.status === 'completed') {
-        return createSuccessPage('Request Already Completed', 'This email change request has already been completed successfully.');
-      }
-
-      // If we get here, show the verification page
-      return createVerificationPage(emailChangeRequest, token, emailType);
-
-    } catch (dbError) {
-      console.error('Database error:', dbError);
+      logger.error('Database error while getting email change request', {
+        error: requestResult.error instanceof Error ? requestResult.error.message : 'Unknown error',
+        responseTime
+      });
+      
       return createErrorPage('System Error', 'We encountered an error while processing your email verification. Please try again later or contact your administrator.');
     }
 
+    if (!requestResult.emailChangeRequest) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 404, responseTime);
+      businessLogger.logBusinessOperation('view', 'email-verification-page', 'anonymous', false, { 
+        reason: 'request_not_found',
+        emailType
+      });
+      
+      return createErrorPage('Invalid Verification Link', 'This email verification token is not valid. It may have expired or the link may be corrupted.');
+    }
+
+    const emailChangeRequest = requestResult.emailChangeRequest;
+
+    // Check verification status and request state with tracing
+    const statusCheck = await businessTracer.traceBusinessOperation(
+      'check-verification-status',
+      'email-change',
+      async () => {
+        // Check if already verified
+        const isCurrentEmail = emailType === 'current';
+        const isAlreadyVerified = isCurrentEmail 
+          ? emailChangeRequest.currentEmailVerified 
+          : emailChangeRequest.newEmailVerified;
+
+        if (isAlreadyVerified) {
+          return { canVerify: false, reason: 'already_verified' };
+        }
+
+        // Check if request is expired or cancelled
+        if (emailChangeRequest.status === 'cancelled') {
+          return { canVerify: false, reason: 'cancelled' };
+        }
+
+        if (emailChangeRequest.status === 'completed') {
+          return { canVerify: false, reason: 'completed' };
+        }
+
+        return { canVerify: true };
+      }
+    );
+
+    if (!statusCheck.canVerify) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 200, responseTime);
+      
+      businessLogger.logBusinessOperation('view', 'email-verification-page', 'anonymous', false, { 
+        requestId: emailChangeRequest.id,
+        emailType,
+        reason: statusCheck.reason,
+        currentStatus: emailChangeRequest.status
+      });
+
+      if (statusCheck.reason === 'already_verified') {
+        return createSuccessPage('Email Already Verified', `This ${emailType} email address has already been verified. The email change process will continue automatically.`);
+      } else if (statusCheck.reason === 'cancelled') {
+        return createErrorPage('Request Cancelled', 'This email change request has been cancelled. Please contact your administrator if you believe this is an error.');
+      } else {
+        return createSuccessPage('Request Already Completed', 'This email change request has already been completed successfully.');
+      }
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('view', 'email-verification-page', 'anonymous', true, { 
+      requestId: emailChangeRequest.id,
+      emailType,
+      requestUserId: emailChangeRequest.userId,
+      currentEmail: emailChangeRequest.currentEmail,
+      newEmail: emailChangeRequest.newEmail,
+      requestStatus: emailChangeRequest.status
+    });
+
+    logger.info('Email verification page displayed successfully', { 
+      requestId: emailChangeRequest.id,
+      emailType,
+      requestUserId: emailChangeRequest.userId,
+      requestStatus: emailChangeRequest.status,
+      responseTime 
+    });
+
+    // If we get here, show the verification page
+    return createVerificationPage(emailChangeRequest, token!, emailType!);
+
   } catch (error) {
-    console.error('Error processing email verification page:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/email-change/verify', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'email-verification-page', 'anonymous');
+
+    logger.error('Error processing email verification page', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
     return createErrorPage('System Error', 'We encountered an unexpected error. Please try again later or contact your administrator.');
   }
 };
@@ -585,4 +728,10 @@ function createSuccessPage(title: string, message: string): APIGatewayProxyResul
     },
     body: html,
   };
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

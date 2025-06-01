@@ -14,6 +14,18 @@ import {
   SuccessResponse
 } from '../shared/types';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 interface DaySchedule {
   targetHours: number;
   start: string | null;
@@ -29,49 +41,105 @@ interface PeriodSummary {
   completionPercentage: number;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Daily summary request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
+
     // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/daily-summary', 'GET', 401, responseTime);
+      businessLogger.logAuth(currentUserId || 'unknown', 'daily-summary', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
 
-    // Parse query parameters
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(currentUserId);
+    addRequestContext(requestId, currentUserId);
+
+    // Parse query parameters with tracing
     const queryParams = event.queryStringParameters || {};
     
-    // Validate required parameters
-    if (!queryParams.startDate || !queryParams.endDate) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'startDate and endDate are required');
-    }
+    logger.info('Query parameters parsed', { 
+      userId: currentUserId,
+      hasStartDate: !!queryParams.startDate,
+      hasEndDate: !!queryParams.endDate,
+      targetUserId: queryParams.userId,
+      includeGaps: queryParams.includeGaps
+    });
 
-    // Validate date format
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(queryParams.startDate) || !dateRegex.test(queryParams.endDate)) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'Dates must be in YYYY-MM-DD format');
-    }
+    // Validate required parameters with tracing
+    const validationResult = await businessTracer.traceBusinessOperation(
+      'validate-daily-summary-request',
+      'time-entry',
+      async () => {
+        if (!queryParams.startDate || !queryParams.endDate) {
+          return { valid: false, error: 'startDate and endDate are required' };
+        }
 
-    // Check date range (max 31 days)
-    const startDate = new Date(queryParams.startDate);
-    const endDate = new Date(queryParams.endDate);
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff > 31) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.DATE_RANGE_TOO_LARGE, 'Date range cannot exceed 31 days');
-    }
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(queryParams.startDate) || !dateRegex.test(queryParams.endDate)) {
+          return { valid: false, error: 'Dates must be in YYYY-MM-DD format' };
+        }
 
-    if (endDate < startDate) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'End date must be after start date');
-    }
+        // Check date range (max 31 days)
+        const startDate = new Date(queryParams.startDate);
+        const endDate = new Date(queryParams.endDate);
+        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff > 31) {
+          return { valid: false, error: 'Date range cannot exceed 31 days' };
+        }
 
-    // Check for future dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (endDate > today) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.FUTURE_DATE_NOT_ALLOWED, 'Cannot analyze future dates');
+        if (endDate < startDate) {
+          return { valid: false, error: 'End date must be after start date' };
+        }
+
+        // Check for future dates
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (endDate > today) {
+          return { valid: false, error: 'Cannot analyze future dates' };
+        }
+
+        return { valid: true, daysDiff };
+      }
+    );
+
+    if (!validationResult.valid) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/daily-summary', 'GET', 400, responseTime);
+      businessLogger.logBusinessOperation('daily-summary', 'time-entry', currentUserId, false, { 
+        validationError: validationResult.error 
+      });
+      
+      if (validationResult.error === 'startDate and endDate are required') {
+        return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, validationResult.error);
+      } else if (validationResult.error === 'Dates must be in YYYY-MM-DD format') {
+        return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, validationResult.error);
+      } else if (validationResult.error === 'Date range cannot exceed 31 days') {
+        return createErrorResponse(400, TimeTrackingErrorCodes.DATE_RANGE_TOO_LARGE, validationResult.error);
+      } else if (validationResult.error === 'End date must be after start date') {
+        return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, validationResult.error);
+      } else if (validationResult.error === 'Cannot analyze future dates') {
+        return createErrorResponse(400, TimeTrackingErrorCodes.FUTURE_DATE_NOT_ALLOWED, validationResult.error);
+      }
     }
 
     // Build request object
@@ -83,22 +151,81 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       targetHours: queryParams.targetHours ? parseFloat(queryParams.targetHours) : undefined,
     };
 
-    // Check permissions - employees can only see their own data
-    if (userRole === 'employee' && request.userId !== currentUserId) {
+    // Check permissions with tracing
+    const authorizationResult = await businessTracer.traceBusinessOperation(
+      'check-authorization',
+      'time-entry',
+      async () => {
+        // Check permissions - employees can only see their own data
+        if (userRole === 'employee' && request.userId !== currentUserId) {
+          return { authorized: false, reason: 'employee_access_restriction' };
+        }
+        return { authorized: true };
+      }
+    );
+
+    if (!authorizationResult.authorized) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/daily-summary', 'GET', 403, responseTime);
+      businessLogger.logAuth(currentUserId, 'daily-summary', false, { 
+        reason: authorizationResult.reason,
+        requestedUserId: request.userId,
+        userRole 
+      });
       return createErrorResponse(403, 'FORBIDDEN', 'Employees can only view their own time data');
     }
 
     // MANDATORY: Use repository pattern instead of direct DynamoDB
     const timeEntryRepo = new TimeEntryRepository();
     
-    // Get user's work schedule (simplified for now)
-    const workSchedule = await getUserWorkSchedule(request.userId!);
+    // Get user's work schedule with tracing
+    const workSchedule = await businessTracer.traceDatabaseOperation(
+      'get-work-schedule',
+      'user-schedule',
+      async () => {
+        return await getUserWorkSchedule(request.userId!);
+      }
+    );
     
-    // Generate daily summaries
-    const summaries = await generateDailySummaries(request, workSchedule, timeEntryRepo);
+    // Generate daily summaries with tracing
+    const summaries = await businessTracer.traceBusinessOperation(
+      'generate-daily-summaries',
+      'time-entry',
+      async () => {
+        return await generateDailySummaries(request, workSchedule, timeEntryRepo);
+      }
+    );
     
-    // Calculate period summary
-    const periodSummary = calculatePeriodSummary(summaries);
+    // Calculate period summary with tracing
+    const periodSummary = await businessTracer.traceBusinessOperation(
+      'calculate-period-summary',
+      'time-entry',
+      async () => {
+        return calculatePeriodSummary(summaries);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/time-entries/daily-summary', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('daily-summary', 'time-entry', currentUserId, true, { 
+      dateRange: `${request.startDate} to ${request.endDate}`,
+      dayCount: validationResult.daysDiff,
+      summariesGenerated: summaries.length,
+      totalHours: periodSummary.totalHours,
+      targetUserId: request.userId,
+      includeGaps: request.includeGaps
+    });
+
+    logger.info('Daily summary completed', { 
+      userId: currentUserId,
+      targetUserId: request.userId,
+      dateRange: `${request.startDate} to ${request.endDate}`,
+      summariesCount: summaries.length,
+      totalHours: periodSummary.totalHours,
+      responseTime 
+    });
 
     const response: SuccessResponse<DailySummaryResponse> = {
       success: true,
@@ -118,7 +245,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error generating daily summary:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/time-entries/daily-summary', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'daily-summary', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating daily summary', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An internal server error occurred');
   }
 };
@@ -144,7 +281,10 @@ async function getUserWorkSchedule(userId: string): Promise<UserWorkSchedule | n
       updatedAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.error('Error fetching work schedule:', error);
+    logger.error('Error fetching work schedule', { 
+      userId,
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
     return null;
   }
 }
@@ -206,7 +346,11 @@ async function getTimeEntriesForDate(
     
     return result.items;
   } catch (error) {
-    console.error('Error fetching time entries:', error);
+    logger.error('Error fetching time entries', { 
+      userId, 
+      date,
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
     return [];
   }
 }
@@ -369,4 +513,10 @@ function calculatePeriodSummary(summaries: DailySummary[]): PeriodSummary {
     targetHours: Math.round(targetHours * 100) / 100,
     completionPercentage: targetHours > 0 ? Math.round((totalHours / targetHours) * 10000) / 100 : 0,
   };
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

@@ -54,7 +54,7 @@ export const businessMetrics = {
   /**
    * Track time entry operations
    */
-  trackTimeEntryOperation: (operation: 'create' | 'update' | 'delete' | 'start' | 'stop', success: boolean, duration?: number) => {
+  trackTimeEntryOperation: (operation: 'create' | 'update' | 'delete' | 'start' | 'stop' | 'submit' | 'approve' | 'reject', success: boolean, duration?: number) => {
     metrics.addMetric('TimeEntryOperation', MetricUnit.Count, 1);
     metrics.addMetric(`TimeEntry${operation.charAt(0).toUpperCase() + operation.slice(1)}`, MetricUnit.Count, 1);
     
@@ -86,6 +86,25 @@ export const businessMetrics = {
       metrics.addMetric(`Project${operation.charAt(0).toUpperCase() + operation.slice(1)}Success`, MetricUnit.Count, 1);
     } else {
       metrics.addMetric(`Project${operation.charAt(0).toUpperCase() + operation.slice(1)}Error`, MetricUnit.Count, 1);
+    }
+
+    metrics.addDimensions({
+      Operation: operation,
+      Result: success ? 'Success' : 'Error',
+    });
+  },
+
+  /**
+   * Track client operations
+   */
+  trackClientOperation: (operation: 'create' | 'update' | 'delete', success: boolean) => {
+    metrics.addMetric('ClientOperation', MetricUnit.Count, 1);
+    metrics.addMetric(`Client${operation.charAt(0).toUpperCase() + operation.slice(1)}`, MetricUnit.Count, 1);
+    
+    if (success) {
+      metrics.addMetric(`Client${operation.charAt(0).toUpperCase() + operation.slice(1)}Success`, MetricUnit.Count, 1);
+    } else {
+      metrics.addMetric(`Client${operation.charAt(0).toUpperCase() + operation.slice(1)}Error`, MetricUnit.Count, 1);
     }
 
     metrics.addDimensions({
@@ -174,7 +193,7 @@ export const businessMetrics = {
   /**
    * Track business KPIs
    */
-  trackBusinessKPI: (kpiName: string, value: number, unit: MetricUnit = MetricUnit.Count) => {
+  trackBusinessKPI: (kpiName: string, value: number, unit: typeof MetricUnit.Count = MetricUnit.Count) => {
     metrics.addMetric(kpiName, unit, value);
   },
 
@@ -226,7 +245,7 @@ export const performanceMetrics = {
   /**
    * Track custom performance metrics
    */
-  trackCustomPerformance: (metricName: string, value: number, unit: MetricUnit, dimensions?: Record<string, string>) => {
+  trackCustomPerformance: (metricName: string, value: number, unit: typeof MetricUnit.Count, dimensions?: Record<string, string>) => {
     metrics.addMetric(metricName, unit, value);
     
     if (dimensions) {
@@ -237,13 +256,8 @@ export const performanceMetrics = {
 
 /**
  * Decorator for automatically tracking Lambda handler metrics
- * Usage: export const handler = trackLambdaMetrics('FunctionName')(myHandler);
+ * Note: Use logMetrics middleware directly with Middy instead
  */
-export const trackLambdaMetrics = (functionName: string) => {
-  return <T extends (...args: any[]) => any>(handler: T): T => {
-    return metrics.logMetrics(handler) as T;
-  };
-};
 
 /**
  * Helper to clear dimensions (useful for reusing metrics instance)

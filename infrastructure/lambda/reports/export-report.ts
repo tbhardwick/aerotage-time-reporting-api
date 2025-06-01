@@ -7,6 +7,18 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { randomUUID } from 'crypto';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 // For now, using mock report cache - in production, create ReportRepository
 const s3Client = new S3Client({});
@@ -53,66 +65,174 @@ interface ExportResponse {
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Export report request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
+
     // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/export', 'POST', 401, responseTime);
+      businessLogger.logAuth(currentUserId || 'unknown', 'export-report', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
 
-    // Parse request body
-    let exportRequest: ExportRequest;
-    try {
-      exportRequest = JSON.parse(event.body || '{}');
-    } catch {
-      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
-    }
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(currentUserId);
+    addRequestContext(requestId, currentUserId);
 
-    // Validate required fields
-    if (!exportRequest.format) {
-      return createErrorResponse(400, 'MISSING_FORMAT', 'Export format is required');
-    }
+    // Parse and validate request body with tracing
+    const exportRequest = await businessTracer.traceBusinessOperation(
+      'parse-export-request',
+      'reports',
+      async () => {
+        let request: ExportRequest;
+        try {
+          request = JSON.parse(event.body || '{}');
+        } catch {
+          throw new Error('Invalid JSON in request body');
+        }
 
-    // Validate format
-    const validFormats = ['pdf', 'csv', 'excel'];
-    if (!validFormats.includes(exportRequest.format)) {
-      return createErrorResponse(400, 'INVALID_FORMAT', `Format must be one of: ${validFormats.join(', ')}`);
-    }
+        // Validate required fields
+        if (!request.format) {
+          throw new Error('Export format is required');
+        }
 
-    // Get report data
-    let reportData;
-    if (exportRequest.reportId) {
-      reportData = await getReportData(exportRequest.reportId, currentUserId, userRole);
-      if (!reportData) {
-        return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report not found or access denied');
+        // Validate format
+        const validFormats = ['pdf', 'csv', 'excel'];
+        if (!validFormats.includes(request.format)) {
+          throw new Error(`Format must be one of: ${validFormats.join(', ')}`);
+        }
+
+        return request;
       }
-    } else if (exportRequest.reportData) {
-      reportData = exportRequest.reportData;
-    } else {
-      return createErrorResponse(400, 'MISSING_DATA', 'Either reportId or reportData is required');
-    }
-
-    // Generate export
-    const exportResult = await generateExport(
-      reportData,
-      exportRequest.format,
-      exportRequest.options || {},
-      currentUserId
     );
 
-    // Handle delivery if requested
+    logger.info('Export request parsed and validated', { 
+      currentUserId,
+      userRole,
+      format: exportRequest.format,
+      reportId: exportRequest.reportId,
+      hasReportData: !!exportRequest.reportData,
+      hasOptions: !!exportRequest.options,
+      hasDelivery: !!exportRequest.delivery
+    });
+
+    // Get report data with tracing
+    const reportData = await businessTracer.traceBusinessOperation(
+      'get-report-data',
+      'reports',
+      async () => {
+        if (exportRequest.reportId) {
+          const data = await getReportData(exportRequest.reportId, currentUserId, userRole);
+          if (!data) {
+            throw new Error('Report not found or access denied');
+          }
+          return data;
+        } else if (exportRequest.reportData) {
+          return exportRequest.reportData;
+        } else {
+          throw new Error('Either reportId or reportData is required');
+        }
+      }
+    );
+
+    // Generate export with tracing
+    const exportResult = await businessTracer.traceBusinessOperation(
+      'generate-export',
+      'reports',
+      async () => {
+        return await generateExport(
+          reportData,
+          exportRequest.format,
+          exportRequest.options || {},
+          currentUserId
+        );
+      }
+    );
+
+    // Handle delivery if requested with tracing
     if (exportRequest.delivery) {
-      await handleDelivery(exportResult, exportRequest.delivery);
+      await businessTracer.traceBusinessOperation(
+        'handle-delivery',
+        'reports',
+        async () => {
+          await handleDelivery(exportResult, exportRequest.delivery!);
+        }
+      );
     }
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/export', 'POST', 200, responseTime);
+    businessLogger.logBusinessOperation('export', 'report', currentUserId, true, { 
+      userRole,
+      exportId: exportResult.exportId,
+      format: exportRequest.format,
+      reportId: exportRequest.reportId,
+      fileSize: exportResult.fileSize,
+      hasDelivery: !!exportRequest.delivery,
+      deliveryStatus: exportResult.deliveryStatus?.email
+    });
+
+    logger.info('Report exported successfully', { 
+      currentUserId,
+      userRole,
+      exportId: exportResult.exportId,
+      format: exportRequest.format,
+      fileSize: exportResult.fileSize,
+      responseTime 
+    });
 
     return createSuccessResponse(exportResult);
 
   } catch (error) {
-    console.error('Error exporting report:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/reports/export', 'POST', 500, responseTime);
+    businessLogger.logError(error as Error, 'export-report', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error exporting report', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Handle specific business logic errors
+    if (error instanceof Error) {
+      if (error.message.includes('Invalid JSON in request body')) {
+        return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+      }
+      if (error.message.includes('Export format is required')) {
+        return createErrorResponse(400, 'MISSING_FORMAT', 'Export format is required');
+      }
+      if (error.message.includes('Format must be one of:')) {
+        return createErrorResponse(400, 'INVALID_FORMAT', error.message);
+      }
+      if (error.message.includes('Report not found or access denied')) {
+        return createErrorResponse(404, 'REPORT_NOT_FOUND', 'Report not found or access denied');
+      }
+      if (error.message.includes('Either reportId or reportData is required')) {
+        return createErrorResponse(400, 'MISSING_DATA', 'Either reportId or reportData is required');
+      }
+    }
+
     return createErrorResponse(500, 'EXPORT_FAILED', 'An internal server error occurred');
   }
 };
@@ -492,4 +612,10 @@ Aerotage Team
 
     await sesClient.send(command);
   }
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

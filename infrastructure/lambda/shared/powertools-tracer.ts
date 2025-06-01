@@ -7,8 +7,6 @@ import { Tracer } from '@aws-lambda-powertools/tracer';
 export const tracer = new Tracer({
   serviceName: 'aerotage-time-api',
   captureHTTPsRequests: true,
-  captureResponse: process.env.STAGE !== 'prod', // Capture responses in dev/staging only
-  environment: process.env.STAGE || 'dev',
 });
 
 /**
@@ -170,8 +168,9 @@ export const businessTracer = {
  * Decorator for tracing Lambda handlers
  * Usage: export const handler = traceLambdaHandler(myHandler);
  */
-export const traceLambdaHandler = <T extends (...args: any[]) => any>(handler: T): T => {
-  return tracer.captureLambdaHandler(handler);
+export const traceLambdaHandler = <T extends (...args: any[]) => any>(handler: T): any => {
+  // For PowerTools v2.x, use middleware pattern instead
+  return handler; // This will be handled by middleware
 };
 
 /**
@@ -179,5 +178,7 @@ export const traceLambdaHandler = <T extends (...args: any[]) => any>(handler: T
  * Usage: @traceMethod('methodName') or traceMethod('methodName')(myMethod)
  */
 export const traceMethod = (methodName: string) => {
-  return tracer.captureMethod(methodName);
+  return (target: any, propertyKey: string, descriptor: PropertyDescriptor) => {
+    return tracer.captureMethod({ subSegmentName: methodName })(target, propertyKey, descriptor);
+  };
 }; 

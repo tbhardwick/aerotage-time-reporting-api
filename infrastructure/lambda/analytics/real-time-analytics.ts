@@ -6,6 +6,18 @@ import { SessionRepository, UserSession } from '../shared/session-repository';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { TimeEntry } from '../shared/types';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const analyticsRepo = new AnalyticsRepository();
 const sessionRepo = new SessionRepository();
@@ -79,9 +91,20 @@ interface RealTimeAlert {
   metadata: Record<string, unknown>;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Real-time analytics request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Real-time analytics request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
 
     // Extract user info from authorizer context
     const userId = getCurrentUserId(event);
@@ -89,45 +112,103 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userRole = user?.role || 'employee';
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/analytics/real-time', 'POST', 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'real-time-analytics', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    // Parse request
-    let analyticsRequest: RealTimeAnalyticsRequest;
-    if (event.body) {
-      try {
-        analyticsRequest = JSON.parse(event.body);
-      } catch {
-        return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
+
+    // Parse and validate request with tracing
+    const analyticsRequest = await businessTracer.traceBusinessOperation(
+      'parse-analytics-request',
+      'analytics',
+      async () => {
+        let request: RealTimeAnalyticsRequest;
+        
+        if (event.body) {
+          try {
+            request = JSON.parse(event.body);
+          } catch {
+            throw new Error('Invalid JSON in request body');
+          }
+        } else {
+          // Default configuration
+          request = {
+            metrics: ['activeUsers', 'currentSessions', 'todayHours', 'todayRevenue', 'liveTimers'],
+            includeActivities: true,
+            includeSessions: true,
+            includeAlerts: true,
+            refreshInterval: 30,
+          };
+        }
+
+        // Apply query parameters
+        const queryParams = event.queryStringParameters || {};
+        if (queryParams.refreshInterval) {
+          request.refreshInterval = parseInt(queryParams.refreshInterval);
+        }
+        if (queryParams.includeActivities === 'false') {
+          request.includeActivities = false;
+        }
+        if (queryParams.includeSessions === 'false') {
+          request.includeSessions = false;
+        }
+        if (queryParams.includeAlerts === 'false') {
+          request.includeAlerts = false;
+        }
+
+        return request;
       }
-    } else {
-      // Default configuration
-      analyticsRequest = {
-        metrics: ['activeUsers', 'currentSessions', 'todayHours', 'todayRevenue', 'liveTimers'],
-        includeActivities: true,
-        includeSessions: true,
-        includeAlerts: true,
-        refreshInterval: 30,
-      };
-    }
+    );
 
-    // Apply query parameters
-    const queryParams = event.queryStringParameters || {};
-    if (queryParams.refreshInterval) {
-      analyticsRequest.refreshInterval = parseInt(queryParams.refreshInterval);
-    }
-    if (queryParams.includeActivities === 'false') {
-      analyticsRequest.includeActivities = false;
-    }
-    if (queryParams.includeSessions === 'false') {
-      analyticsRequest.includeSessions = false;
-    }
-    if (queryParams.includeAlerts === 'false') {
-      analyticsRequest.includeAlerts = false;
-    }
+    logger.info('Real-time analytics request parsed', { 
+      userId,
+      userRole,
+      metricsCount: analyticsRequest.metrics.length,
+      includeActivities: analyticsRequest.includeActivities,
+      includeSessions: analyticsRequest.includeSessions,
+      includeAlerts: analyticsRequest.includeAlerts,
+      refreshInterval: analyticsRequest.refreshInterval
+    });
 
-    // Generate real-time analytics
-    const analyticsData = await generateRealTimeAnalytics(analyticsRequest, userId, userRole);
+    // Generate real-time analytics with tracing
+    const analyticsData = await businessTracer.traceBusinessOperation(
+      'generate-real-time-analytics',
+      'analytics',
+      async () => {
+        return await generateRealTimeAnalytics(analyticsRequest, userId, userRole);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/analytics/real-time', 'POST', 200, responseTime);
+    businessLogger.logBusinessOperation('generate', 'real-time-analytics', userId, true, { 
+      userRole,
+      metricsCount: analyticsRequest.metrics.length,
+      includeActivities: analyticsRequest.includeActivities,
+      includeSessions: analyticsRequest.includeSessions,
+      includeAlerts: analyticsRequest.includeAlerts,
+      refreshInterval: analyticsRequest.refreshInterval,
+      activeUsers: analyticsData.metrics.activeUsers,
+      currentSessions: analyticsData.metrics.currentSessions,
+      todayHours: analyticsData.metrics.todayHours,
+      todayRevenue: analyticsData.metrics.todayRevenue
+    });
+
+    logger.info('Real-time analytics generated successfully', { 
+      userId,
+      userRole,
+      metricsCount: analyticsRequest.metrics.length,
+      activeUsers: analyticsData.metrics.activeUsers,
+      currentSessions: analyticsData.metrics.currentSessions,
+      responseTime 
+    });
 
     return {
       statusCode: 200,
@@ -145,7 +226,21 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error generating real-time analytics:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/analytics/real-time', 'POST', 500, responseTime);
+    businessLogger.logError(error as Error, 'real-time-analytics', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating real-time analytics', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Handle specific business logic errors
+    if (error instanceof Error && error.message.includes('Invalid JSON in request body')) {
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+    }
     
     return {
       statusCode: 500,
@@ -506,4 +601,10 @@ export async function trackRealTimeActivity(
   } catch (error) {
     console.error('Error tracking real-time activity:', error);
   }
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

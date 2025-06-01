@@ -4,6 +4,18 @@ import { createErrorResponse, createSuccessResponse } from '../shared/response-h
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { createHash } from 'crypto';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
 
@@ -94,21 +106,32 @@ interface ClientReportResponse {
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Generate client report request:', JSON.stringify(event, null, 2));
+    // Add request context to logger
+    addRequestContext(event.requestContext?.requestId || 'unknown');
+    
+    logger.info('Generate client report request received', {
+      httpMethod: event.httpMethod,
+      path: event.path,
+      queryStringParameters: event.queryStringParameters
+    });
 
     // Extract user info from authorizer context
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
-    const userRole = user?.role || 'employee';
-    
-    if (!userId) {
+    const currentUserId = getCurrentUserId(event);
+    if (!currentUserId) {
+      metrics.addMetric('ApiClientError', MetricUnit.Count, 1);
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
+    const user = getAuthenticatedUser(event);
+    const userRole = user?.role || 'employee';
+    
     // Check permissions - only managers and admins can view client reports
     if (userRole === 'employee') {
+      metrics.addMetric('ApiClientError', MetricUnit.Count, 1);
       return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'Client reports require manager or admin privileges');
     }
 
@@ -133,26 +156,90 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
     };
 
+    logger.info('Client report request parsed and validated', { 
+      currentUserId,
+      userRole,
+      dateRange: filters.dateRange,
+      clientIds: filters.clientIds,
+      includeProjects: filters.includeProjects,
+      includeBilling: filters.includeBilling,
+      groupBy: filters.groupBy,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+      limit: filters.limit,
+      offset: filters.offset
+    });
+
     // Generate cache key
     const cacheKey = generateCacheKey(filters);
     
-    // Check cache first
-    const cachedReport = await getCachedReport(cacheKey);
+    // Check cache first with tracing
+    const cachedReport = await businessTracer.traceBusinessOperation(
+      'check-cache',
+      'reports',
+      async () => {
+        return await getCachedReport(cacheKey);
+      }
+    );
+
     if (cachedReport) {
-      console.log('Returning cached client report');
+      logger.info('Returning cached client report', { cacheKey });
+      metrics.addMetric('CacheHit', MetricUnit.Count, 1);
+      businessMetrics.trackApiPerformance('/reports/client', 'GET', 200, Date.now() - startTime);
+      
       return createSuccessResponse(cachedReport);
     }
 
-    // Generate new report
-    const reportData = await generateClientReport(filters);
+    metrics.addMetric('CacheMiss', MetricUnit.Count, 1);
+
+    // Generate new report with tracing
+    const reportData = await businessTracer.traceBusinessOperation(
+      'generate-client-report',
+      'reports',
+      async () => {
+        return await generateClientReport(filters);
+      }
+    );
     
-    // Cache the report (30 minutes TTL for client reports)
-    await cacheReport(reportData, 1800);
+    // Cache the report (30 minutes TTL for client reports) with tracing
+    await businessTracer.traceBusinessOperation(
+      'cache-report',
+      'reports',
+      async () => {
+        await cacheReport(reportData, 1800);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/client', 'GET', 200, responseTime);
+    businessMetrics.trackReportGeneration('client', true, responseTime, reportData.data.length);
+    metrics.addMetric('ClientReportGenerated', MetricUnit.Count, 1);
+    metrics.addMetric('ClientReportDataPoints', MetricUnit.Count, reportData.data.length);
+
+    logger.info('Client report generated successfully', {
+      reportId: reportData.reportId,
+      dataPoints: reportData.data.length,
+      responseTime,
+      cached: false
+    });
 
     return createSuccessResponse(reportData);
 
   } catch (error) {
-    console.error('Error generating client report:', error);
+    const responseTime = Date.now() - startTime;
+    
+    logger.error('Error generating client report', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Track error metrics
+    businessMetrics.trackApiPerformance('/reports/client', 'GET', 500, responseTime);
+    businessMetrics.trackReportGeneration('client', false, responseTime);
+    metrics.addMetric('ClientReportErrors', MetricUnit.Count, 1);
     
     return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate client report');
   }
@@ -567,4 +654,10 @@ async function cacheReport(reportData: ClientReportResponse, ttlSeconds: number)
     console.error('Error caching client report:', error);
     // Don't throw - caching failure shouldn't break the report generation
   }
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

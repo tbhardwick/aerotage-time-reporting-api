@@ -4,6 +4,18 @@ import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { UserRepository } from '../shared/user-repository';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
 const userRepo = new UserRepository();
@@ -181,9 +193,20 @@ interface DateRange {
   endDate: string;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Enhanced dashboard request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Enhanced dashboard request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
 
     // Extract user info from authorizer context
     const userId = getCurrentUserId(event);
@@ -191,46 +214,107 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userRole = user?.role || 'employee';
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/analytics/enhanced-dashboard', event.httpMethod, 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'enhanced-dashboard', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    // Parse request body for POST requests
-    let dashboardRequest: EnhancedDashboardRequest;
-    if (event.httpMethod === 'POST' && event.body) {
-      try {
-        dashboardRequest = JSON.parse(event.body);
-      } catch {
-        return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
+
+    // Parse and validate request with tracing
+    const dashboardRequest = await businessTracer.traceBusinessOperation(
+      'parse-enhanced-dashboard-request',
+      'analytics',
+      async () => {
+        let request: EnhancedDashboardRequest;
+        
+        if (event.httpMethod === 'POST' && event.body) {
+          try {
+            request = JSON.parse(event.body);
+          } catch {
+            throw new Error('Invalid JSON in request body');
+          }
+        } else {
+          // Use default dashboard configuration
+          request = getDefaultDashboardConfig();
+        }
+
+        // Apply query parameters for GET requests
+        const queryParams = event.queryStringParameters || {};
+        if (queryParams.timeframe) {
+          request.timeframe = queryParams.timeframe as EnhancedDashboardRequest['timeframe'];
+        }
+        if (queryParams.realTime === 'true') {
+          request.realTime = true;
+        }
+        if (queryParams.includeForecasting === 'true') {
+          request.includeForecasting = true;
+        }
+        if (queryParams.includeBenchmarks === 'true') {
+          request.includeBenchmarks = true;
+        }
+
+        return request;
       }
-    } else {
-      // Default dashboard configuration
-      dashboardRequest = getDefaultDashboardConfig();
-    }
+    );
 
-    // Apply query parameters
-    const queryParams = event.queryStringParameters || {};
-    if (queryParams.timeframe) {
-      dashboardRequest.timeframe = queryParams.timeframe as EnhancedDashboardRequest['timeframe'];
-    }
-    if (queryParams.realTime === 'true') {
-      dashboardRequest.realTime = true;
-    }
-    if (queryParams.forecasting === 'true') {
-      dashboardRequest.includeForecasting = true;
-    }
-    if (queryParams.benchmarks === 'true') {
-      dashboardRequest.includeBenchmarks = true;
-    }
+    logger.info('Enhanced dashboard request parsed', { 
+      userId,
+      userRole,
+      timeframe: dashboardRequest.timeframe,
+      widgetCount: dashboardRequest.widgets.length,
+      realTime: dashboardRequest.realTime,
+      includeForecasting: dashboardRequest.includeForecasting,
+      includeBenchmarks: dashboardRequest.includeBenchmarks
+    });
 
-    // Generate enhanced dashboard
-    const dashboardData = await generateEnhancedDashboard(dashboardRequest, userId, userRole);
+    // Generate enhanced dashboard with tracing
+    const dashboardData = await businessTracer.traceBusinessOperation(
+      'generate-enhanced-dashboard',
+      'analytics',
+      async () => {
+        return await generateEnhancedDashboard(dashboardRequest, userId, userRole);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/analytics/enhanced-dashboard', event.httpMethod, 200, responseTime);
+    businessLogger.logBusinessOperation('generate', 'enhanced-dashboard', userId, true, { 
+      userRole,
+      timeframe: dashboardRequest.timeframe,
+      widgetCount: dashboardRequest.widgets.length,
+      realTime: dashboardRequest.realTime,
+      includeForecasting: dashboardRequest.includeForecasting,
+      includeBenchmarks: dashboardRequest.includeBenchmarks,
+      totalRevenue: dashboardData.summary.totalRevenue,
+      totalHours: dashboardData.summary.totalHours,
+      activeProjects: dashboardData.summary.activeProjects,
+      teamUtilization: dashboardData.summary.teamUtilization,
+      alertCount: dashboardData.alerts.length
+    });
+
+    logger.info('Enhanced dashboard generated successfully', { 
+      userId,
+      userRole,
+      timeframe: dashboardRequest.timeframe,
+      widgetCount: dashboardData.widgets.length,
+      totalRevenue: dashboardData.summary.totalRevenue,
+      totalHours: dashboardData.summary.totalHours,
+      alertCount: dashboardData.alerts.length,
+      responseTime 
+    });
 
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': dashboardRequest.realTime ? 'no-cache' : 'max-age=300', // 5 min cache for non-real-time
+        'Cache-Control': 'max-age=300', // 5 minute cache for non-real-time
       },
       body: JSON.stringify({
         success: true,
@@ -239,9 +323,23 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error generating enhanced dashboard:', error);
+    const responseTime = Date.now() - startTime;
     
-    return createErrorResponse(500, 'DASHBOARD_GENERATION_FAILED', 'Failed to generate enhanced dashboard');
+    businessMetrics.trackApiPerformance('/analytics/enhanced-dashboard', event.httpMethod, 500, responseTime);
+    businessLogger.logError(error as Error, 'enhanced-dashboard', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating enhanced dashboard', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Handle specific business logic errors
+    if (error instanceof Error && error.message.includes('Invalid JSON in request body')) {
+      return createErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+    }
+
+    return createErrorResponse(500, 'ENHANCED_DASHBOARD_FAILED', 'Failed to generate enhanced dashboard');
   }
 };
 
@@ -1011,4 +1109,10 @@ function getGaugeStatus(value: number, target?: number, threshold?: number): 'go
   if (threshold && value < threshold) return 'critical';
   if (target && value < target) return 'warning';
   return 'good';
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

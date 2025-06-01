@@ -7,9 +7,11 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as xray from 'aws-cdk-lib/aws-xray';
 import { Construct } from 'constructs';
 import { DatabaseTables } from './database-stack';
 import { SesStack } from './ses-stack';
+import { getLambdaConfig } from './lambda-configs';
 
 export interface ApiStackProps extends cdk.StackProps {
   stage: string;
@@ -56,6 +58,59 @@ export class ApiStack extends cdk.Stack {
         loggingLevel: stage === 'prod' 
           ? apigateway.MethodLoggingLevel.ERROR 
           : apigateway.MethodLoggingLevel.INFO,
+        // ✅ NEW: Enable X-Ray tracing for API Gateway
+        tracingEnabled: true,
+      },
+    });
+
+    // ✅ NEW: Configure X-Ray sampling rules for cost optimization
+    new xray.CfnSamplingRule(this, 'AerotageXRaySamplingRule', {
+      samplingRule: {
+        ruleName: `aerotage-api-${stage}-main`,
+        priority: 9000,
+        fixedRate: stage === 'prod' ? 0.1 : 0.5, // 10% in prod, 50% in dev
+        reservoirSize: stage === 'prod' ? 1 : 2, // Minimum traces per second
+        serviceName: 'aerotage-time-api',
+        serviceType: '*',
+        host: '*',
+        httpMethod: '*',
+        urlPath: '*',
+        resourceArn: '*',
+        version: 1,
+      },
+    });
+
+    // ✅ NEW: Additional sampling rule for critical endpoints (auth, health)
+    new xray.CfnSamplingRule(this, 'AerotageXRayCriticalSamplingRule', {
+      samplingRule: {
+        ruleName: `aerotage-api-${stage}-critical`,
+        priority: 1000, // Higher priority (lower number)
+        fixedRate: stage === 'prod' ? 0.5 : 1.0, // 50% in prod, 100% in dev
+        reservoirSize: stage === 'prod' ? 2 : 5, // Minimum traces per second
+        serviceName: 'aerotage-time-api',
+        serviceType: '*',
+        host: '*',
+        httpMethod: '*',
+        urlPath: '/health*', // Health check endpoints
+        resourceArn: '*',
+        version: 1,
+      },
+    });
+
+    // ✅ NEW: Sampling rule for authentication endpoints
+    new xray.CfnSamplingRule(this, 'AerotageXRayAuthSamplingRule', {
+      samplingRule: {
+        ruleName: `aerotage-api-${stage}-auth`,
+        priority: 2000,
+        fixedRate: stage === 'prod' ? 0.3 : 1.0, // 30% in prod, 100% in dev
+        reservoirSize: stage === 'prod' ? 2 : 3,
+        serviceName: 'aerotage-time-api',
+        serviceType: '*',
+        host: '*',
+        httpMethod: 'POST',
+        urlPath: '/users*', // User management endpoints
+        resourceArn: '*',
+        version: 1,
       },
     });
 
@@ -98,6 +153,8 @@ export class ApiStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        // ✅ NEW: Add X-Ray tracing permissions
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
         // Import SES policy from SES stack
         iam.ManagedPolicy.fromManagedPolicyArn(this, 'SesPolicy', 
           cdk.Fn.importValue(`LambdaSesPolicyArn-${stage}`)
@@ -287,16 +344,30 @@ export class ApiStack extends cdk.Stack {
     // Add API Gateway ID to environment variables after API is created
     lambdaEnvironment.API_GATEWAY_ID = this.api.restApiId;
 
-    // Helper function to create Lambda functions
+    // Helper function to create Lambda functions with optimized configurations and X-Ray tracing
     const createLambdaFunction = (name: string, handler: string, description: string): lambdaNodejs.NodejsFunction => {
+      // Get optimized configuration for this function
+      const config = getLambdaConfig(handler, stage);
+      
       const func = new lambdaNodejs.NodejsFunction(this, name, {
         functionName: `aerotage-${name.toLowerCase()}-${stage}`,
         entry: `lambda/${handler}.ts`,
         handler: 'handler',
         runtime: lambda.Runtime.NODEJS_20_X,
-        timeout: cdk.Duration.seconds(30),
-        memorySize: 256,
-        environment: lambdaEnvironment,
+        timeout: cdk.Duration.seconds(config.timeout),
+        memorySize: config.memory,
+        // ✅ NEW: Enable X-Ray tracing for distributed tracing
+        tracing: lambda.Tracing.ACTIVE,
+        environment: {
+          ...lambdaEnvironment,
+          // ✅ NEW: PowerTools environment variables
+          POWERTOOLS_SERVICE_NAME: 'aerotage-time-api',
+          POWERTOOLS_LOG_LEVEL: stage === 'prod' ? 'WARN' : 'INFO',
+          POWERTOOLS_LOGGER_SAMPLE_RATE: stage === 'prod' ? '0.1' : '1.0',
+          POWERTOOLS_TRACER_CAPTURE_RESPONSE: stage === 'prod' ? 'false' : 'true',
+          POWERTOOLS_TRACER_CAPTURE_ERROR: 'true',
+          POWERTOOLS_METRICS_NAMESPACE: 'Aerotage/TimeAPI',
+        },
         role: lambdaRole,
         bundling: {
           minify: false,
@@ -305,8 +376,25 @@ export class ApiStack extends cdk.Stack {
           externalModules: ['aws-sdk'],
           forceDockerBundling: false,
         },
-        description,
+        description: config.description || description,
+        // ✅ NEW: Set reserved concurrency if specified
+        ...(config.reservedConcurrency && { reservedConcurrencyLimit: config.reservedConcurrency }),
       });
+      
+      // ✅ NEW: Set provisioned concurrency for critical functions in production
+      if (config.provisionedConcurrency && stage === 'prod') {
+        const version = func.currentVersion;
+        const alias = new lambda.Alias(this, `${name}Alias`, {
+          aliasName: 'live',
+          version,
+        });
+        
+        // Add provisioned concurrency to the alias using CDK v2 approach
+        alias.addAutoScaling({
+          minCapacity: config.provisionedConcurrency,
+          maxCapacity: config.provisionedConcurrency,
+        });
+      }
       
       this.lambdaFunctions[name] = func;
       return func;
@@ -562,6 +650,28 @@ export class ApiStack extends cdk.Stack {
 
     const quickAddResource = timeEntriesResource.addResource('quick-add');
     quickAddResource.addMethod('POST', new apigateway.LambdaIntegration(quickAddFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    // ✅ NEW - Timer APIs
+    const startTimerFunction = createLambdaFunction('StartTimer', 'time-entries/start-timer', 'Start timer');
+    const stopTimerFunction = createLambdaFunction('StopTimer', 'time-entries/stop-timer', 'Stop timer');
+    const timerStatusFunction = createLambdaFunction('TimerStatus', 'time-entries/timer-status', 'Get timer status');
+
+    const timerResource = timeEntriesResource.addResource('timer');
+    
+    const startTimerResource = timerResource.addResource('start');
+    startTimerResource.addMethod('POST', new apigateway.LambdaIntegration(startTimerFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    const stopTimerResource = timerResource.addResource('stop');
+    stopTimerResource.addMethod('POST', new apigateway.LambdaIntegration(stopTimerFunction), {
+      authorizer: customAuthorizer,
+    });
+
+    const timerStatusResource = timerResource.addResource('status');
+    timerStatusResource.addMethod('GET', new apigateway.LambdaIntegration(timerStatusFunction), {
       authorizer: customAuthorizer,
     });
 

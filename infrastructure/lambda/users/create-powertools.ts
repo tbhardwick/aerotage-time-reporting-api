@@ -11,8 +11,14 @@ import { InvitationRepository } from '../shared/invitation-repository';
 
 // ✅ NEW: Import PowerTools utilities
 import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
-import { tracer, businessTracer, traceLambdaHandler } from '../shared/powertools-tracer';
-import { metrics, businessMetrics, trackLambdaMetrics, MetricUnit } from '../shared/powertools-metrics';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+
+// ✅ NEW: Import Middy and PowerTools v2.x middleware
+import middy from '@middy/core';
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
 
 const userRepo = new UserRepository();
 
@@ -49,9 +55,9 @@ const createUserHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
     const user = getAuthenticatedUser(event);
     const userRole = user?.role || 'employee';
 
-         // ✅ NEW: Add user context to tracer and logger
-     businessTracer.addUserContext(currentUserId, userRole, user?.department);
-     logger.appendKeys({ userId: currentUserId, userRole });
+    // ✅ NEW: Add user context to tracer and logger
+    businessTracer.addUserContext(currentUserId, userRole, user?.department);
+    logger.appendKeys({ userId: currentUserId, userRole });
 
     // ✅ NEW: Track successful authentication
     businessMetrics.trackAuthEvent(true, 'token');
@@ -195,5 +201,8 @@ const createUserHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewa
   }
 };
 
-// ✅ NEW: Export handler with PowerTools decorators
-export const handler = logger.injectLambdaContext(createUserHandler); 
+// ✅ NEW: Export handler with PowerTools v2.x middleware pattern
+export const handler = middy(createUserHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger, { clearState: true }))
+  .use(logMetrics(metrics)); 

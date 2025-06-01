@@ -44,6 +44,7 @@
     "@aws-sdk/client-ses": "^3.658.1",
     "@aws-sdk/lib-dynamodb": "^3.658.1",
     "@aws-sdk/util-dynamodb": "^3.658.1",
+    "@middy/core": "^6.3.1",
     "aws-cdk-lib": "^2.165.0",
     "bcryptjs": "^2.4.3",
     "constructs": "^10.3.0",

@@ -3,63 +3,209 @@ import { InvitationRepository } from '../shared/invitation-repository';
 import { TokenService } from '../shared/token-service';
 import { UserInvitation } from '../shared/types';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const invitationRepo = new InvitationRepository();
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  console.log('Accept invitation page request:', JSON.stringify(event, null, 2));
-
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    // Get token from query parameters
-    const token = event.queryStringParameters?.token;
-    
-    if (!token) {
-      return createErrorPage('Missing invitation token', 'The invitation link appears to be invalid. Please check the link in your email or contact your administrator.');
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Accept invitation page request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+      path: event.path,
+      queryStringParameters: event.queryStringParameters
+    });
+
+    // Get token from query parameters with tracing
+    const tokenValidation = await businessTracer.traceBusinessOperation(
+      'validate-invitation-token',
+      'user-invitations',
+      async () => {
+        const token = event.queryStringParameters?.token;
+        
+        if (!token) {
+          return { isValid: false, reason: 'missing_token' };
+        }
+
+        // Validate token format
+        if (!TokenService.validateTokenFormat(token)) {
+          return { isValid: false, reason: 'invalid_format' };
+        }
+
+        return { isValid: true, token };
+      }
+    );
+
+    if (!tokenValidation.isValid) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 400, responseTime);
+      businessLogger.logBusinessOperation('view', 'invitation-accept-page', 'anonymous', false, { 
+        reason: tokenValidation.reason
+      });
+
+      if (tokenValidation.reason === 'missing_token') {
+        return createErrorPage('Missing invitation token', 'The invitation link appears to be invalid. Please check the link in your email or contact your administrator.');
+      } else {
+        return createErrorPage('Invalid invitation token', 'The invitation token format is invalid. Please check the link in your email or contact your administrator.');
+      }
     }
 
-    // Validate token format
-    if (!TokenService.validateTokenFormat(token)) {
-      return createErrorPage('Invalid invitation token', 'The invitation token format is invalid. Please check the link in your email or contact your administrator.');
-    }
+    const token = tokenValidation.token!;
 
-    try {
-      // Get invitation by token hash
-      const tokenHash = TokenService.hashToken(token);
-      const invitation = await invitationRepo.getInvitationByTokenHash(tokenHash);
+    logger.info('Invitation token validated', { 
+      tokenPresent: true,
+      tokenLength: token.length
+    });
 
-      if (!invitation) {
-        return createErrorPage('Invalid invitation', 'This invitation token is not valid. It may have been cancelled or the link may be corrupted.');
+    // Get invitation by token hash with tracing
+    const invitationResult = await businessTracer.traceDatabaseOperation(
+      'get-invitation-by-token',
+      'user-invitations',
+      async () => {
+        try {
+          const tokenHash = TokenService.hashToken(token);
+          const invitation = await invitationRepo.getInvitationByTokenHash(tokenHash);
+          return { invitation, error: null };
+        } catch (dbError) {
+          return { invitation: null, error: dbError };
+        }
       }
+    );
 
-      // Check invitation status
-      if (invitation.status === 'accepted') {
-        return createSuccessPage('Invitation Already Accepted', 'This invitation has already been accepted. If you need access to your account, please contact your administrator.');
-      }
-
-      if (invitation.status === 'cancelled') {
-        return createErrorPage('Invitation Cancelled', 'This invitation has been cancelled. Please contact your administrator if you believe this is an error.');
-      }
-
-      // Check if invitation is expired
-      const isExpired = TokenService.isExpired(invitation.expiresAt);
-      if (isExpired) {
-        // Update invitation status to expired
-        await invitationRepo.updateInvitation(invitation.id, {
-          status: 'expired',
-        });
-        return createErrorPage('Invitation Expired', 'This invitation has expired. Please contact your administrator to request a new invitation.');
-      }
-
-      // If we get here, the invitation is valid - show the acceptance form
-      return createAcceptancePage(invitation, token);
-
-    } catch (dbError) {
-      console.error('Database error:', dbError);
+    if (invitationResult.error) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 500, responseTime);
+      businessLogger.logError(invitationResult.error as Error, 'invitation-accept-page-db', 'anonymous');
+      
+      logger.error('Database error while getting invitation', {
+        error: invitationResult.error instanceof Error ? invitationResult.error.message : 'Unknown error',
+        responseTime
+      });
+      
       return createErrorPage('System Error', 'We encountered an error while processing your invitation. Please try again later or contact your administrator.');
     }
 
+    if (!invitationResult.invitation) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 404, responseTime);
+      businessLogger.logBusinessOperation('view', 'invitation-accept-page', 'anonymous', false, { 
+        reason: 'invitation_not_found'
+      });
+      
+      return createErrorPage('Invalid invitation', 'This invitation token is not valid. It may have been cancelled or the link may be corrupted.');
+    }
+
+    const invitation = invitationResult.invitation;
+
+    // Check invitation status and expiration with tracing
+    const statusCheck = await businessTracer.traceBusinessOperation(
+      'check-invitation-status',
+      'user-invitations',
+      async () => {
+        // Check invitation status
+        if (invitation.status === 'accepted') {
+          return { canAccept: false, reason: 'already_accepted' };
+        }
+
+        if (invitation.status === 'cancelled') {
+          return { canAccept: false, reason: 'cancelled' };
+        }
+
+        // Check if invitation is expired
+        const isExpired = TokenService.isExpired(invitation.expiresAt);
+        if (isExpired) {
+          return { canAccept: false, reason: 'expired', needsUpdate: true };
+        }
+
+        return { canAccept: true };
+      }
+    );
+
+    if (!statusCheck.canAccept) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 400, responseTime);
+      
+      // Update invitation status to expired if needed
+      if (statusCheck.needsUpdate) {
+        await businessTracer.traceDatabaseOperation(
+          'update-invitation-expired',
+          'user-invitations',
+          async () => {
+            await invitationRepo.updateInvitation(invitation.id, {
+              status: 'expired',
+            });
+          }
+        );
+      }
+
+      businessLogger.logBusinessOperation('view', 'invitation-accept-page', 'anonymous', false, { 
+        invitationId: invitation.id,
+        invitationStatus: invitation.status,
+        reason: statusCheck.reason
+      });
+
+      if (statusCheck.reason === 'already_accepted') {
+        return createSuccessPage('Invitation Already Accepted', 'This invitation has already been accepted. If you need access to your account, please contact your administrator.');
+      } else if (statusCheck.reason === 'cancelled') {
+        return createErrorPage('Invitation Cancelled', 'This invitation has been cancelled. Please contact your administrator if you believe this is an error.');
+      } else {
+        return createErrorPage('Invitation Expired', 'This invitation has expired. Please contact your administrator to request a new invitation.');
+      }
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('view', 'invitation-accept-page', 'anonymous', true, { 
+      invitationId: invitation.id,
+      invitationEmail: invitation.email,
+      invitationRole: invitation.role,
+      invitedBy: invitation.invitedBy,
+      expiresAt: invitation.expiresAt
+    });
+
+    logger.info('Invitation accept page displayed successfully', { 
+      invitationId: invitation.id,
+      invitationEmail: invitation.email,
+      invitationRole: invitation.role,
+      responseTime 
+    });
+
+    // If we get here, the invitation is valid - show the acceptance form
+    return createAcceptancePage(invitation, token);
+
   } catch (error) {
-    console.error('Error processing invitation page:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/user-invitations/accept', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'invitation-accept-page', 'anonymous');
+
+    logger.error('Error processing invitation page', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
     return createErrorPage('System Error', 'We encountered an unexpected error. Please try again later or contact your administrator.');
   }
 };
@@ -660,4 +806,10 @@ function createSuccessPage(title: string, message: string): APIGatewayProxyResul
     },
     body: html,
   };
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

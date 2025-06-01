@@ -4,6 +4,18 @@ import { createErrorResponse, createSuccessResponse } from '../shared/response-h
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { createHash } from 'crypto';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
 
@@ -82,9 +94,21 @@ interface ProjectReportResponse {
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Generate project report request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Generate project report request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+      queryStringParameters: event.queryStringParameters
+    });
 
     // Extract user info from authorizer context
     const userId = getCurrentUserId(event);
@@ -92,56 +116,187 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userRole = user?.role || 'employee';
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/project', 'GET', 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'generate-project-report', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
 
-    // Check permissions - only managers and admins can view project reports
-    if (userRole === 'employee') {
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
+
+    // Check permissions with tracing
+    const accessControl = await businessTracer.traceBusinessOperation(
+      'validate-project-report-access',
+      'reports',
+      async () => {
+        if (userRole === 'employee') {
+          return { canAccess: false, reason: 'insufficient_role' };
+        }
+        return { canAccess: true };
+      }
+    );
+
+    if (!accessControl.canAccess) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/project', 'GET', 403, responseTime);
+      businessLogger.logAuth(userId, 'generate-project-report', false, { 
+        reason: 'insufficient_permissions',
+        userRole,
+        accessReason: accessControl.reason
+      });
       return createErrorResponse(403, 'INSUFFICIENT_PERMISSIONS', 'Project reports require manager or admin privileges');
     }
 
-    // Parse query parameters
-    const queryParams = event.queryStringParameters || {};
-    const defaultStartDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
-    const defaultEndDate = new Date().toISOString().split('T')[0]!;
+    // Parse and validate filters with tracing
+    const filters = await businessTracer.traceBusinessOperation(
+      'parse-project-report-filters',
+      'reports',
+      async () => {
+        const queryParams = event.queryStringParameters || {};
+        const defaultStartDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
+        const defaultEndDate = new Date().toISOString().split('T')[0]!;
 
-    const filters: ProjectReportFilters = {
-      dateRange: {
-        startDate: queryParams.startDate || defaultStartDate,
-        endDate: queryParams.endDate || defaultEndDate,
-        preset: queryParams.preset as "week" | "month" | "quarter" | "year" | undefined,
-      },
-      projectIds: queryParams.projectId ? [queryParams.projectId] : undefined,
-      clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
-      status: queryParams.status ? queryParams.status.split(',') : undefined,
-      includeMetrics: queryParams.includeMetrics === 'true',
-      groupBy: (queryParams.groupBy as 'project' | 'date' | 'client') || 'project',
-      sortBy: queryParams.sortBy || 'totalHours',
-      sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
-      limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
-      offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
-    };
+        return {
+          dateRange: {
+            startDate: queryParams.startDate || defaultStartDate,
+            endDate: queryParams.endDate || defaultEndDate,
+            preset: queryParams.preset as "week" | "month" | "quarter" | "year" | undefined,
+          },
+          projectIds: queryParams.projectId ? [queryParams.projectId] : undefined,
+          clientIds: queryParams.clientId ? [queryParams.clientId] : undefined,
+          status: queryParams.status ? queryParams.status.split(',') : undefined,
+          includeMetrics: queryParams.includeMetrics === 'true',
+          groupBy: (queryParams.groupBy as 'project' | 'date' | 'client') || 'project',
+          sortBy: queryParams.sortBy || 'totalHours',
+          sortOrder: (queryParams.sortOrder as 'asc' | 'desc') || 'desc',
+          limit: queryParams.limit ? parseInt(queryParams.limit) : 50,
+          offset: queryParams.offset ? parseInt(queryParams.offset) : 0,
+        } as ProjectReportFilters;
+      }
+    );
 
-    // Generate cache key
-    const cacheKey = generateCacheKey('project-report', filters);
+    logger.info('Project report filters parsed', { 
+      userId,
+      userRole,
+      dateRange: filters.dateRange,
+      projectIds: filters.projectIds,
+      clientIds: filters.clientIds,
+      status: filters.status,
+      includeMetrics: filters.includeMetrics,
+      groupBy: filters.groupBy,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+      limit: filters.limit,
+      offset: filters.offset
+    });
+
+    // Generate cache key with tracing
+    const cacheKey = await businessTracer.traceBusinessOperation(
+      'generate-cache-key',
+      'reports',
+      async () => {
+        return generateCacheKey('project-report', filters);
+      }
+    );
     
-    // Check cache first
-    const cachedReport = await getCachedReport(cacheKey);
+    // Check cache first with tracing
+    const cachedReport = await businessTracer.traceDatabaseOperation(
+      'check-report-cache',
+      'reports',
+      async () => {
+        return await getCachedReport(cacheKey);
+      }
+    );
+
     if (cachedReport) {
-      console.log('Returning cached project report');
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/project', 'GET', 200, responseTime);
+      businessLogger.logBusinessOperation('generate', 'project-report', userId, true, { 
+        userRole,
+        cached: true,
+        cacheKey,
+        dateRange: filters.dateRange,
+        projectCount: cachedReport.summary.totalProjects,
+        totalHours: cachedReport.summary.totalActualHours,
+        totalCost: cachedReport.summary.totalActualCost
+      });
+
+      logger.info('Returning cached project report', { 
+        userId,
+        userRole,
+        cacheKey,
+        projectCount: cachedReport.summary.totalProjects,
+        responseTime 
+      });
+
       return createSuccessResponse(cachedReport);
     }
 
-    // Generate new report
-    const reportData = await generateProjectReport(filters);
+    // Generate new report with tracing
+    const reportData = await businessTracer.traceBusinessOperation(
+      'generate-project-report',
+      'reports',
+      async () => {
+        return await generateProjectReport(filters);
+      }
+    );
     
-    // Cache the report (30 minutes TTL for project reports)
-    await cacheReport(reportData, 1800);
+    // Cache the report with tracing
+    await businessTracer.traceDatabaseOperation(
+      'cache-project-report',
+      'reports',
+      async () => {
+        await cacheReport(reportData, 1800); // 30 minutes TTL
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/project', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('generate', 'project-report', userId, true, { 
+      userRole,
+      cached: false,
+      reportId: reportData.reportId,
+      dateRange: filters.dateRange,
+      projectCount: reportData.summary.totalProjects,
+      activeProjects: reportData.summary.activeProjects,
+      completedProjects: reportData.summary.completedProjects,
+      overdueProjects: reportData.summary.overdueProjects,
+      overBudgetProjects: reportData.summary.overBudgetProjects,
+      totalHours: reportData.summary.totalActualHours,
+      totalCost: reportData.summary.totalActualCost,
+      averageUtilization: reportData.summary.averageUtilization,
+      averageProfitMargin: reportData.summary.averageProfitMargin,
+      dataPoints: reportData.data.length
+    });
+
+    logger.info('Project report generated successfully', { 
+      userId,
+      userRole,
+      reportId: reportData.reportId,
+      projectCount: reportData.summary.totalProjects,
+      activeProjects: reportData.summary.activeProjects,
+      totalHours: reportData.summary.totalActualHours,
+      totalCost: reportData.summary.totalActualCost,
+      responseTime 
+    });
 
     return createSuccessResponse(reportData);
 
   } catch (error) {
-    console.error('Error generating project report:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/reports/project', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'generate-project-report', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating project report', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
     
     return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to generate project report');
   }
@@ -494,4 +649,10 @@ async function cacheReport(reportData: ProjectReportResponse, ttlSeconds: number
     console.error('Error caching project report:', error);
     // Don't throw - caching failure shouldn't break the report generation
   }
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 

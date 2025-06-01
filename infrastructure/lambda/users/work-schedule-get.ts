@@ -7,43 +7,215 @@ import {
   WorkDaySchedule
 } from '../shared/types';
 
+// ✅ NEW: Import PowerTools utilities with correct v2.x pattern
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// ✅ NEW: Import Middy middleware for PowerTools v2.x
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 const userRepo = new UserRepository();
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+// ✅ FIXED: Use correct PowerTools v2.x middleware pattern
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Get work schedule request:', JSON.stringify(event, null, 2));
-
-    // Extract user information
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
+    // ✅ NEW: Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
     
-    if (!userId) {
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
+    logger.info('Work schedule get request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      path: event.path,
+      pathParameters: event.pathParameters,
+    });
+
+    // ✅ NEW: Track API request metrics
+    businessMetrics.trackApiPerformance(
+      '/users/work-schedule',
+      'GET',
+      0, // Will be updated later
+      0  // Will be updated later
+    );
+
+    // ✅ NEW: Trace authentication
+    const authResult = await businessTracer.traceBusinessOperation(
+      'authenticate-user',
+      'work-schedule-access',
+      async () => {
+        // Extract user information
+        const userId = getCurrentUserId(event);
+        const user = getAuthenticatedUser(event);
+        
+        if (!userId) {
+          logger.warn('User not authenticated');
+          throw new Error('User not authenticated');
+        }
+
+        logger.info('User authenticated successfully', { 
+          userId, 
+          userRole: user?.role 
+        });
+
+        return { userId, user };
+      }
+    );
+
+    // ✅ NEW: Add user context to tracer
+    businessTracer.addUserContext(authResult.userId, authResult.user?.role, authResult.user?.department);
+    addRequestContext(requestId, authResult.userId, authResult.user?.role);
+
+    // ✅ NEW: Trace authorization logic
+    const authorizationResult = await businessTracer.traceBusinessOperation(
+      'authorize-access',
+      'work-schedule-access',
+      async () => {
+        // Get target user ID from path parameters or use current user
+        const targetUserId = event.pathParameters?.userId || authResult.userId;
+
+        // Check permissions - employees can only view their own schedule
+        if (authResult.user?.role === 'employee' && targetUserId !== authResult.userId) {
+          logger.warn('Access denied: employee trying to access other user schedule', {
+            currentUserId: authResult.userId,
+            targetUserId,
+            userRole: authResult.user.role
+          });
+          throw new Error('Employees can only view their own work schedule');
+        }
+
+        logger.info('Authorization passed', { 
+          currentUserId: authResult.userId,
+          targetUserId,
+          userRole: authResult.user?.role 
+        });
+
+        return { targetUserId };
+      }
+    );
+
+    // ✅ NEW: Trace database operation
+    const workSchedule = await businessTracer.traceDatabaseOperation(
+      'get',
+      'user-work-schedule',
+      async () => {
+        logger.info('Fetching work schedule from database', { 
+          targetUserId: authorizationResult.targetUserId 
+        });
+        
+        const schedule = await userRepo.getUserWorkSchedule(authorizationResult.targetUserId);
+        
+                 if (schedule) {
+           logger.info('Work schedule found in database', { 
+             targetUserId: authorizationResult.targetUserId,
+             timezone: schedule.timezone
+           });
+         } else {
+           logger.info('No work schedule found in database, will use default', { 
+             targetUserId: authorizationResult.targetUserId 
+           });
+         }
+
+         return schedule;
+      }
+    );
+
+    // ✅ NEW: Trace response preparation
+    const responseData = await businessTracer.traceBusinessOperation(
+      'prepare-response',
+      'work-schedule',
+      async () => {
+        if (!workSchedule) {
+          // Return default work schedule if none exists
+          const defaultSchedule = createDefaultWorkSchedule(authorizationResult.targetUserId);
+          
+          logger.info('Created default work schedule', { 
+            targetUserId: authorizationResult.targetUserId,
+            weeklyTargetHours: defaultSchedule.weeklyTargetHours,
+            timezone: defaultSchedule.timezone
+          });
+          
+          return { schedule: defaultSchedule, isDefault: true };
+        }
+
+                 logger.info('Using existing work schedule', { 
+           targetUserId: authorizationResult.targetUserId,
+           timezone: workSchedule.timezone
+         });
+
+        return { schedule: workSchedule, isDefault: false };
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+    
+    // ✅ NEW: Track successful metrics
+    businessMetrics.trackApiPerformance('/users/work-schedule', 'GET', 200, responseTime);
+    businessMetrics.trackBusinessKPI('WorkScheduleRetrieved', 1, MetricUnit.Count);
+    if (responseData.isDefault) {
+      businessMetrics.trackBusinessKPI('DefaultWorkScheduleUsed', 1, MetricUnit.Count);
     }
+    
+         businessLogger.logBusinessOperation('get', 'work-schedule', authResult.userId, true, { 
+       targetUserId: authorizationResult.targetUserId,
+       isDefault: responseData.isDefault,
+       weeklyTargetHours: 'weeklyTargetHours' in responseData.schedule ? responseData.schedule.weeklyTargetHours : 40
+     });
 
-    // Get target user ID from path parameters or use current user
-    const targetUserId = event.pathParameters?.userId || userId;
+    logger.info('Work schedule retrieved successfully', { 
+      targetUserId: authorizationResult.targetUserId,
+      isDefault: responseData.isDefault,
+      responseTime 
+    });
 
-    // Check permissions - employees can only view their own schedule
-    if (user?.role === 'employee' && targetUserId !== userId) {
-      return createErrorResponse(403, 'FORBIDDEN', 'Employees can only view their own work schedule');
-    }
+    const message = responseData.isDefault 
+      ? 'Default work schedule retrieved'
+      : 'Work schedule retrieved successfully';
 
-    // Get work schedule using repository
-    const workSchedule = await userRepo.getUserWorkSchedule(targetUserId);
-
-    if (!workSchedule) {
-      // Return default work schedule if none exists
-      const defaultSchedule = createDefaultWorkSchedule(targetUserId);
-      
-      return createSuccessResponse(defaultSchedule, 200, 'Default work schedule retrieved');
-    }
-
-    return createSuccessResponse(workSchedule, 200, 'Work schedule retrieved successfully');
+    return createSuccessResponse(responseData.schedule, 200, message);
 
   } catch (error) {
-    console.error('Error getting work schedule:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
+    const responseTime = Date.now() - startTime;
+    
+    // ✅ NEW: Enhanced error handling with PowerTools
+    logger.error('Work schedule retrieval failed', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime 
+    });
+
+    // ✅ NEW: Track error metrics
+    let statusCode = 500;
+    let errorCode = 'INTERNAL_SERVER_ERROR';
+    let errorMessage = 'An unexpected error occurred';
+
+    if (error instanceof Error) {
+      if (error.message === 'User not authenticated') {
+        statusCode = 401;
+        errorCode = 'UNAUTHORIZED';
+        errorMessage = 'User not authenticated';
+      } else if (error.message === 'Employees can only view their own work schedule') {
+        statusCode = 403;
+        errorCode = 'FORBIDDEN';
+        errorMessage = 'Employees can only view their own work schedule';
+      }
+    }
+
+    businessMetrics.trackApiPerformance('/users/work-schedule', 'GET', statusCode, responseTime);
+    businessMetrics.trackBusinessKPI('WorkScheduleRetrievalError', 1, MetricUnit.Count);
+    businessLogger.logBusinessOperation('get', 'work-schedule', 'unknown', false, { 
+      errorCode,
+      errorMessage 
+    });
+
+    return createErrorResponse(statusCode, errorCode, errorMessage);
   }
 };
 
@@ -78,4 +250,10 @@ function createDefaultWorkSchedule(userId: string): UserWorkSchedule {
     createdAt: now,
     updatedAt: now,
   };
-} 
+}
+
+// ✅ NEW: Export handler with PowerTools v2.x middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger, { clearState: true }))
+  .use(logMetrics(metrics)); 

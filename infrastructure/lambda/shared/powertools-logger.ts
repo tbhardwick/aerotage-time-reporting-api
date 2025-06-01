@@ -6,7 +6,7 @@ import { Logger } from '@aws-lambda-powertools/logger';
  */
 export const logger = new Logger({
   serviceName: 'aerotage-time-api',
-  logLevel: process.env.LOG_LEVEL || (process.env.STAGE === 'prod' ? 'WARN' : 'INFO'),
+  logLevel: (process.env.LOG_LEVEL || (process.env.STAGE === 'prod' ? 'WARN' : 'INFO')) as any,
   environment: process.env.STAGE || 'dev',
   sampleRateValue: process.env.STAGE === 'prod' ? 0.1 : 1.0, // Sample 10% in prod, 100% in dev
   persistentLogAttributes: {
@@ -99,7 +99,7 @@ export const businessLogger = {
  * Helper function to add request context to logger
  */
 export const addRequestContext = (requestId: string, userId?: string, userRole?: string) => {
-  logger.addContext({
+  logger.appendKeys({
     requestId,
     userId,
     userRole,

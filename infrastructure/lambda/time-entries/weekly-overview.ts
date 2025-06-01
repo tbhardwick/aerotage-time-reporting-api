@@ -14,6 +14,18 @@ import {
   SuccessResponse
 } from '../shared/types';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 const timeEntryRepo = new TimeEntryRepository();
 const userRepo = new UserRepository();
 
@@ -43,35 +55,62 @@ interface WeeklyComparison {
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Weekly overview request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Weekly overview request received', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
 
     // Extract user information
     const userId = getCurrentUserId(event);
     const user = getAuthenticatedUser(event);
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'weekly-overview', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
     }
+
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
     
     // Validate required parameters
     if (!queryParams.weekStartDate) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 400, responseTime);
+      businessLogger.logError(new Error('Missing weekStartDate parameter'), 'weekly-overview-validation', userId);
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'weekStartDate is required');
     }
 
     // Validate date format
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(queryParams.weekStartDate)) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 400, responseTime);
+      businessLogger.logError(new Error('Invalid weekStartDate format'), 'weekly-overview-validation', userId, { weekStartDate: queryParams.weekStartDate });
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'weekStartDate must be in YYYY-MM-DD format');
     }
 
     // Validate that weekStartDate is a Monday
     const weekStart = new Date(queryParams.weekStartDate);
     if (weekStart.getDay() !== 1) { // 1 = Monday
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 400, responseTime);
+      businessLogger.logError(new Error('weekStartDate is not a Monday'), 'weekly-overview-validation', userId, { weekStartDate: queryParams.weekStartDate, dayOfWeek: weekStart.getDay() });
       return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_DATE_RANGE, 'weekStartDate must be a Monday');
     }
 
@@ -79,6 +118,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (weekStart > today) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 400, responseTime);
+      businessLogger.logError(new Error('Future date not allowed'), 'weekly-overview-validation', userId, { weekStartDate: queryParams.weekStartDate });
       return createErrorResponse(400, TimeTrackingErrorCodes.FUTURE_DATE_NOT_ALLOWED, 'Cannot analyze future weeks');
     }
 
@@ -91,11 +133,40 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     // Check permissions - employees can only see their own data
     if (user?.role === 'employee' && request.userId !== userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 403, responseTime);
+      businessLogger.logAuth(userId, 'weekly-overview', false, { 
+        reason: 'employee_accessing_other_user_data',
+        requestedUserId: request.userId 
+      });
       return createErrorResponse(403, 'FORBIDDEN', 'Employees can only view their own time data');
     }
 
-    // Generate weekly overview
-    const weeklyOverview = await generateWeeklyOverview(request);
+    // Generate weekly overview with tracing
+    const weeklyOverview = await businessTracer.traceBusinessOperation(
+      'generate-weekly-overview',
+      'time-entry',
+      async () => {
+        return await generateWeeklyOverview(request);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+    
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('weekly-overview', 'time-entry', userId, true, { 
+      weekStartDate: request.weekStartDate,
+      targetUserId: request.userId,
+      totalHours: weeklyOverview.weeklyTotals.totalHours,
+      totalEntries: weeklyOverview.weeklyTotals.totalEntries
+    });
+
+    logger.info('Weekly overview generated successfully', { 
+      userId, 
+      weekStartDate: request.weekStartDate,
+      responseTime 
+    });
 
     const response: SuccessResponse<WeeklyOverview> = {
       success: true,
@@ -112,10 +183,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     };
 
   } catch (error) {
-    console.error('Error generating weekly overview:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/time-entries/weekly-overview', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'weekly-overview', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating weekly overview', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
     return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
   }
 };
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics));
 
 async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<WeeklyOverview> {
   const weekStart = new Date(request.weekStartDate);
@@ -130,11 +217,28 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
     year: weekStart.getFullYear(),
   };
 
+  logger.info('Generating weekly overview', {
+    weekInfo,
+    userId: request.userId
+  });
+
   // Get user's work schedule using repository
-  const workSchedule = await userRepo.getUserWorkSchedule(request.userId!);
+  const workSchedule = await businessTracer.traceDatabaseOperation(
+    'get',
+    'user-work-schedule',
+    async () => {
+      return await userRepo.getUserWorkSchedule(request.userId!);
+    }
+  );
 
   // Get daily summaries for the week
-  const dailySummaries = await getDailySummariesForWeek(request.userId!, weekStart, weekEnd, workSchedule as UserWorkSchedule | null);
+  const dailySummaries = await businessTracer.traceBusinessOperation(
+    'get-daily-summaries',
+    'time-entry',
+    async () => {
+      return await getDailySummariesForWeek(request.userId!, weekStart, weekEnd, workSchedule as UserWorkSchedule | null);
+    }
+  );
 
   // Calculate weekly totals
   const weeklyTotals = calculateWeeklyTotals(dailySummaries);
@@ -143,13 +247,32 @@ async function generateWeeklyOverview(request: WeeklyOverviewRequest): Promise<W
   const patterns = calculateWeeklyPatterns(dailySummaries);
 
   // Calculate project distribution
-  const projectDistribution = await calculateWeeklyProjectDistribution(request.userId!, weekStart, weekEnd);
+  const projectDistribution = await businessTracer.traceBusinessOperation(
+    'calculate-project-distribution',
+    'time-entry',
+    async () => {
+      return await calculateWeeklyProjectDistribution(request.userId!, weekStart, weekEnd);
+    }
+  );
 
   // Get comparison data if requested
   let comparison;
   if (request.includeComparison) {
-    comparison = await getWeeklyComparison(request.userId!, weekStart);
+    comparison = await businessTracer.traceBusinessOperation(
+      'get-weekly-comparison',
+      'time-entry',
+      async () => {
+        return await getWeeklyComparison(request.userId!, weekStart);
+      }
+    );
   }
+
+  logger.info('Weekly overview calculation completed', {
+    weeklyTotals,
+    patternsCalculated: !!patterns,
+    projectDistributionCount: projectDistribution.length,
+    comparisonIncluded: !!comparison
+  });
 
   return {
     weekInfo: {

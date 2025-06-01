@@ -9,6 +9,18 @@ import {
   TimeTrackingErrorCodes
 } from '../shared/types';
 
+// ✅ NEW: Import PowerTools utilities with correct v2.x pattern
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// ✅ NEW: Import Middy middleware for PowerTools v2.x
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 const userRepo = new UserRepository();
 
 // Valid timezones (simplified list)
@@ -26,61 +38,258 @@ const VALID_TIMEZONES = [
   'Australia/Sydney',
 ];
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+// ✅ FIXED: Use correct PowerTools v2.x middleware pattern
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Update work schedule request:', JSON.stringify(event, null, 2));
-
-    // Extract user information
-    const userId = getCurrentUserId(event);
-    const user = getAuthenticatedUser(event);
+    // ✅ NEW: Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
     
-    if (!userId) {
-      return createErrorResponse(401, 'UNAUTHORIZED', 'User not authenticated');
-    }
+    logger.info('Work schedule update request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      path: event.path,
+      pathParameters: event.pathParameters,
+      hasBody: !!event.body,
+    });
 
-    // Get target user ID from path parameters or use current user
-    const targetUserId = event.pathParameters?.userId || userId;
+    // ✅ NEW: Track API request metrics
+    businessMetrics.trackApiPerformance(
+      '/users/work-schedule',
+      'PUT',
+      0, // Will be updated later
+      0  // Will be updated later
+    );
 
-    // Check permissions - employees can only update their own schedule
-    if (user?.role === 'employee' && targetUserId !== userId) {
-      return createErrorResponse(403, 'FORBIDDEN', 'Employees can only update their own work schedule');
-    }
+    // ✅ NEW: Trace authentication
+    const authResult = await businessTracer.traceBusinessOperation(
+      'authenticate-user',
+      'work-schedule-update',
+      async () => {
+        // Extract user information
+        const userId = getCurrentUserId(event);
+        const user = getAuthenticatedUser(event);
+        
+        if (!userId) {
+          logger.warn('User not authenticated');
+          throw new Error('User not authenticated');
+        }
 
-    // Parse request body
-    if (!event.body) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE, 'Request body is required');
-    }
+        logger.info('User authenticated successfully', { 
+          userId, 
+          userRole: user?.role 
+        });
 
-    let updateRequest: UpdateWorkScheduleRequest;
-    try {
-      updateRequest = JSON.parse(event.body);
-    } catch {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE, 'Invalid JSON in request body');
-    }
+        return { userId, user };
+      }
+    );
 
-    // Validate the update request
-    const validationError = validateUpdateRequest(updateRequest);
-    if (validationError) {
-      return createErrorResponse(400, TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE, validationError);
-    }
+    // ✅ NEW: Add user context to tracer
+    businessTracer.addUserContext(authResult.userId, authResult.user?.role, authResult.user?.department);
+    addRequestContext(requestId, authResult.userId, authResult.user?.role);
 
-    // Get existing work schedule or create default using repository
-    let existingSchedule: UserWorkSchedule | null = await userRepo.getUserWorkSchedule(targetUserId) as UserWorkSchedule | null;
-    if (!existingSchedule) {
-      existingSchedule = createDefaultWorkSchedule(targetUserId);
-    }
+    // ✅ NEW: Trace authorization logic
+    const authorizationResult = await businessTracer.traceBusinessOperation(
+      'authorize-access',
+      'work-schedule-update',
+      async () => {
+        // Get target user ID from path parameters or use current user
+        const targetUserId = event.pathParameters?.userId || authResult.userId;
 
-    // Apply updates
-    const updatedSchedule = applyUpdates(existingSchedule, updateRequest);
+        // Check permissions - employees can only update their own schedule
+        if (authResult.user?.role === 'employee' && targetUserId !== authResult.userId) {
+          logger.warn('Access denied: employee trying to update other user schedule', {
+            currentUserId: authResult.userId,
+            targetUserId,
+            userRole: authResult.user.role
+          });
+          throw new Error('Employees can only update their own work schedule');
+        }
 
-    // Save updated schedule using repository
-    await userRepo.updateUserWorkSchedule(updatedSchedule as any);
+        logger.info('Authorization passed', { 
+          currentUserId: authResult.userId,
+          targetUserId,
+          userRole: authResult.user?.role 
+        });
+
+        return { targetUserId };
+      }
+    );
+
+    // ✅ NEW: Trace request parsing
+    const updateRequest = await businessTracer.traceBusinessOperation(
+      'parse-request-body',
+      'work-schedule-update',
+      async () => {
+        // Parse request body
+        if (!event.body) {
+          logger.warn('Request body is required');
+          throw new Error('Request body is required');
+        }
+
+        let parsedRequest: UpdateWorkScheduleRequest;
+        try {
+          parsedRequest = JSON.parse(event.body);
+        } catch {
+          logger.warn('Invalid JSON in request body');
+          throw new Error('Invalid JSON in request body');
+        }
+
+        logger.info('Request body parsed successfully', { 
+          hasSchedule: !!parsedRequest.schedule,
+          timezone: parsedRequest.timezone 
+        });
+
+        return parsedRequest;
+      }
+    );
+
+    // ✅ NEW: Trace validation logic
+    const validation = await businessTracer.traceBusinessOperation(
+      'validate-update-request',
+      'work-schedule-update',
+      async () => {
+        logger.info('Validating work schedule update request');
+        
+        const validationError = validateUpdateRequest(updateRequest);
+        if (validationError) {
+          logger.warn('Validation failed', { error: validationError });
+          throw new Error(validationError);
+        }
+
+        logger.info('Validation passed successfully');
+        return { isValid: true };
+      }
+    );
+
+    // ✅ NEW: Trace database lookup
+    const existingSchedule = await businessTracer.traceDatabaseOperation(
+      'get',
+      'user-work-schedule',
+      async () => {
+        logger.info('Fetching existing work schedule from database', { 
+          targetUserId: authorizationResult.targetUserId 
+        });
+        
+        let schedule: UserWorkSchedule | null = await userRepo.getUserWorkSchedule(authorizationResult.targetUserId) as UserWorkSchedule | null;
+        
+        if (!schedule) {
+          logger.info('No existing schedule found, creating default');
+          schedule = createDefaultWorkSchedule(authorizationResult.targetUserId);
+        } else {
+          logger.info('Existing work schedule found', { 
+            targetUserId: authorizationResult.targetUserId,
+            timezone: schedule.timezone
+          });
+        }
+
+        return schedule;
+      }
+    );
+
+    // ✅ NEW: Trace update logic
+    const updatedSchedule = await businessTracer.traceBusinessOperation(
+      'apply-schedule-updates',
+      'work-schedule-update',
+      async () => {
+        logger.info('Applying updates to work schedule');
+        
+        const updated = applyUpdates(existingSchedule, updateRequest);
+        
+        logger.info('Updates applied successfully', { 
+          targetUserId: authorizationResult.targetUserId,
+          timezone: updated.timezone,
+          weeklyTargetHours: updated.weeklyTargetHours
+        });
+
+        return updated;
+      }
+    );
+
+    // ✅ NEW: Trace database save
+    await businessTracer.traceDatabaseOperation(
+      'update',
+      'user-work-schedule',
+      async () => {
+        logger.info('Saving updated work schedule to database');
+        
+        await userRepo.updateUserWorkSchedule(updatedSchedule as any);
+        
+        logger.info('Work schedule saved successfully', { 
+          targetUserId: authorizationResult.targetUserId 
+        });
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+    
+    // ✅ NEW: Track successful metrics
+    businessMetrics.trackApiPerformance('/users/work-schedule', 'PUT', 200, responseTime);
+    businessMetrics.trackBusinessKPI('WorkScheduleUpdated', 1, MetricUnit.Count);
+    
+    businessLogger.logBusinessOperation('update', 'work-schedule', authResult.userId, true, { 
+      targetUserId: authorizationResult.targetUserId,
+      timezone: updatedSchedule.timezone,
+      weeklyTargetHours: updatedSchedule.weeklyTargetHours
+    });
+
+    logger.info('Work schedule updated successfully', { 
+      targetUserId: authorizationResult.targetUserId,
+      responseTime 
+    });
 
     return createSuccessResponse(updatedSchedule, 200, 'Work schedule updated successfully');
 
   } catch (error) {
-    console.error('Error updating work schedule:', error);
-    return createErrorResponse(500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred');
+    const responseTime = Date.now() - startTime;
+    
+    // ✅ NEW: Enhanced error handling with PowerTools
+    logger.error('Work schedule update failed', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime 
+    });
+
+    // ✅ NEW: Track error metrics
+    let statusCode = 500;
+    let errorCode = 'INTERNAL_SERVER_ERROR';
+    let errorMessage = 'An unexpected error occurred';
+
+    if (error instanceof Error) {
+      if (error.message === 'User not authenticated') {
+        statusCode = 401;
+        errorCode = 'UNAUTHORIZED';
+        errorMessage = 'User not authenticated';
+      } else if (error.message === 'Employees can only update their own work schedule') {
+        statusCode = 403;
+        errorCode = 'FORBIDDEN';
+        errorMessage = 'Employees can only update their own work schedule';
+      } else if (error.message === 'Request body is required') {
+        statusCode = 400;
+        errorCode = TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE;
+        errorMessage = 'Request body is required';
+      } else if (error.message === 'Invalid JSON in request body') {
+        statusCode = 400;
+        errorCode = TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE;
+        errorMessage = 'Invalid JSON in request body';
+      } else if (error.message.includes('Invalid') || error.message.includes('must be')) {
+        statusCode = 400;
+        errorCode = TimeTrackingErrorCodes.INVALID_WORK_SCHEDULE;
+        errorMessage = error.message;
+      }
+    }
+
+    businessMetrics.trackApiPerformance('/users/work-schedule', 'PUT', statusCode, responseTime);
+    businessMetrics.trackBusinessKPI('WorkScheduleUpdateError', 1, MetricUnit.Count);
+    businessLogger.logBusinessOperation('update', 'work-schedule', 'unknown', false, { 
+      errorCode,
+      errorMessage 
+    });
+
+    return createErrorResponse(statusCode, errorCode, errorMessage);
   }
 };
 
@@ -207,4 +416,10 @@ function applyUpdates(existingSchedule: UserWorkSchedule, updateRequest: UpdateW
   }
 
   return updatedSchedule;
-} 
+}
+
+// ✅ NEW: Export handler with PowerTools v2.x middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger, { clearState: true }))
+  .use(logMetrics(metrics)); 

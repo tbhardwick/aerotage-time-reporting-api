@@ -4,6 +4,18 @@ import { createErrorResponse, createSuccessResponse } from '../shared/response-h
 import { TimeEntryRepository } from '../shared/time-entry-repository';
 import { createHash } from 'crypto';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 const timeEntryRepo = new TimeEntryRepository();
 
@@ -74,13 +86,33 @@ interface ReportResponse {
   };
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Generate time report request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+    });
+
     // MANDATORY: Use standardized authentication helpers
     const currentUserId = getCurrentUserId(event);
     if (!currentUserId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/generate-time-report', 'GET', 401, responseTime);
+      businessLogger.logAuth(currentUserId || 'unknown', 'generate-time-report', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(currentUserId);
+    addRequestContext(requestId, currentUserId);
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {};
@@ -123,19 +155,63 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return createSuccessResponse(cachedReport);
     }
 
-    // Generate new report
-    const reportData = await generateTimeReport(accessControlledFilters);
+    // Generate new report with tracing
+    const reportData = await businessTracer.traceBusinessOperation(
+      'generate-time-report',
+      'report',
+      async () => {
+        return await generateTimeReport(accessControlledFilters);
+      }
+    );
     
     // Cache the report (1 hour TTL)
-    await cacheReport(reportData, 3600);
+    await businessTracer.traceBusinessOperation(
+      'cache-report',
+      'report',
+      async () => {
+        return await cacheReport(reportData, 3600);
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/generate-time-report', 'GET', 200, responseTime);
+    businessLogger.logBusinessOperation('generate', 'time-report', currentUserId, true, { 
+      reportId: reportData.reportId,
+      dataCount: reportData.data.length,
+      totalHours: reportData.summary.totalHours
+    });
+
+    logger.info('Time report generated successfully', { 
+      userId: currentUserId,
+      reportId: reportData.reportId,
+      responseTime 
+    });
 
     return createSuccessResponse(reportData);
 
   } catch (error) {
-    console.error('Error generating time report:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/reports/generate-time-report', 'GET', 500, responseTime);
+    businessLogger.logError(error as Error, 'generate-time-report', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error generating time report', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
     return createErrorResponse(500, 'INTERNAL_ERROR', 'An internal server error occurred');
   }
 };
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics));
 
 async function generateTimeReport(filters: ReportFilters): Promise<ReportResponse> {
   const reportId = `time-report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

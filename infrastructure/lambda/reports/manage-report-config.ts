@@ -3,6 +3,18 @@ import { getCurrentUserId, getAuthenticatedUser } from '../shared/auth-helper';
 import { createErrorResponse, createSuccessResponse } from '../shared/response-helper';
 import { randomUUID } from 'crypto';
 
+// PowerTools v2.x imports
+import { logger, businessLogger, addRequestContext } from '../shared/powertools-logger';
+import { tracer, businessTracer } from '../shared/powertools-tracer';
+import { metrics, businessMetrics } from '../shared/powertools-metrics';
+import { MetricUnit } from '@aws-lambda-powertools/metrics';
+
+// PowerTools v2.x middleware
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
+import middy from '@middy/core';
+
 // MANDATORY: Use repository pattern instead of direct DynamoDB
 // Mock storage for report configurations - in production, create ReportConfigRepository
 const mockReportConfigs = new Map<string, ReportConfig>();
@@ -62,9 +74,21 @@ interface UpdateReportConfigRequest {
   metadata?: Record<string, unknown>;
 }
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  const startTime = Date.now();
+  
   try {
-    console.log('Report config management request:', JSON.stringify(event, null, 2));
+    // Add request context to logger and tracer
+    const requestId = event.requestContext.requestId;
+    addRequestContext(requestId);
+    businessTracer.addRequestContext(requestId, event.httpMethod, event.resource);
+
+    logger.info('Report config management request started', {
+      requestId,
+      httpMethod: event.httpMethod,
+      resource: event.resource,
+      pathParameters: event.pathParameters
+    });
 
     // Extract user info from authorizer context
     const userId = getCurrentUserId(event);
@@ -72,42 +96,104 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const userRole = user?.role || 'employee';
     
     if (!userId) {
+      const responseTime = Date.now() - startTime;
+      businessMetrics.trackApiPerformance('/reports/config', event.httpMethod, 401, responseTime);
+      businessLogger.logAuth(userId || 'unknown', 'manage-report-config', false, { reason: 'no_user_id' });
       return createErrorResponse(401, 'UNAUTHORIZED', 'User authentication required');
     }
+
+    // Add user context to tracer and logger
+    businessTracer.addUserContext(userId);
+    addRequestContext(requestId, userId);
 
     const httpMethod = event.httpMethod;
     const pathParameters = event.pathParameters || {};
     const reportId = pathParameters.reportId;
 
-    switch (httpMethod) {
-      case 'GET':
-        if (reportId) {
-          return await getReportConfig(reportId, userId, userRole);
-        } else {
-          return await listReportConfigs(event, userId, userRole);
+    logger.info('Report config operation determined', { 
+      userId,
+      userRole,
+      httpMethod,
+      reportId
+    });
+
+    // Route to appropriate operation with tracing
+    const result = await businessTracer.traceBusinessOperation(
+      `report-config-${httpMethod.toLowerCase()}`,
+      'reports',
+      async () => {
+        switch (httpMethod) {
+          case 'GET':
+            if (reportId) {
+              return await getReportConfig(reportId, userId, userRole);
+            } else {
+              return await listReportConfigs(event, userId, userRole);
+            }
+          
+          case 'POST':
+            return await createReportConfig(event, userId, userRole);
+          
+          case 'PUT':
+            if (!reportId) {
+              throw new Error('Report ID is required for updates');
+            }
+            return await updateReportConfig(reportId, event, userId, userRole);
+          
+          case 'DELETE':
+            if (!reportId) {
+              throw new Error('Report ID is required for deletion');
+            }
+            return await deleteReportConfig(reportId, userId, userRole);
+          
+          default:
+            throw new Error(`HTTP method ${httpMethod} not allowed`);
         }
-      
-      case 'POST':
-        return await createReportConfig(event, userId, userRole);
-      
-      case 'PUT':
-        if (!reportId) {
-          return createErrorResponse(400, 'MISSING_REPORT_ID', 'Report ID is required for updates');
-        }
-        return await updateReportConfig(reportId, event, userId, userRole);
-      
-      case 'DELETE':
-        if (!reportId) {
-          return createErrorResponse(400, 'MISSING_REPORT_ID', 'Report ID is required for deletion');
-        }
-        return await deleteReportConfig(reportId, userId, userRole);
-      
-      default:
-        return createErrorResponse(405, 'METHOD_NOT_ALLOWED', `HTTP method ${httpMethod} not allowed`);
-    }
+      }
+    );
+
+    const responseTime = Date.now() - startTime;
+
+    // Track success metrics
+    businessMetrics.trackApiPerformance('/reports/config', httpMethod, result.statusCode, responseTime);
+    businessLogger.logBusinessOperation(httpMethod.toLowerCase(), 'report-config', userId, true, { 
+      userRole,
+      httpMethod,
+      reportId,
+      statusCode: result.statusCode
+    });
+
+    logger.info('Report config operation completed successfully', { 
+      userId,
+      userRole,
+      httpMethod,
+      reportId,
+      statusCode: result.statusCode,
+      responseTime 
+    });
+
+    return result;
 
   } catch (error) {
-    console.error('Error in report config management:', error);
+    const responseTime = Date.now() - startTime;
+    
+    businessMetrics.trackApiPerformance('/reports/config', event.httpMethod, 500, responseTime);
+    businessLogger.logError(error as Error, 'manage-report-config', getCurrentUserId(event) || 'unknown');
+
+    logger.error('Error in report config management', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime
+    });
+
+    // Handle specific business logic errors
+    if (error instanceof Error) {
+      if (error.message.includes('Report ID is required')) {
+        return createErrorResponse(400, 'MISSING_REPORT_ID', error.message);
+      }
+      if (error.message.includes('HTTP method') && error.message.includes('not allowed')) {
+        return createErrorResponse(405, 'METHOD_NOT_ALLOWED', error.message);
+      }
+    }
     
     return createErrorResponse(500, 'INTERNAL_ERROR', 'Failed to manage report configuration');
   }
@@ -469,4 +555,10 @@ function applyAccessControl(reportConfig: ReportConfig, userId: string, userRole
     canAccess: false, 
     reason: 'You do not have permission to access this report' 
   };
-} 
+}
+
+// Export handler with PowerTools middleware
+export const handler = middy(lambdaHandler)
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .use(logMetrics(metrics)); 
