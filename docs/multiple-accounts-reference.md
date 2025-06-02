@@ -15,10 +15,12 @@
 
 ### 🚀 Quick Switching (Recommended)
 ```bash
-work-aerotage     # Switch both GitHub and AWS to Aerotage
-work-voltasis     # Switch both GitHub and AWS to Voltasis  
+work-aerotage     # Switch both GitHub and AWS to Aerotage (auto-syncs git auth)
+work-voltasis     # Switch both GitHub and AWS to Voltasis (auto-syncs git auth)
 account-status    # Check current status of both
 ```
+
+> **Note**: The switching commands automatically run `gh auth setup-git` to ensure git operations use the correct account credentials.
 
 ---
 
@@ -49,8 +51,8 @@ The aliases are automatically added to your `~/.zshrc` file. If you need to add 
 
 ```bash
 # Add to ~/.zshrc or ~/.bashrc
-alias work-aerotage="gh auth switch --user tbhardwick && export AWS_PROFILE=aerotage && echo '🚀 Switched to Aerotage accounts'"
-alias work-voltasis="gh auth switch --user bhardwick-voltasis && export AWS_PROFILE=voltasis && echo '🚀 Switched to Voltasis accounts'"
+alias work-aerotage="gh auth switch --user tbhardwick && gh auth setup-git && export AWS_PROFILE=aerotage && echo '🚀 Switched to Aerotage accounts (git auth synced)'"
+alias work-voltasis="gh auth switch --user bhardwick-voltasis && gh auth setup-git && export AWS_PROFILE=voltasis && echo '🚀 Switched to Voltasis accounts (git auth synced)'"
 alias account-status="echo '=== GitHub ===' && gh auth status && echo '=== AWS ===' && echo 'Profile: \$AWS_PROFILE' && aws sts get-caller-identity"
 
 # Reload shell configuration
@@ -324,9 +326,9 @@ echo "=== GitHub ===" && gh auth status && echo "=== AWS ===" && echo "Profile: 
 **These aliases are automatically configured in your `~/.zshrc` file:**
 
 ```bash
-# Combined account switching
-alias work-aerotage="gh auth switch --user tbhardwick && export AWS_PROFILE=aerotage && echo '🚀 Switched to Aerotage accounts'"
-alias work-voltasis="gh auth switch --user bhardwick-voltasis && export AWS_PROFILE=voltasis && echo '🚀 Switched to Voltasis accounts'"
+# Combined account switching (with automatic git auth sync)
+alias work-aerotage="gh auth switch --user tbhardwick && gh auth setup-git && export AWS_PROFILE=aerotage && echo '🚀 Switched to Aerotage accounts (git auth synced)'"
+alias work-voltasis="gh auth switch --user bhardwick-voltasis && gh auth setup-git && export AWS_PROFILE=voltasis && echo '🚀 Switched to Voltasis accounts (git auth synced)'"
 
 # Status check
 alias account-status="echo '=== GitHub ===' && gh auth status && echo '=== AWS ===' && echo 'Profile: $AWS_PROFILE' && aws sts get-caller-identity"
@@ -347,6 +349,13 @@ work-aerotage     # Switch both GitHub and AWS to Aerotage
 work-voltasis     # Switch both GitHub and AWS to Voltasis  
 account-status    # Check current status of both
 ```
+
+#### 🔄 Automatic Git Authentication Sync
+The `work-aerotage` and `work-voltasis` commands automatically run `gh auth setup-git` to prevent credential conflicts. This ensures:
+- ✅ Git operations always use the correct account
+- ✅ No more "Permission denied" errors from cached credentials  
+- ✅ Seamless switching between accounts
+- ✅ Works perfectly with AI tools like Cursor
 
 ---
 
