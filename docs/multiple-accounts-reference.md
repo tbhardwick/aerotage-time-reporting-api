@@ -68,6 +68,18 @@ sudo chown -R $USER:staff ~/.config
 gh auth login --hostname github.com --git-protocol https --web
 ```
 
+#### Git Push Permission Denied (Wrong Account)
+```bash
+# Configure git to use GitHub CLI for authentication
+gh auth setup-git
+
+# Verify the active account
+gh auth status
+
+# Try the git operation again
+git push origin main
+```
+
 #### Aliases Not Working
 ```bash
 # Check if aliases are defined
